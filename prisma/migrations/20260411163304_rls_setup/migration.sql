@@ -372,6 +372,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO watchtower_app;
 
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO watchtower_migrate; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO watchtower_app; REVOKE INSERT, UPDATE, DELETE ON "Permission", "Role", "RolePermission" FROM watchtower_app;
 -- =============================================================================
 -- END
 -- =============================================================================
