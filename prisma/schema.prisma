@@ -1,0 +1,650 @@
+// =============================================================================
+// Watchtower — Phase 0 schema
+// =============================================================================
+//
+// This file defines the core entity model. It is the foundation; everything
+// else (RLS policies, permission catalog, error codes, application code)
+// references the shapes declared here.
+//
+// Companion files:
+//   - migrations/001_rls_setup.sql   RLS policies, role separation, triggers,
+//                                    materialized views, and any raw SQL that
+//                                    Prisma cannot express.
+//   - seeds/permissions.ts            Permission catalog, locked-permission list,
+//                                    system role presets.
+//   - ../api/src/errors.ts            Two-layer error code catalog.
+//   - ../../docs/Schema-Design-Notes.md   Design rationale for non-obvious
+//                                    decisions in this file.
+//
+// Conventions:
+//   - All IDs are CUID strings via `@default(cuid())`. NOTE: Prisma's built-in
+//     cuid() is CUID v1; the application uses @paralleldrive/cuid2 for input
+//     validation. Migration to native CUID2 generation is a future task.
+//   - All workspace-scoped tables carry a denormalized `workspaceId` (and
+//     `scopeId` where applicable) so RLS policies can filter without joins
+//     and the composite indexes can serve the canonical query patterns.
+//   - Soft-delete via `deletedAt` on Workspace, Scope, Tenant. Audit tables
+//     are append-only and never soft-deleted.
+//   - Foreign keys into AuditEvent / AuditAccessLog use `onDelete: Restrict`
+//     to prevent cascade-destruction of compliance evidence.
+//
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// HIERARCHY: Workspace → Scope → Tenant
+// =============================================================================
+
+model Workspace {
+  id                 String             @id @default(cuid())
+  name               String
+  betterAuthOrgId    String             @unique // bridge to Better Auth
+  scopeIsolationMode ScopeIsolationMode @default(SOFT)
+  // SOFT: workspace admins see across all scopes by default (MSP shape)
+  // STRICT: scopes are hard isolation boundaries; cross-scope access requires
+  //         explicit elevation that is itself audited (enterprise shape)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  scopes          Scope[]
+  tenants         Tenant[]
+  memberships     Membership[]
+  roles           Role[]
+  findings        Finding[]
+  observations    Observation[]
+  scans           Scan[]
+  auditEvents     AuditEvent[]
+  auditAccessLogs AuditAccessLog[]
+  idempotencyKeys IdempotencyKey[]
+  pluginRepos     PluginRepo[]
+
+  @@index([deletedAt])
+}
+
+enum ScopeIsolationMode {
+  SOFT
+  STRICT
+}
+
+model Scope {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  name          String // "Healthcare segment", "Acme Legal Entity GmbH"
+  slug          String // for stable URLs and API references
+  parentScopeId String? // optional nesting; capped at depth 3 in app code
+  parentScope   Scope?    @relation("ScopeHierarchy", fields: [parentScopeId], references: [id])
+  childScopes   Scope[]   @relation("ScopeHierarchy")
+  metadata      Json      @default("{}") // jsonb — region, industry, anything for filtering/grouping
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenants         Tenant[]
+  memberships     Membership[]
+  findings        Finding[]
+  observations    Observation[]
+  scans           Scan[]
+  auditEvents     AuditEvent[]
+  auditAccessLogs AuditAccessLog[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, deletedAt])
+  @@index([parentScopeId])
+}
+
+model Tenant {
+  id          String    @id @default(cuid())
+  workspaceId String // denormalized for RLS
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  scopeId     String
+  scope       Scope     @relation(fields: [scopeId], references: [id])
+
+  displayName          String
+  msTenantId           String // the M365 tenant GUID
+  encryptedCredentials Bytes // sealed blob; NEVER selected by default
+  authMethod           TenantAuthMethod
+  status               TenantStatus     @default(ACTIVE)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  findings     Finding[]
+  observations Observation[]
+  scans        Scan[]
+
+  @@unique([workspaceId, msTenantId])
+  @@index([workspaceId, scopeId, deletedAt])
+}
+
+enum TenantAuthMethod {
+  CLIENT_SECRET
+  WORKLOAD_IDENTITY // preferred — no stored secret
+}
+
+enum TenantStatus {
+  ACTIVE
+  DISCONNECTED
+  ERROR
+}
+
+// =============================================================================
+// CHECKS, FRAMEWORKS, AND THEIR MAPPING
+// =============================================================================
+//
+// Checks are global (no workspaceId) for builtins, scoped to a PluginRepo for
+// custom checks. Findings reference checks by SLUG, not by surrogate id, so
+// findings survive check version bumps.
+//
+// Framework mappings are hybrid: source-of-truth lives in policy source files,
+// and a sync job materializes them into CheckFrameworkMapping for query
+// performance. The materialized table is a CACHE — safe to drop and rebuild.
+//
+// The "current version of a check" lookup is served by a materialized view
+// defined in 001_rls_setup.sql, refreshed on policy load.
+// =============================================================================
+
+model Check {
+  id           String      @id @default(cuid())
+  slug         String // stable public identity, e.g. "wt.entra.ca.require_mfa_admins"
+  version      Int // monotonic per slug
+  title        String
+  description  String      @db.Text
+  rationale    String      @db.Text
+  remediation  String      @db.Text // markdown
+  severity     Severity
+  severityRank Int // numeric mirror of severity for ORDER BY (see design notes)
+  source       CheckSource @default(BUILTIN)
+  pluginRepoId String? // null for builtin
+  pluginRepo   PluginRepo? @relation(fields: [pluginRepoId], references: [id])
+  graphScopes  String[] // required Microsoft Graph permissions
+
+  createdAt DateTime @default(now())
+
+  frameworkMappings CheckFrameworkMapping[]
+
+  @@unique([slug, version])
+  @@index([slug])
+  @@index([source, pluginRepoId])
+}
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CheckSource {
+  BUILTIN
+  PLUGIN
+}
+
+model PluginRepo {
+  id          String           @id @default(cuid())
+  workspaceId String
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id])
+  githubRepo  String // "acme/watchtower-policies"
+  branch      String           @default("main")
+  lastSyncAt  DateTime?
+  lastSyncSha String?
+  status      PluginRepoStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checks Check[]
+
+  @@unique([workspaceId, githubRepo])
+  @@index([workspaceId])
+}
+
+enum PluginRepoStatus {
+  ACTIVE
+  ERROR
+  DISCONNECTED
+}
+
+model Framework {
+  id        String  @id @default(cuid())
+  slug      String  @unique // "cis-m365-v2.0"
+  name      String // "CIS Microsoft 365 Foundations Benchmark"
+  publisher String // "CIS", "NIST", "ISO"
+  version   String // "2.0"
+  url       String?
+
+  createdAt DateTime @default(now())
+
+  mappings CheckFrameworkMapping[]
+}
+
+model CheckFrameworkMapping {
+  checkSlug    String // by slug to survive check version bumps
+  frameworkId  String
+  framework    Framework @relation(fields: [frameworkId], references: [id])
+  checkId      String // current-version pointer (refreshed on policy sync)
+  check        Check     @relation(fields: [checkId], references: [id])
+  controlId    String // the framework's own identifier, e.g. "1.1.4"
+  controlTitle String
+  // TODO: performance — push framework filter into the join, not the WHERE
+  // clause. See Schema-Design-Notes.md "canonical query walkthrough".
+
+  @@id([checkSlug, frameworkId, controlId])
+  @@index([frameworkId])
+  @@index([checkSlug])
+}
+
+// =============================================================================
+// FINDINGS, OBSERVATIONS, SCANS
+// =============================================================================
+//
+// A Scan is an event that produces Observations. Observations update Findings.
+// Findings are the durable, stateful objects — one per (tenant, checkSlug)
+// pair, ever. Observations are append-only.
+// =============================================================================
+
+model Finding {
+  id String @id @default(cuid())
+
+  // Denormalized for RLS and composite-index efficiency
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  scopeId     String
+  scope       Scope     @relation(fields: [scopeId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  checkSlug String // by slug, not checkId — survives version bumps
+
+  status     FindingStatus     @default(OPEN)
+  visibility FindingVisibility @default(DEFAULT)
+
+  // Severity is copied from check at creation (severityRank for sorting)
+  // and may be overridden per-finding by the customer ("for us this is critical")
+  severity     Severity
+  severityRank Int
+
+  // Lifecycle timestamps
+  firstSeenAt              DateTime  @default(now())
+  lastSeenAt               DateTime  @default(now())
+  acknowledgedAt           DateTime?
+  acknowledgedBy           String? // userId
+  resolvedAt               DateTime?
+  resolvedBy               String?
+  regressionFromResolvedAt DateTime? // set when a resolved finding fails again
+
+  // Acceptance
+  acceptedAt          DateTime?
+  acceptedBy          String?
+  acceptanceReason    String?   @db.Text
+  acceptanceExpiresAt DateTime? // mandatory when status = ACCEPTED_RISK
+
+  // Mute (orthogonal to status)
+  mutedAt    DateTime?
+  mutedBy    String?
+  mutedUntil DateTime? // null = indefinite
+
+  // Assignment and notes
+  assignedTo String? // userId
+  notes      String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  observations Observation[]
+  // TODO: add index on (workspaceId, checkSlug) once we ship the
+  // "show me every tenant failing check X" view.
+
+  @@unique([tenantId, checkSlug])
+  // The load-bearing index for the canonical findings list query.
+  // (workspaceId, scopeId, status, severityRank DESC, firstSeenAt) lets a
+  // filtered + sorted list query be served from index alone.
+  @@index([workspaceId, scopeId, status, severityRank(sort: Desc), firstSeenAt])
+  @@index([workspaceId, status]) // for workspace-wide rollups
+  @@index([tenantId, status]) // for per-tenant detail pages
+  @@index([assignedTo])
+}
+
+enum FindingStatus {
+  OPEN
+  ACKNOWLEDGED
+  IN_PROGRESS
+  ACCEPTED_RISK // requires acceptanceExpiresAt; auto-reverts to OPEN on expiry
+  RESOLVED // set by engine when next observation passes, or manually
+  NOT_APPLICABLE // engine-set; auto-revisits when conditions change
+}
+
+enum FindingVisibility {
+  DEFAULT
+  MUTED // orthogonal to status: a muted finding still has its real status
+}
+
+model Observation {
+  id String @id @default(cuid())
+
+  // Denormalized for RLS
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  scopeId     String
+  scope       Scope     @relation(fields: [scopeId], references: [id])
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+
+  scanId    String
+  scan      Scan    @relation(fields: [scanId], references: [id])
+  findingId String
+  finding   Finding @relation(fields: [findingId], references: [id])
+
+  result   ObservationResult
+  // Structured evidence — the raw data the check evaluated.
+  // Phase 1 will add an Evidence table for attached files (PDFs, screenshots).
+  evidence Json              @default("{}")
+
+  observedAt DateTime @default(now())
+
+  // Append-only at the application layer; enforced at the DB level
+  // by the runtime role's lack of UPDATE/DELETE grants on this table
+  // (see 001_rls_setup.sql).
+  // TODO: partition by month once volume justifies it. See design notes.
+
+  @@index([workspaceId, scopeId, observedAt])
+  @@index([findingId, observedAt])
+  @@index([scanId])
+}
+
+enum ObservationResult {
+  PASS
+  FAIL
+  ERROR
+  NOT_APPLICABLE
+}
+
+model Scan {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  scopeId     String
+  scope       Scope     @relation(fields: [scopeId], references: [id])
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+
+  triggeredBy       ScanTrigger
+  triggeredByUserId String?
+  status            ScanStatus  @default(PENDING)
+
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  checksRun    Int       @default(0)
+  checksFailed Int       @default(0)
+  inngestRunId String? // for debugging
+
+  createdAt DateTime @default(now())
+
+  observations Observation[]
+
+  @@index([workspaceId, scopeId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([status])
+}
+
+enum ScanTrigger {
+  MANUAL
+  SCHEDULED
+  WEBHOOK
+  API
+}
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+// =============================================================================
+// RBAC: Permission-first with custom roles
+// =============================================================================
+//
+// Permissions are a closed catalog managed by Watchtower releases — never by
+// customers. Customers compose them into Roles, which they bind to users via
+// Memberships. The catalog itself, the locked-permission list, and the four
+// system role presets are seeded by seeds/permissions.ts.
+// =============================================================================
+
+model Permission {
+  key                     String             @id // "findings:mute" — IS the identity
+  category                String // for grouping in UI: "findings", "tenants", etc.
+  description             String             @db.Text
+  scopeApplicability      ScopeApplicability // workspace_only / scope_only / both
+  assignableToCustomRoles Boolean            @default(true)
+  // false for permissions locked to system roles only; see locked list in seed.
+
+  createdAt DateTime @default(now())
+
+  rolePermissions RolePermission[]
+}
+
+enum ScopeApplicability {
+  WORKSPACE_ONLY
+  SCOPE_ONLY
+  BOTH
+}
+
+model Role {
+  id           String     @id @default(cuid())
+  workspaceId  String? // null = system role (built-in preset)
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id])
+  name         String
+  slug         String
+  description  String?    @db.Text
+  isSystem     Boolean    @default(false)
+  isAssignable Boolean    @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissions RolePermission[]
+  memberships MembershipRole[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model RolePermission {
+  roleId        String
+  role          Role       @relation(fields: [roleId], references: [id])
+  permissionKey String
+  permission    Permission @relation(fields: [permissionKey], references: [key])
+
+  @@id([roleId, permissionKey])
+  @@index([permissionKey])
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  userId      String // Better Auth user id (opaque)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  scopeId     String? // null = workspace-wide membership
+  scope       Scope?    @relation(fields: [scopeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roles MembershipRole[]
+
+  // A user can hold multiple memberships in the same workspace at different
+  // scopes. Roles attached to a workspace-wide membership apply everywhere;
+  // roles attached to a scope-bound membership apply only within that scope.
+  @@unique([userId, workspaceId, scopeId])
+  @@index([workspaceId, userId])
+  @@index([scopeId])
+}
+
+model MembershipRole {
+  membershipId String
+  membership   Membership @relation(fields: [membershipId], references: [id])
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id])
+
+  @@id([membershipId, roleId])
+  @@index([roleId])
+}
+
+// =============================================================================
+// AUDIT LOG
+// =============================================================================
+//
+// Two tables, deliberately:
+//   - AuditEvent     hash-chained, Ed25519-signed, transactional with the
+//                    operational change. For state-changing actions.
+//   - AuditAccessLog high-volume, batched into Merkle roots committed to
+//                    AuditEvent. For optional read auditing.
+//
+// Append-only is enforced by:
+//   1. Runtime DB role having only INSERT + SELECT grants (001_rls_setup.sql)
+//   2. BEFORE UPDATE OR DELETE triggers that raise (001_rls_setup.sql)
+//   3. RLS policies scoping reads to current workspace
+//
+// The private signing key never lives in this database. Only the public key
+// does, in AuditSigningKey, for verification.
+// =============================================================================
+
+model AuditEvent {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  scopeId     String? // null for workspace-level events
+  scope       Scope?    @relation(fields: [scopeId], references: [id], onDelete: Restrict)
+
+  eventType    String // "finding.muted" — closed enum, see errors.ts catalog
+  eventVersion Int    @default(1) // schema version for eventData
+
+  // The actor
+  actorType      ActorType
+  actorId        String // userId, system process name, token id, plugin slug
+  actorIp        String?
+  actorUserAgent String?
+
+  // The target
+  targetType String // "finding", "tenant", "role", ...
+  targetId   String
+
+  // Payload
+  eventData Json // schema determined by (eventType, eventVersion)
+
+  // The chain — see Schema-Design-Notes for canonicalization rules
+  prevHash      String // hex of previous event's rowHash in same workspace
+  rowHash       String // hex of hash(prevHash || canonical(this row))
+  chainSequence Int // gap-free per workspace
+  signature     String // Ed25519 signature, hex
+  signingKeyId  String
+  signingKey    AuditSigningKey @relation(fields: [signingKeyId], references: [id], onDelete: Restrict)
+
+  // Tracing
+  traceId String? // threaded from request through tRPC, Inngest, audit
+
+  occurredAt DateTime // when the action happened (set by application)
+  recordedAt DateTime @default(now()) // when the row was written
+
+  @@unique([workspaceId, chainSequence])
+  @@index([workspaceId, occurredAt])
+  @@index([workspaceId, targetType, targetId])
+  @@index([workspaceId, actorType, actorId])
+  @@index([workspaceId, eventType])
+  @@index([traceId])
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+  API_TOKEN
+  PLUGIN
+}
+
+model AuditSigningKey {
+  id        String    @id @default(cuid())
+  publicKey String // PEM-encoded Ed25519 public key
+  algorithm String    @default("ed25519")
+  createdAt DateTime  @default(now())
+  retiredAt DateTime? // when this key stopped signing new entries
+
+  events AuditEvent[]
+
+  @@index([retiredAt])
+}
+
+model AuditAccessLog {
+  id String @id @default(cuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  scopeId     String?
+  scope       Scope?    @relation(fields: [scopeId], references: [id], onDelete: Restrict)
+
+  actorType ActorType
+  actorId   String
+  actorIp   String?
+
+  resourceType String // "finding", "scan", ...
+  resourceId   String
+  action       String // "read", "list", "export"
+
+  traceId    String?
+  occurredAt DateTime @default(now())
+
+  // Append-only — same enforcement story as AuditEvent.
+  // Batch Merkle roots are computed periodically and committed to AuditEvent
+  // as `access_log.batch_committed` events. See design notes.
+
+  @@index([workspaceId, occurredAt])
+  @@index([workspaceId, resourceType, resourceId])
+  @@index([workspaceId, actorType, actorId])
+  @@index([traceId])
+}
+
+// =============================================================================
+// IDEMPOTENCY
+// =============================================================================
+//
+// Every mutation requires an idempotencyKey (UUID v4) in its input. The
+// middleware writes to this table at the start of the transaction; duplicate
+// keys return the cached response without re-executing.
+//
+// 4xx responses are cached (client must regenerate the key to retry).
+// 5xx responses are not cached (client may retry the same key safely).
+//
+// A periodic job sweeps rows older than 24 hours.
+// =============================================================================
+
+model IdempotencyKey {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  key          String // client-generated UUID v4
+  requestHash  String // hash of the canonicalized request body
+  responseBody Json
+  statusCode   Int
+
+  createdAt DateTime @default(now())
+  // expiresAt is enforced by the sweeper job, not the database.
+
+  @@unique([workspaceId, key])
+  @@index([createdAt]) // for the sweeper
+}
