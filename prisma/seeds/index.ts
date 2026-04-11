@@ -17,6 +17,7 @@
 // =============================================================================
 
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import {
   PERMISSIONS,
   SYSTEM_ROLES,
@@ -287,15 +288,31 @@ async function main(): Promise<void> {
   // Use a fresh PrismaClient. The runner intentionally does NOT use the
   // RLS-wrapped ctx.db proxy — seed operations need full access to insert
   // system roles and permissions, which are workspace-independent.
-  const db = new PrismaClient();
-
+const db = new PrismaClient({
+  adapter: new PrismaPg({
+    connectionString: process.env.DATABASE_MIGRATE_URL!,
+  }),
+});
   try {
     for (const seeder of seedersToRun) {
       log.step(`${seeder.name} — ${seeder.description}`);
       const count = flags.dryRun
-        ? await seeder.dryRun(db)
-        : await seeder.run(db);
+      ? await seeder.dryRun(db as any) 
+      : await seeder.run(db as any);
       log.ok(`${seeder.name}: ${count} records ${flags.dryRun ? "would be" : ""} affected.`);
+    }
+
+    // === DIAGNOSTIC: prove the data was actually written to the DB ===
+    if (!flags.dryRun) {
+      log.info("🔍 Verifying final DB state after seed...");
+      const [permCount, roleCount, rpCount] = await Promise.all([
+        db.permission.count(),
+        db.role.count(),
+        db.rolePermission.count(),
+      ]);
+      log.info(`   Permission: ${permCount} rows`);
+      log.info(`   Role:       ${roleCount} rows`);
+      log.info(`   RolePermission: ${rpCount} rows`);
     }
 
     log.divider();
@@ -304,7 +321,7 @@ async function main(): Promise<void> {
   } catch (err) {
     log.err("Seed run failed:");
     console.error(err);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     await db.$disconnect();
   }
@@ -312,5 +329,5 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   console.error(err);
-  process.exit(1);
+  process.exitCode = 1;
 });
