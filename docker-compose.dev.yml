@@ -1,0 +1,131 @@
+# =============================================================================
+# Watchtower — local development infrastructure
+# =============================================================================
+#
+# Brings up the services Watchtower needs to run locally:
+#   - PostgreSQL 18    operational database, with role bootstrap on first start
+#   - Garage S3        evidence vault (S3-compatible object store)
+#   - Inngest          dev server for stateful workflow orchestration
+#
+# What is NOT in this file:
+#   - The Watchtower app itself. Run it on your host with `bun run dev`.
+#     This is the fastest dev loop — hot reload, native debugger, no rebuild
+#     cycle. The app talks to the containerized infra via localhost.
+#   - Traefik. Not needed in dev because the app runs on the host.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d         start
+#   docker compose -f docker-compose.dev.yml down          stop
+#   docker compose -f docker-compose.dev.yml down -v       stop + WIPE volumes
+#   docker compose -f docker-compose.dev.yml logs -f pg    tail postgres logs
+#
+# First-run sequence:
+#   1. cp .env.example .env
+#   2. docker compose -f docker-compose.dev.yml up -d
+#   3. wait ~10s for postgres to finish role bootstrap
+#   4. bun run db:push          (apply schema)
+#   5. psql ... -f prisma/migrations/001_rls_setup.sql   (apply RLS migration)
+#   6. bun run db:seed -- --dry-run   (validate seeds)
+#   7. bun run db:seed                (apply seeds)
+#   8. bun run dev                    (start the app on host)
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 18
+  # ---------------------------------------------------------------------------
+  # The init script in ./docker/postgres/init/ runs ONCE on first container
+  # start (when the data volume is empty). It creates the watchtower_app and
+  # watchtower_migrate roles before any application or migration connects.
+  # If you ever need to re-bootstrap, `docker compose down -v` to wipe the
+  # volume, then bring it back up.
+  pg:
+    image: postgres:18-alpine
+    container_name: watchtower-pg
+    restart: unless-stopped
+    environment:
+      # The superuser, used only by the init script and emergency access.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: watchtower
+      # Passed through to the init script (see 01-create-roles.sh).
+      WATCHTOWER_APP_PASSWORD: ${WATCHTOWER_APP_PASSWORD}
+      WATCHTOWER_MIGRATE_PASSWORD: ${WATCHTOWER_MIGRATE_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d watchtower"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - watchtower
+
+  # ---------------------------------------------------------------------------
+  # Garage S3
+  # ---------------------------------------------------------------------------
+  # The evidence vault. Single-node configuration for dev — three nodes is the
+  # production minimum for replication, but one is fine for local iteration.
+  # The init job creates the default bucket and access keys on first start.
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: watchtower-garage
+    restart: unless-stopped
+    ports:
+      - "3900:3900" # S3 API
+      - "3902:3902" # Web UI (admin)
+    volumes:
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+      - ./docker/garage/garage.toml:/etc/garage.toml:ro
+    networks:
+      - watchtower
+
+  # ---------------------------------------------------------------------------
+  # Inngest dev server
+  # ---------------------------------------------------------------------------
+  # The dev server is in-memory and stateless — it does NOT persist events
+  # across restarts, which is exactly what you want in dev. Production uses
+  # the cloud or self-hosted Inngest (separate compose file).
+  inngest:
+    image: inngest/inngest:latest
+    container_name: watchtower-inngest
+    restart: unless-stopped
+    command: ["inngest", "dev", "-u", "http://host.docker.internal:3000/api/inngest"]
+    ports:
+      - "8288:8288" # dev UI
+    extra_hosts:
+      # Allows the container to reach the app running on the host machine.
+      - "host.docker.internal:host-gateway"
+    networks:
+      - watchtower
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+# Named volumes survive `docker compose down`. They're wiped only by
+# `docker compose down -v`. Use that explicitly when you want a fresh DB.
+
+volumes:
+  pg_data:
+    name: watchtower_pg_data
+  garage_meta:
+    name: watchtower_garage_meta
+  garage_data:
+    name: watchtower_garage_data
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+# A single bridge network so the services can talk to each other by name.
+# The app on the host connects via localhost: ports.
+
+networks:
+  watchtower:
+    name: watchtower-dev
+    driver: bridge
