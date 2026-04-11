@@ -35,26 +35,8 @@
 -- The runtime role is the most important security boundary in the database.
 -- If this role can mutate audit rows or bypass RLS, every other guarantee in
 -- this file is theater.
-CREATE SCHEMA IF NOT EXISTS app;
-
--- Skapa watchtower_app om den inte finns
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'watchtower_app') THEN
-        CREATE ROLE watchtower_app WITH LOGIN;
-    END IF;
-END
-$$;
-
--- Skapa watchtower_migrate om den inte finns
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'watchtower_migrate') THEN
-        CREATE ROLE watchtower_migrate WITH LOGIN BYPASSRLS CREATEDB;
-    END IF;
-END
-$$;
 -- The migration role owns the schema; the runtime role only gets explicit grants.
+
 ALTER SCHEMA public OWNER TO watchtower_migrate;
 
 -- =============================================================================
@@ -135,6 +117,12 @@ CREATE OR REPLACE FUNCTION app.audit_append_only_guard()
   LANGUAGE plpgsql
 AS $$
 BEGIN
+  -- ALLOW Prisma / Migration user to truncate tables during dev resets and migrations
+  IF current_user = 'watchtower_migrate' THEN
+    RETURN NULL;
+  END IF;
+
+  -- Block the runtime application
   RAISE EXCEPTION 'Audit log is append-only. Table % cannot be modified or deleted.', TG_TABLE_NAME
     USING ERRCODE = 'insufficient_privilege';
 END;
