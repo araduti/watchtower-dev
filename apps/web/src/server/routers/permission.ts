@@ -4,10 +4,8 @@
  * Cursor-based pagination per API-Conventions.md §9.
  *
  * NOTE: The permission table is global (no workspaceId), so RLS does not
- * apply to it. However, per Non-Negotiable Rule #1, we use ctx.db once
- * it exists (Phase 1.1). For now, we use the singleton prisma client
- * because ctx.db is not yet wired in the middleware chain. This is a
- * known Phase 1.0 limitation — the TODO in trpc.ts tracks this.
+ * apply to it. We use ctx.db for consistency with Non-Negotiable Rule #1
+ * — all database access goes through the RLS-scoped transaction client.
  */
 
 import { z } from "zod";
@@ -39,18 +37,13 @@ export const permissionRouter = router({
     .query(async ({ input, ctx }) => {
       await ctx.requirePermission("checks:read");
 
-      // TODO: Phase 1.1 — use ctx.db instead of direct prisma import
-      // once RLS-aware proxy is wired through the middleware chain.
-      // Permission table is global (no RLS), so this is safe for now.
-      const { prisma } = await import("@watchtower/db");
-
       const where: Record<string, unknown> = {};
       if (input.category) {
         where["category"] = input.category;
       }
 
       // Cursor pagination: fetch limit + 1 to detect next page
-      const rows = await prisma.permission.findMany({
+      const rows = await ctx.db.permission.findMany({
         where,
         orderBy: [{ key: "asc" }],
         take: input.limit + 1,
