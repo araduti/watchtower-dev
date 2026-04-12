@@ -12,6 +12,11 @@
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
+import { resolveSession } from "@watchtower/auth";
+import type { PrismaTransactionClient } from "@watchtower/db";
+import { withRLS } from "@watchtower/db";
+import { loadPermissionContext } from "./permissions.ts";
+import type { PermissionContext } from "./permissions.ts";
 
 // ---------------------------------------------------------------------------
 // Context
@@ -24,11 +29,11 @@ export interface TRPCContext {
   } | null;
 }
 
-export async function createTRPCContext(_opts: {
+export async function createTRPCContext(opts: {
   headers: Headers;
 }): Promise<TRPCContext> {
-  // TODO: Phase 1.1 — resolve Better Auth session from cookies/headers
-  return { session: null };
+  const session = await resolveSession(opts.headers);
+  return { session };
 }
 
 // ---------------------------------------------------------------------------
@@ -36,7 +41,7 @@ export async function createTRPCContext(_opts: {
 // ---------------------------------------------------------------------------
 
 const t = initTRPC.context<TRPCContext>().create({
-  // TODO: add superjson transformer once @trpc/client is wired
+  // superjson transformer deferred until @trpc/client is wired
 });
 
 // ---------------------------------------------------------------------------
@@ -59,11 +64,6 @@ const enforceAuth = t.middleware(({ ctx, next }) => {
 // ---------------------------------------------------------------------------
 // Permission context
 // ---------------------------------------------------------------------------
-
-interface PermissionContext {
-  permissions: Set<string>;
-  accessibleScopeIds: string[];
-}
 
 /**
  * Create a permission checker that returns NOT_FOUND (not FORBIDDEN)
@@ -93,27 +93,66 @@ function createRequirePermission(permCtx: PermissionContext) {
 }
 
 // ---------------------------------------------------------------------------
-// Protected procedure
+// Protected procedure — loads permissions and wires RLS
 // ---------------------------------------------------------------------------
+
+/**
+ * Extended context exposed to protected procedures.
+ *
+ * `db` is an RLS-scoped Prisma transaction client. All database access
+ * inside procedures MUST go through `ctx.db` — never the singleton client.
+ */
+export interface ProtectedContext {
+  session: { userId: string; workspaceId: string };
+  requirePermission: (
+    permission: string,
+    opts?: { scopeId?: string },
+  ) => Promise<void>;
+  permissionContext: PermissionContext;
+  traceId: string;
+  db: PrismaTransactionClient;
+}
 
 const protectedMiddleware = t.middleware(async ({ ctx, next }) => {
   const session = ctx.session as { userId: string; workspaceId: string };
 
-  // TODO: Phase 1.1 — load from database via Membership → Role → Permission
-  const permCtx: PermissionContext = {
-    permissions: new Set<string>(),
-    accessibleScopeIds: [],
-  };
+  // Step 2: Load permission context from database
+  // Queries Membership → MembershipRole → Role → RolePermission → Permission
+  // Respects scopeIsolationMode (SOFT vs STRICT) per Architecture.md §2
+  const permCtx = await loadPermissionContext(
+    session.userId,
+    session.workspaceId,
+  );
 
   const traceId = crypto.randomUUID();
 
-  return next({
-    ctx: {
-      session,
-      requirePermission: createRequirePermission(permCtx),
-      permissionContext: permCtx,
-      traceId,
-    },
+  // Step 3+4: Wire RLS session variables and expose ctx.db
+  // withRLS() sets SET LOCAL for workspace/scope context,
+  // completing the three-layer isolation chain:
+  //   Layer 1: ctx.requirePermission (application check)
+  //   Layer 2: explicit WHERE filters in router queries
+  //   Layer 3: Postgres RLS via SET LOCAL (safety net)
+  //
+  // If the user has no accessible scopes, we still need to proceed
+  // (they may be calling workspace-level procedures). In that case,
+  // we pass a sentinel scope ID that will match nothing in RLS,
+  // ensuring workspace-level procedures work but scope-level data
+  // is invisible.
+  const scopeIds =
+    permCtx.accessibleScopeIds.length > 0
+      ? permCtx.accessibleScopeIds
+      : ["__no_scope_access__"];
+
+  return withRLS(session.workspaceId, scopeIds, async (tx) => {
+    return next({
+      ctx: {
+        session,
+        requirePermission: createRequirePermission(permCtx),
+        permissionContext: permCtx,
+        traceId,
+        db: tx,
+      },
+    });
   });
 });
 
