@@ -70,7 +70,11 @@ export async function withRLS<T>(
     // SET LOCAL scopes variables to this transaction only.
     // They are automatically cleared on commit/rollback — never leak
     // across pooled connections even when pg.Pool reuses a connection.
-    const scopeIdList = scopeIds.join(",");
+    //
+    // Scope IDs are wrapped in PostgreSQL array literal format {id1,id2}
+    // and each ID is validated by assertSafeIdentifier() to prevent
+    // comma injection into the scope list.
+    const scopeIdList = `{${scopeIds.join(",")}}`;
 
     await tx.$executeRaw`SET LOCAL app.current_workspace_id = ${workspaceId}`;
     await tx.$executeRaw`SET LOCAL app.current_user_scope_ids = ${scopeIdList}`;
