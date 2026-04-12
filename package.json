@@ -1,6 +1,10 @@
 {
   "name": "watchtower-dev",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
@@ -17,6 +21,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.2.4",
+    "@types/pg": "^8",
     "vitest": "^4.1.4"
   },
   "peerDependencies": {
@@ -25,7 +30,10 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7",
+    "@trpc/server": "^11.16.0",
     "@types/node": "^22.13.5",
-    "prisma": "^7"
+    "pg": "^8",
+    "prisma": "^7",
+    "zod": "^4.3.6"
   }
 }

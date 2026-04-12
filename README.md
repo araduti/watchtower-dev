@@ -208,6 +208,16 @@ TBD.
 
 ## Status
 
-Phase 0 (the database foundation) is in place: schema, RLS, audit log infrastructure, permission catalog, system roles, dev infrastructure. Phase 1 — the first tRPC routers, the Microsoft Graph connector, the GitHub App for plugin sync, the application UI — is the next focus.
+**Phase 0** (database foundation) is complete: schema, RLS, audit log infrastructure, permission catalog, system roles, dev infrastructure.
+
+**Phase 1.0** (application foundation) is in progress:
+- ✅ Monorepo structure with npm workspaces (`packages/*`, `apps/*`)
+- ✅ `@watchtower/db` — RLS-aware Prisma client wrapper (singleton client, `withRLS()`, startup validation, soft-delete extension)
+- ✅ `@watchtower/errors` — Two-layer error code catalog (31 codes, zero dependencies)
+- ✅ `apps/web` — tRPC v11 skeleton with protected procedure middleware and first router (`permission.list`)
+- ✅ ADR-001: monorepo structure decisions
+- ✅ 89 passing tests (57 Phase 0 + 32 Phase 1)
+
+**Phase 1.1** (next): Better Auth integration, permission loading from database, RLS wiring in tRPC middleware, first workspace-scoped router.
 
 For the full roadmap, see `Architecture.md` section 12 ("Open design questions") and section 13 ("What Phase 0 actually delivers").
