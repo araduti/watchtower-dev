@@ -53,7 +53,7 @@ services:
       WATCHTOWER_APP_PASSWORD: ${WATCHTOWER_APP_PASSWORD}
       WATCHTOWER_MIGRATE_PASSWORD: ${WATCHTOWER_MIGRATE_PASSWORD}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -77,8 +77,8 @@ services:
     container_name: watchtower-garage
     restart: unless-stopped
     ports:
-      - "3900:3900" # S3 API
-      - "3902:3902" # Web UI (admin)
+      - "127.0.0.1:3900:3900" # S3 API
+      - "127.0.0.1:3902:3902" # Web UI (admin)
     volumes:
       - garage_meta:/var/lib/garage/meta
       - garage_data:/var/lib/garage/data
@@ -98,7 +98,7 @@ services:
     restart: unless-stopped
     command: ["inngest", "dev", "-u", "http://host.docker.internal:3000/api/inngest"]
     ports:
-      - "8288:8288" # dev UI
+      - "127.0.0.1:8288:8288" # dev UI
     extra_hosts:
       # Allows the container to reach the app running on the host machine.
       - "host.docker.internal:host-gateway"
