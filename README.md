@@ -38,14 +38,15 @@ If anything in steps 3–4 fails, the most likely cause is something else listen
 
 ```
 watchtower-dev/
-├── apps/                          # planned: application code (Phase 1+)
+├── apps/                          # application code
 │   ├── web/                       # Next.js 16 app, tRPC server, UI
-│   └── worker/                    # Bun-based worker (Core + Plugin engines)
-├── packages/                      # planned: shared packages (Phase 1+)
+│   └── worker/                    # planned: Bun-based worker (Core + Plugin engines)
+├── packages/                      # shared packages
+│   ├── auth/                      # Better Auth configuration, Org plugin, session resolver
 │   ├── db/                        # Prisma client wrapper, RLS-aware proxy
-│   ├── engine/                    # Core engine binary, Zod policy validation
-│   ├── auth/                      # Better Auth configuration, Org plugin
-│   └── ui/                        # Shared Tailwind / shadcn components
+│   ├── errors/                    # Two-layer error code catalog (zero dependencies)
+│   ├── engine/                    # planned: Core engine binary, Zod policy validation
+│   └── ui/                        # planned: Shared Tailwind / shadcn components
 ├── prisma/
 │   ├── schema.prisma              # Entity model — single source of truth
 │   ├── migrations/                # Versioned migrations
@@ -64,7 +65,9 @@ watchtower-dev/
 │   ├── Architecture.md            # System architecture
 │   ├── Schema-Design-Notes.md     # Why the schema is the way it is
 │   ├── API-Conventions.md         # tRPC, errors, pagination, RBAC patterns
-│   └── decisions/                 # planned: ADRs for open design questions
+│   └── decisions/                 # Architecture Decision Records
+│       ├── 001-monorepo-structure.md
+│       └── 002-better-auth-integration.md
 ├── docker-compose.dev.yml         # Local infra (Postgres, Garage, Inngest)
 ├── docker-compose.prod.yml        # planned: production stack
 ├── prisma.config.ts               # Prisma 7 config — points at MIGRATE URL
@@ -74,7 +77,7 @@ watchtower-dev/
 └── README.md
 ```
 
-The `apps/` and `packages/` directories don't exist yet — they'll land as part of Phase 1 when we draft the first tRPC routers and the application code. The current Phase 0 contents are the database foundation (schema, migrations, RLS, seeds, bootstrap infrastructure).
+The `apps/` and `packages/` directories contain the application foundation built across Phase 1.0 and 1.1. The database foundation (schema, migrations, RLS, seeds, bootstrap infrastructure) was established in Phase 0.
 
 ## Tech stack
 
@@ -210,14 +213,23 @@ TBD.
 
 **Phase 0** (database foundation) is complete: schema, RLS, audit log infrastructure, permission catalog, system roles, dev infrastructure.
 
-**Phase 1.0** (application foundation) is in progress:
+**Phase 1.0** (application foundation) is complete:
 - ✅ Monorepo structure with Bun workspaces (`packages/*`, `apps/*`)
 - ✅ `@watchtower/db` — RLS-aware Prisma client wrapper (singleton client, `withRLS()`, startup validation, soft-delete extension)
 - ✅ `@watchtower/errors` — Two-layer error code catalog (31 codes, zero dependencies)
 - ✅ `apps/web` — tRPC v11 skeleton with protected procedure middleware and first router (`permission.list`)
 - ✅ ADR-001: monorepo structure decisions
-- ✅ 89 passing tests (57 Phase 0 + 32 Phase 1)
 
-**Phase 1.1** (next): Better Auth integration, permission loading from database, RLS wiring in tRPC middleware, first workspace-scoped router.
+**Phase 1.1** (authentication & middleware) is complete:
+- ✅ `@watchtower/auth` — Better Auth with Organization plugin, session resolution via `resolveSession(headers)`
+- ✅ tRPC middleware — session resolution from Better Auth cookies/headers
+- ✅ tRPC middleware — permission loading from database (Membership → Role → Permission chain, SOFT/STRICT isolation)
+- ✅ tRPC middleware — RLS wiring via `ctx.db` (three-layer isolation chain complete)
+- ✅ `workspace` router — `workspace.get`, `workspace.updateSettings` (with idempotencyKey, audit log, permission check)
+- ✅ `scope` router — `scope.list` (cursor-paginated), `scope.get` (scope-derived permission check)
+- ✅ ADR-002: Better Auth + Organization plugin decisions
+- ✅ 155 passing tests (57 Phase 0 + 98 Phase 1)
+
+**Phase 1.2** (next): Idempotency middleware (table write/lookup), audit log hash chain construction (Ed25519 signing), rate limiting middleware.
 
 For the full roadmap, see `Architecture.md` section 12 ("Open design questions") and section 13 ("What Phase 0 actually delivers").
