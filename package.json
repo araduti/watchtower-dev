@@ -2,6 +2,10 @@
   "name": "watchtower-dev",
   "private": true,
   "scripts": {
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:watch": "vitest watch",
+    "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:migrate": "DATABASE_URL=$DATABASE_MIGRATE_URL prisma migrate deploy",
     "db:migrate:dev": "DATABASE_URL=$DATABASE_MIGRATE_URL prisma migrate dev",
@@ -12,7 +16,8 @@
     "db:reset": "docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.4"
+    "@types/bun": "^1.2.4",
+    "vitest": "^4.1.4"
   },
   "peerDependencies": {
     "typescript": "^5"

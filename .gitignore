@@ -1,4 +1,9 @@
 node_modules
+# Private keys and credentials must never be committed to version control.
+# The secrets/ directory holds Ed25519 audit-signing keys, GitHub App private
+# keys, and any other sensitive material required at runtime.
+secrets/*
+!secrets/README.md
 # Keep environment variables out of version control
 .env
 
