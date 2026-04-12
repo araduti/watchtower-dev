@@ -211,7 +211,7 @@ TBD.
 **Phase 0** (database foundation) is complete: schema, RLS, audit log infrastructure, permission catalog, system roles, dev infrastructure.
 
 **Phase 1.0** (application foundation) is in progress:
-- ✅ Monorepo structure with npm workspaces (`packages/*`, `apps/*`)
+- ✅ Monorepo structure with Bun workspaces (`packages/*`, `apps/*`)
 - ✅ `@watchtower/db` — RLS-aware Prisma client wrapper (singleton client, `withRLS()`, startup validation, soft-delete extension)
 - ✅ `@watchtower/errors` — Two-layer error code catalog (31 codes, zero dependencies)
 - ✅ `apps/web` — tRPC v11 skeleton with protected procedure middleware and first router (`permission.list`)

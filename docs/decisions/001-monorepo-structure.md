@@ -12,12 +12,13 @@ CI simple and dependency management consistent.
 
 ## Decisions
 
-### 1. npm workspaces (not Turborepo / Nx)
+### 1. Bun workspaces (not Turborepo / Nx)
 
-CI runs on Node.js 22 with `npm ci`. Adding Turborepo/Nx would increase CI
-complexity for marginal benefit at ~3 packages. The `"workspaces"` field in
-`package.json` is compatible with both npm and Bun, so switching CI to Bun
-later requires no config changes. Revisit at >8 packages or >60s CI builds.
+CI and local development both use Bun, matching the project's stated runtime.
+The `"workspaces"` field in `package.json` is native to Bun. Adding
+Turborepo/Nx would increase CI complexity for marginal benefit at ~3 packages.
+Only `bun.lock` is committed; no `package-lock.json`. Revisit at >8 packages
+or >60s CI builds.
 
 ### 2. `prisma/` stays at root
 
@@ -29,8 +30,9 @@ The schema is a shared contract, not an implementation detail of one package.
 ### 3. `pg` npm package (not Bun's native `Bun.sql`)
 
 `@prisma/adapter-pg` requires `pg.Pool`. `Bun.sql` is experimental, lacks a
-Pool abstraction, and doesn't exist on Node.js (CI). `pg` works identically
-on both runtimes. Database access is I/O-bound — no performance difference.
+Pool abstraction, and is not supported by `@prisma/adapter-pg`. `pg` works
+identically under Bun and Node.js. Database access is I/O-bound — no
+performance difference.
 
 ### 4. Shared dependencies hoisted to root
 
@@ -45,8 +47,8 @@ tests. The tRPC-specific factory (`TRPCError` wrapper) lives in
 
 ## Consequences
 
-**Easier:** Onboarding (one `npm ci`), CI (unchanged pipeline), schema
-governance (single source of truth), cross-package error codes.
+**Easier:** Onboarding (one `bun install`), CI (single runtime matches dev),
+schema governance (single source of truth), cross-package error codes.
 
 **Harder:** Parallel builds (no Turborepo cache), granular dependency trees
 (hoisting means all packages share versions). Both acceptable at current scale.
