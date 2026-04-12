@@ -1,57 +1,7 @@
-Watchtower Core Principles
-This document outlines the architectural and philosophical pillars of Watchtower. Every engineering decision—from database schema design to the sandboxing of execution—must align with these principles.
-
-1. Compliance as Structured Knowledge
-Compliance is not a "feature" or a set of static reports; it is a live data state.
-
-The Inversion: We do not write "scanners" that output PDF reports. We treat frameworks (CIS, NIST), controls, and mappings as rows in a relational database.
-
-Version Control: A new CIS version is a database migration. A customer’s internal policy is a Pull Request against their own Git repository.
-
-Unified Objects: Built-in checks and customer-authored checks are the same object types, stored in the same tables, and executed via the same engine. Overriding a default check is the same operation as writing a novel one.
-
-Technical Enforcement: Global Check and Framework tables reference customer-specific PluginRepo rows.
-
-2. Zero-Trust Execution Boundary
-Code the platform has never seen is code the platform must not trust.
-
-Sandboxing: Customer-authored checks run inside a strictly bounded execution environment (V8 Isolates).
-
-Isolation: Policies are denied access to the network, the local filesystem, and the underlying database. They receive a read-only Resource Graph and return a structured Observation.
-
-Input Posture: This "untrusted" posture is applied consistently to every input not authored by the core Watchtower team.
-
-Technical Enforcement: Bun-based worker nodes spawning isolated V8 contexts with memory and CPU caps.
-
-3. Observation-Finding Inversion
-The fundamental question is not "What did the latest scan find?" but "What is the current state of this condition, and how did it get here?"
-
-Observations: The raw, ephemeral output of a scan (Pass/Fail/Error).
-
-Findings: Durable, stateful entities that persist across scans. A finding has a lifecycle: OPEN → ACKNOWLEDGED → RESOLVED.
-
-Drift Detection: Because we diff Observations against Findings in the database, drift detection and historical reasoning ("How long has this been broken?") are first-class citizens of the data model.
-
-Technical Enforcement: PostgreSQL stored procedures performing Set Difference operations between Observation snapshots and Finding states.
-
-4. Provable History (Non-Repudiation)
-We do not "log everything"; we provide provable history.
-
-Immutable Ledger: Every state change (muting a finding, resolving a vulnerability) is recorded in an audit trail that is append-only at the database level.
-
-Cryptographic Verification: Entries are hash-chained and signed with Ed25519 keys. A security-accountable customer can prove to an auditor that no finding was silently edited or deleted.
-
-Independent Verification: The audit trail is designed so that a third party can verify the integrity of the compliance history without needing access to the application source code.
-
-Technical Enforcement: AuditEvent table with prevHash and signature columns, protected by PostgreSQL BEFORE UPDATE OR DELETE triggers.
-
-5. Multi-Tenant Hard isolation
-Security at the application layer is insufficient; security must be enforced at the data layer.
-
-RLS-First: No query reaches the database without a workspace_id context.
-
-Role Separation: The engine that runs migrations (watchtower_migrate) and the engine that serves the UI (watchtower_app) are separate database roles with distinct permission sets.
-
-Scope Boundaries: Support for both SOFT (MSP-style) and STRICT (Enterprise-style) isolation modes at the schema level.
-
-Technical Enforcement: PostgreSQL Row Level Security (RLS) policies and SET app.current_workspace_id session variables.
+Watchtower treats compliance as a form of structured knowledge, not as a product feature. Frameworks, checks, controls, and the mappings between them are rows in a database — so a new CIS version is a migration, a customer's internal policy is a pull request against their own GitHub repo, and an auditor's bespoke control is a record, not a release. The platform executes checks; customers own the definitions, and through their own GitHub repositories — synced via GitOps, reviewed and approved by the customer's own compliance process before anything runs — they can write compliance logic the platform has never seen. Our built-in checks and a customer's custom checks are the same kind of object, written the same way, reviewed through the same approval flow, stored in the same table. Overriding a shipped check and writing a novel one are the same operation. Out of the box, Watchtower ships the frameworks customers need on day one — CIS, NIST 800-53, and our own curated best-practice catalog — maintained as the frameworks themselves evolve. That content is where most customers start, and for most it's enough; the ones with deeper or more specific compliance needs extend it through the same mechanism the platform uses internally.
+Customer-authored checks run inside a sandboxed execution boundary, because code the platform has never seen is code the platform must not trust — a posture Watchtower applies consistently to every input it does not author itself.
+A compliance question is not "what did the latest scan find." It is "what is the state of every compliance-relevant condition across every tenant, right now — and how did each condition get here." Scans produce observations; observations update findings; findings persist across scans and carry their own lifecycle — open, muted, accepted as risk, resolved. This inversion is what makes drift detection, historical reasoning, and the "how long has this been broken" question first-class rather than retrofitted.
+Every state change is recorded in an audit trail designed for independent verification — hash-chained, signed, append-only at the database level — so a security-accountable customer can prove to an auditor, a regulator, or themselves that no finding was silently edited. Not "we log everything"; provable history.
+The same schema serves a 600-tenant MSP and a five-entity enterprise because tenancy, scope, and isolation mode are configuration, not forks.
+And because the data Watchtower holds — findings, audit trails, evidence — is itself sensitive compliance material, the platform deploys where the customer needs it to: on their own hardware, in their own jurisdiction, inside their own network boundary. A compliance platform that requires customers to trust someone else's cloud with their audit record is asking for the same faith it claims to replace.
+The platform is built for the people personally accountable for their organization's security and compliance posture — CISOs, the MSP practice leads whose reputation is bound to every client's posture, the compliance engineers who sign the attestation — and it is built on the premise that a vendor dashboard they have to take on faith is not good enough.
