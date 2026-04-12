@@ -109,7 +109,7 @@ export const workspaceRouter = router({
 
       // Build update data — only include changed fields
       const data: Record<string, unknown> = {};
-      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      const changes: Record<string, { from: string; to: string }> = {};
 
       if (input.name !== undefined && input.name !== existing.name) {
         data["name"] = input.name;

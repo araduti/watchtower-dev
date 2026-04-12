@@ -29,7 +29,7 @@ const scopeOutput = z.object({
   name: z.string(),
   slug: z.string(),
   parentScopeId: z.string().nullable(),
-  metadata: z.record(z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
