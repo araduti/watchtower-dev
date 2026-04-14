@@ -18,7 +18,13 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
+import { createAuditEvent } from "@watchtower/db";
 import { throwWatchtowerError } from "../errors.ts";
+import {
+  checkIdempotencyKey,
+  saveIdempotencyResult,
+  computeRequestHash,
+} from "../idempotency.ts";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -81,12 +87,24 @@ export const workspaceRouter = router({
    *
    * Permission: workspace:edit_settings (workspace-level, no scope)
    * Audit: workspace.updateSettings logged with changed fields
-   * Idempotency: required
+   * Idempotency: required — enforced via checkIdempotencyKey/saveIdempotencyResult
    */
   updateSettings: protectedProcedure
     .input(updateSettingsInput)
     .output(updateSettingsOutput)
     .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof updateSettingsOutput>;
+      }
+
       // Existence check first (API-Conventions §5)
       const existing = await ctx.db.workspace.findFirst({
         where: {
@@ -159,33 +177,28 @@ export const workspaceRouter = router({
 
       // Audit log entry — same transaction as the mutation
       // (Code-Conventions §1: "same transaction, not after")
-      //
-      // NOTE: The hash chain fields (prevHash, rowHash, chainSequence,
-      // signature, signingKeyId) are computed by the audit infrastructure.
-      // Phase 1.1 writes the business fields; the full chain construction
-      // is wired in Phase 1.2 when the AuditSigningKey is loaded at startup.
-      // For now, we write placeholder values that maintain the schema contract.
-      // This is a known Phase 1.1 limitation documented in ADR-002.
-      await ctx.db.auditEvent.create({
-        data: {
-          workspaceId: ctx.session.workspaceId,
-          eventType: "workspace.updateSettings",
-          actorType: "USER",
-          actorId: ctx.session.userId,
-          targetType: "Workspace",
-          targetId: existing.id,
-          eventData: changes,
-          // Placeholder chain fields — will be replaced by audit
-          // infrastructure in Phase 1.2
-          prevHash: "0000000000000000000000000000000000000000000000000000000000000000",
-          rowHash: "0000000000000000000000000000000000000000000000000000000000000000",
-          chainSequence: 0,
-          signature: "0000000000000000000000000000000000000000000000000000000000000000",
-          signingKeyId: "placeholder",
-          occurredAt: new Date(),
-          traceId: ctx.traceId,
-        },
+      // Hash chain fields (prevHash, rowHash, chainSequence, signature,
+      // signingKeyId) are computed by createAuditEvent().
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        eventType: "workspace.updateSettings",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Workspace",
+        targetId: existing.id,
+        eventData: changes,
+        traceId: ctx.traceId,
       });
+
+      // Cache the successful result for idempotency replay (API-Conventions §8)
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        updated,
+        200,
+      );
 
       return updated;
     }),

@@ -116,7 +116,7 @@ describe("Router conventions", () => {
     });
 
     it("Code-Conventions §1: writes audit log for updateSettings", () => {
-      expect(src).toContain("auditEvent.create");
+      expect(src).toContain("createAuditEvent");
       expect(src).toContain("workspace.updateSettings");
     });
 
