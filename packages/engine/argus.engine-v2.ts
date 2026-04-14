@@ -937,6 +937,122 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     return { pass: failing.length === 0, warnings: failing };
   },
 
+  // ── ScubaGear aliases ───────────────────────────────────────────────────────
+  // Map ScubaGear camelCase evaluator slugs to existing CIS kebab-case evaluators.
+
+  "dkimEnabled":  (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["dkim-enabled"]!(...args),
+  "spfEnabled":   (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["spf-records-published"]!(...args),
+  "dmarcPublished": (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["dmarc-published"]!(...args),
+
+  // dmarcReject — DMARC p=reject (stricter subset of dmarc-published)
+  "dmarcReject": (snapshot: Record<string, any>) => {
+    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
+    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records"] };
+    const failing: string[] = [];
+    for (const d of domains) {
+      if (d.domain.endsWith(".mail.onmicrosoft.com")) continue;
+      const record = (d.dmarc ?? [])[0] ?? "";
+      if (!record) { failing.push(`${d.domain} — no DMARC record`); continue; }
+      const pMatch = record.match(/;\s*p=([^;\s]+)/i) ?? record.match(/^v=DMARC1;\s*p=([^;\s]+)/i);
+      if (!pMatch || pMatch[1]?.toLowerCase() !== "reject") {
+        failing.push(`${d.domain} — DMARC p=${pMatch?.[1] ?? "missing"} (must be reject)`);
+      }
+    }
+    return { pass: failing.length === 0, warnings: failing };
+  },
+
+  // dmarcCISAContact — DMARC rua includes reports@dmarc.cyber.dhs.gov
+  "dmarcCISAContact": (snapshot: Record<string, any>) => {
+    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
+    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records"] };
+    const failing: string[] = [];
+    for (const d of domains) {
+      if (d.domain.endsWith(".mail.onmicrosoft.com")) continue;
+      const record = (d.dmarc ?? [])[0] ?? "";
+      if (!record.includes("mailto:reports@dmarc.cyber.dhs.gov")) {
+        failing.push(`${d.domain} — DMARC rua missing reports@dmarc.cyber.dhs.gov`);
+      }
+    }
+    return { pass: failing.length === 0, warnings: failing };
+  },
+
+  // calendarSharingRestricted — sharing policies must not share details with all domains
+  "calendarSharingRestricted": (snapshot: Record<string, any>) => {
+    const policies: any[] = snapshot.data?.sharingPolicies ?? [];
+    if (policies.length === 0) return { pass: false, warnings: ["No sharing policies in snapshot"] };
+    const failing: string[] = [];
+    for (const p of policies) {
+      const domains: string[] = p.domains ?? [];
+      for (const d of domains) {
+        // Format is "domain:action" — "*" means all domains, CalendarSharing* actions share details
+        if (d.startsWith("*:") && d.toLowerCase().includes("calendarsharingfreebusydetail")) {
+          failing.push(`Sharing policy "${p.name ?? p.identity}" shares calendar details with all domains`);
+        }
+      }
+    }
+    return { pass: failing.length === 0, warnings: failing };
+  },
+
+  // userConsentRestricted — permissionGrantPolicyIds must not allow broad user consent
+  "userConsentRestricted": (snapshot: Record<string, any>) => {
+    const policies: any[] = snapshot.data?.authorizationPolicy ?? [];
+    if (policies.length === 0) return { pass: false, warnings: ["No authorization policy in snapshot"] };
+    const assigned: string[] = policies[0]?.permissionGrantPolicyIdsAssignedToDefaultUserRole ?? [];
+    const broad = [
+      "managePermissionGrantsForSelf.microsoft-user-default-low",
+      "managePermissionGrantsForSelf.microsoft-user-default-legacy",
+    ];
+    const found = assigned.filter(p => broad.some(b => p.toLowerCase().includes(b.toLowerCase())));
+    return {
+      pass: found.length === 0,
+      warnings: found.length === 0 ? [] : [`User consent enabled via: ${found.join(", ")}`],
+    };
+  },
+
+  // presetPoliciesEnabled — ATP protection policy rules must include standard+strict
+  "presetPoliciesEnabled": (snapshot: Record<string, any>) => {
+    const rules: any[] = snapshot.data?.atpProtectionPolicyRules ?? [];
+    if (rules.length === 0) return { pass: false, warnings: ["No ATP protection policy rules in snapshot"] };
+    const hasStandard = rules.some((r: any) => r.identity?.toLowerCase().includes("standard"));
+    const hasStrict = rules.some((r: any) => r.identity?.toLowerCase().includes("strict"));
+    const failing: string[] = [];
+    if (!hasStandard) failing.push("Standard preset security policy not found or disabled");
+    if (!hasStrict) failing.push("Strict preset security policy not found or disabled");
+    return { pass: failing.length === 0, warnings: failing };
+  },
+
+  // ── ScubaGear TODO stubs ────────────────────────────────────────────────────
+  // The following ScubaGear evaluators require CA policy match engine support
+  // or complex PIM/role management inspection. They are documented here as
+  // stubs that return explicit "not yet implemented" failures so results are
+  // transparent rather than silently wrong.
+  //
+  // TODO: Implement via CA policy match engine (Phase 5) or dedicated logic:
+  //   - blockLegacyAuth (MS.AAD.1.1v1)
+  //   - blockHighRiskUsers (MS.AAD.2.1v1)
+  //   - blockHighRiskSignIns (MS.AAD.2.3v1)
+  //   - requireMFAAllUsers (MS.AAD.3.2v2)
+  //   - phishingResistantMFAAdmins (MS.AAD.3.6v1)
+  //
+  // TODO: Implement via PIM role management policy inspection:
+  //   - noPermanentActiveAssignment (MS.AAD.7.4v1)
+  //   - globalAdminApprovalRequired (MS.AAD.7.6v1)
+  //   - assignmentAlertConfigured (MS.AAD.7.7v1)
+  //   - globalAdminActivationAlert (MS.AAD.7.8v1)
+  //
+  // TODO: Implement via Teams federation configuration inspection:
+  //   - externalAccessPerDomain (MS.TEAMS.2.1v2)
+  ...[
+    "blockLegacyAuth", "blockHighRiskUsers", "blockHighRiskSignIns",
+    "requireMFAAllUsers", "phishingResistantMFAAdmins",
+    "noPermanentActiveAssignment", "globalAdminApprovalRequired",
+    "assignmentAlertConfigured", "globalAdminActivationAlert",
+    "externalAccessPerDomain",
+  ].reduce((acc, slug) => {
+    acc[slug] = () => ({ pass: false, warnings: [`ScubaGear evaluator "${slug}" not yet implemented — see TODO in engine`] });
+    return acc;
+  }, {} as Record<string, CustomEvaluator>),
+
 };
 
 // ─── Runner ───────────────────────────────────────────────────────────────────
