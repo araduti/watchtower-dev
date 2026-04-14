@@ -23,7 +23,7 @@ const evaluate: EvaluatorFn = (snapshot) => {
     const issues: string[] = [];
     if (!["quarantine", "reject"].includes(tags["p"] ?? "")) issues.push(`p=${tags["p"] ?? "missing"} (must be quarantine or reject)`);
     // pct omitted defaults to 100 per RFC 7489 — only flag if explicitly set to less than 100
-    const pct = tags["pct"] !== undefined ? parseInt(tags["pct"]) : 100;
+    const pct = tags["pct"] !== undefined ? parseInt(tags["pct"], 10) : 100;
     if (pct < 100) issues.push(`pct=${pct} (must be 100)`);
     if (!record.includes("rua=mailto:")) issues.push("rua missing");
     if (!record.includes("ruf=mailto:")) issues.push("ruf missing");

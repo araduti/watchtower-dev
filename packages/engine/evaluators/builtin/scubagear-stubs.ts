@@ -27,7 +27,7 @@ import type { EvaluatorModule } from "../types.ts";
 function stub(slug: string): EvaluatorModule {
   return {
     slug,
-    evaluate: () => ({ pass: false, warnings: [`ScubaGear evaluator "${slug}" not yet implemented`] }),
+    evaluate: (_snapshot) => ({ pass: false, warnings: [`ScubaGear evaluator "${slug}" not yet implemented`] }),
   };
 }
 

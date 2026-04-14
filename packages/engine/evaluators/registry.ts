@@ -24,7 +24,7 @@ const registry = new Map<string, EvaluatorFn>();
  */
 export function register(slug: string, evaluate: EvaluatorFn): void {
   if (registry.has(slug)) {
-    throw new Error(`Evaluator slug "${slug}" is already registered — duplicate registration is a bug`);
+    throw new Error(`Evaluator slug "${slug}" is already registered — check for duplicate exports or alias conflicts`);
   }
   registry.set(slug, evaluate);
 }
