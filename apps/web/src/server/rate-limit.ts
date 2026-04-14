@@ -109,8 +109,9 @@ function cleanupExpiredEntries(): void {
   const now = Date.now();
 
   store.forEach((entry, compositeKey) => {
-    // Derive the tier from the composite key ("tier:rest-of-key")
-    const tierName = compositeKey.split(":")[0] as RateLimitTier;
+    // Derive the tier from the composite key ("tier:rest-of-key").
+    // Limit split to 2 parts so colons inside the key are harmless.
+    const tierName = compositeKey.split(":", 2)[0] as RateLimitTier;
     const config = RATE_LIMIT_TIERS[tierName];
 
     // If the tier is unrecognised (should not happen), evict defensively
