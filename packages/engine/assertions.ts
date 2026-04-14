@@ -205,12 +205,12 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 2.1.9 — DKIM is enabled for all domains
+  // Replaced custom evaluator: each domain must have at least one DKIM record
   {
     controlId: '2.1.9', controlTitle: 'DKIM is enabled for all domains',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'dkim-enabled',
+    source: 'domainDnsRecords', property: 'dkim',
+    operator: 'notEmpty' as Operator, expectedValue: true, assertionLogic: "ALL",
   },
 
   // 2.1.10 — DMARC records are published
@@ -1319,12 +1319,12 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // MS.EXO.3.1v1 — DKIM enabled (ScubaGear = SHOULD, CIS = SHALL)
+  // Converted to declarative: each domain must have at least one DKIM record
   {
     controlId: 'MS.EXO.3.1v1', controlTitle: 'DKIM SHOULD be enabled for all domains',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHOULD', required: false,
     source: 'domainDnsRecords', property: 'dkim',
-    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'dkimEnabled',
+    operator: 'notEmpty' as Operator, expectedValue: true, assertionLogic: "ALL",
   },
 
   // MS.EXO.4.1v1 — DMARC published

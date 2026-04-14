@@ -18,6 +18,31 @@
  * Run alongside argus.ts to compare results:
  *   bun run argus.ts          → results from snapshot.json + spec files
  *   bun run argus.engine-v2.ts → results from evidence.json + DB assertions
+ *
+ * ─── Design decision: why not JSONPath? ───────────────────────────────────────
+ *
+ * JSONPath (jsonpath-plus) was evaluated and rejected for the Core Engine.
+ * The current approach uses a small declarative DSL (source + property path +
+ * operator + sourceFilter) instead of JSONPath expressions. Reasons:
+ *
+ *   1. Security: jsonpath-plus has 3 historical RCEs from eval-based filter
+ *      expressions. Assertions are headed to the DB — user-stored JSONPath
+ *      strings would become an RCE vector inside the trusted Core Engine.
+ *
+ *   2. Capability gap is marginal: JSONPath would address ~3/177 assertions.
+ *      The 50+ custom evaluators that justify their existence (DMARC parsing,
+ *      CA policy matching, PIM correlation) require imperative code regardless.
+ *
+ *   3. esbuild compatibility: jsonpath-plus uses dynamic Function() which
+ *      breaks tree-shaking and degrades cold-start time.
+ *
+ *   4. Auditability: property path + operator assertions are self-documenting
+ *      and trivially reviewable. JSONPath filter expressions are opaque.
+ *
+ * Extension path: If richer data extraction is needed, extend getProperty(),
+ * sourceFilter operators ($ne/$in/$exists), or add new Operator types.
+ * If the Plugin Engine needs JSONPath for customer-authored checks, that
+ * belongs behind the sandbox boundary — not in the Core Engine.
  */
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -911,18 +936,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     return { pass: failing.length === 0, warnings: failing };
   },
 
-  "dkim-enabled": (snapshot: Record<string, any>) => {
-    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
-    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records — re-run Watchtower"] };
-
-    const failing: string[] = [];
-    for (const d of domains) {
-      const hasDkim = (d.dkim ?? []).length > 0;
-      if (!hasDkim) failing.push(`${d.domain} — no DKIM record found (selector1 or selector2._domainkey)`);
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
 
   "spf-records-published": (snapshot: Record<string, any>) => {
     const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
@@ -940,7 +953,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
   // ── ScubaGear aliases ───────────────────────────────────────────────────────
   // Map ScubaGear camelCase evaluator slugs to existing CIS kebab-case evaluators.
 
-  "dkimEnabled":  (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["dkim-enabled"]!(...args),
   "spfEnabled":   (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["spf-records-published"]!(...args),
   "dmarcPublished": (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["dmarc-published"]!(...args),
 
@@ -1301,32 +1313,13 @@ function evalOperator(actual: any, operator: Operator, expected: any): boolean {
 
 function getProperty(obj: any, path: string): any {
   if (!path) return obj;
-  // Support bracket notation for keys with dots (e.g. ["@odata.type"])
-  const segments: string[] = [];
-  let i = 0;
-  while (i < path.length) {
-    if (path[i] === "[" && i + 1 < path.length && path[i + 1] === '"') {
-      // Bracket-escaped segment: ["key.with.dots"]
-      const end = path.indexOf('"]', i + 2);
-      if (end === -1) break;
-      segments.push(path.slice(i + 2, end));
-      i = end + 2;
-      if (path[i] === ".") i++; // skip trailing dot separator
-    } else {
-      // Normal dot-separated segment
-      const dot = path.indexOf(".", i);
-      const bracket = path.indexOf("[", i);
-      let end: number;
-      if (dot === -1 && bracket === -1) end = path.length;
-      else if (dot === -1) end = bracket;
-      else if (bracket === -1) end = dot;
-      else end = Math.min(dot, bracket);
-      segments.push(path.slice(i, end));
-      i = end;
-      if (path[i] === ".") i++; // skip dot separator
-    }
-  }
-  return segments.reduce((o, k) => o?.[k], obj);
+  // Parse path into segments: supports dot-notation and bracket-escaped keys
+  // e.g. 'a.b.["@odata.type"]' → ["a", "b", "@odata.type"]
+  const segments = path.match(/\["[^"]*"\]|[^.\[\]]+/g) ?? [];
+  return segments.reduce((o, seg) => {
+    const key = seg.startsWith('["') ? seg.slice(2, -2) : seg;
+    return o?.[key];
+  }, obj);
 }
 
 
@@ -1354,12 +1347,26 @@ const CA_POLICY_SPECS: Record<string, PolicySpec> = {
 };
 
 // ─── Source filter utility ─────────────────────────────────────────────────────
+// Supports plain equality, array-includes, and operator objects:
+//   { key: value }              → equality / array-includes
+//   { key: { $ne: value } }    → not-equal
+//   { key: { $in: [a, b] } }   → value is one of the listed values
+//   { key: { $exists: true } }  → value is non-null/non-undefined
 
 function applySourceFilter(items: any[], filter: Record<string, any> | undefined): any[] {
   if (!filter) return items;
   return items.filter(item =>
     Object.entries(filter).every(([k, v]) => {
       const itemVal = getProperty(item, k);
+
+      // Operator objects: { $ne: ... }, { $in: [...] }, { $exists: bool }
+      if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+        if ("$ne" in v)     return itemVal !== v.$ne;
+        if ("$in" in v)     return Array.isArray(v.$in) && v.$in.includes(itemVal);
+        if ("$exists" in v) return v.$exists ? (itemVal != null) : (itemVal == null);
+      }
+
+      // Plain equality / array-includes
       if (Array.isArray(itemVal)) return itemVal.includes(v);
       return itemVal === v;
     })
