@@ -1,0 +1,4 @@
+# Watchtower — Production Stack
+#
+# Planned: production Docker Compose configuration.
+# See docker-compose.dev.yml for the local development stack.
