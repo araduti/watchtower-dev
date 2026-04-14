@@ -338,7 +338,7 @@ model Finding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  latestEvidenceId String? // denormalized, updated by trigger
+  latestEvidenceId String? // denormalized, updated by trigger (see 001_rls_setup.sql)
   evidenceDueAt    DateTime? // deadline for manual evidence
 
   evidence Evidence[]

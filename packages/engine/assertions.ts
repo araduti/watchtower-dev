@@ -121,12 +121,14 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 1.3.7 — Third-party storage services are restricted
+  // Replaced custom evaluator: if SP doesn't exist → pass; if exists but disabled → pass
+  // Uses count-inversion: zero SPs with accountEnabled=true must exist
   {
     controlId: '1.3.7', controlTitle: 'Third-party storage services are restricted',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'third-party-storage-disabled',
+    source: 'thirdPartyStorage', property: "",
+    operator: "count" as Operator, expectedValue: { min: 0, max: 0 }, assertionLogic: "ALL",
+    sourceFilter: { accountEnabled: true },
   },
 
   // 1.3.8 — Sways cannot be shared externally
@@ -364,12 +366,12 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 5.1.2.2 — Third-party integrated applications are not allowed
+  // Replaced custom evaluator: simple eq check on authorizationPolicy
   {
     controlId: '5.1.2.2', controlTitle: 'Third-party integrated applications are not allowed',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'users-cannot-register-apps',
+    source: 'authorizationPolicy', property: 'defaultUserRolePermissions.allowedToCreateApps',
+    operator: "eq" as Operator, expectedValue: false, assertionLogic: "ALL",
   },
 
   // 5.1.2.3 — Restrict non-admin users from creating tenants
@@ -422,12 +424,15 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 5.1.4.1 — Entra device join is restricted
+  // Replaced custom evaluator: checks @odata.type via bracket notation
   {
     controlId: '5.1.4.1', controlTitle: 'Entra device join is restricted',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'entra-join-restricted',
+    source: 'deviceRegistrationPolicy', property: 'azureADJoin.allowedToJoin.["@odata.type"]',
+    operator: "in" as Operator, expectedValue: [
+      "#microsoft.graph.enumeratedDeviceRegistrationMembership",
+      "#microsoft.graph.noDeviceRegistrationMembership"
+    ], assertionLogic: "ALL",
   },
 
   // 5.1.4.2 — Maximum devices per user is limited
@@ -447,12 +452,15 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 5.1.4.4 — Local administrator assignment is limited
+  // Replaced custom evaluator: checks @odata.type via bracket notation
   {
     controlId: '5.1.4.4', controlTitle: 'Local administrator assignment is limited',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'local-admin-assignment-restricted',
+    source: 'deviceRegistrationPolicy', property: 'azureADJoin.localAdmins.registeringUsers.["@odata.type"]',
+    operator: "in" as Operator, expectedValue: [
+      "#microsoft.graph.enumeratedDeviceRegistrationMembership",
+      "#microsoft.graph.noDeviceRegistrationMembership"
+    ], assertionLogic: "ALL",
   },
 
   // 5.1.4.5 — LAPS is enabled
@@ -472,12 +480,15 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 5.1.5.1 — User consent to apps is not allowed
+  // Replaced custom evaluator: notContainsAny on permissionGrantPoliciesAssigned
   {
     controlId: '5.1.5.1', controlTitle: 'User consent to apps is not allowed',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'user-consent-disabled',
+    source: 'authorizationPolicy', property: 'defaultUserRolePermissions.permissionGrantPoliciesAssigned',
+    operator: "notContainsAny" as Operator, expectedValue: [
+      "ManagePermissionGrantsForSelf.microsoft-user-default-low",
+      "ManagePermissionGrantsForSelf.microsoft-user-default-legacy"
+    ], assertionLogic: "ALL",
   },
 
   // 5.1.5.2 — Admin consent workflow is enabled
@@ -795,12 +806,16 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 6.3.1 — Users installing Outlook add-ins is not allowed
+  // Replaced custom evaluator: notContainsAny on assignedRoles
   {
     controlId: '6.3.1', controlTitle: 'Users installing Outlook add-ins is not allowed',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'outlook-addins-blocked',
+    source: 'roleAssignmentPolicies', property: 'assignedRoles',
+    operator: "notContainsAny" as Operator, expectedValue: [
+      "My Custom Apps",
+      "My Marketplace Apps",
+      "My ReadWriteMailbox Apps"
+    ], assertionLogic: "ALL",
   },
 
   // 6.5.1 — Modern authentication for Exchange Online is enabled
@@ -1107,7 +1122,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.1.1v1', controlTitle: 'Legacy authentication SHALL be blocked',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'caPolicies', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'blockLegacyAuth',
   },
 
@@ -1116,7 +1131,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.2.1v1', controlTitle: 'Users detected as high risk SHALL be blocked',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'caPolicies', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'blockHighRiskUsers',
   },
 
@@ -1125,7 +1140,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.2.3v1', controlTitle: 'Sign-ins detected as high risk SHALL be blocked',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'caPolicies', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'blockHighRiskSignIns',
   },
 
@@ -1134,7 +1149,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.3.2v2', controlTitle: 'MFA SHALL be enforced for all users',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'caPolicies', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'requireMFAAllUsers',
   },
 
@@ -1159,7 +1174,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.3.6v1', controlTitle: 'Phishing-resistant MFA SHALL be required for highly privileged roles',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'caPolicies', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'phishingResistantMFAAdmins',
   },
 
@@ -1176,7 +1191,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.5.2v1', controlTitle: 'User consent to applications SHALL be restricted',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'authorizationPolicy', property: 'permissionGrantPolicyIdsAssignedToDefaultUserRole',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'userConsentRestricted',
   },
 
@@ -1218,7 +1233,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.7.4v1', controlTitle: 'Permanent active role assignments SHALL NOT be allowed for highly privileged roles',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL NOT', required: true,
     source: 'roleManagementPolicyAssignments', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'noPermanentActiveAssignment',
   },
 
@@ -1227,7 +1242,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.7.6v1', controlTitle: 'Activation of the Global Administrator role SHALL require approval',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'roleManagementPolicyAssignments', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'globalAdminApprovalRequired',
   },
 
@@ -1236,7 +1251,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.7.7v1', controlTitle: 'Highly privileged role assignments SHALL trigger an alert',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'roleManagementPolicyAssignments', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'assignmentAlertConfigured',
   },
 
@@ -1245,7 +1260,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.AAD.7.8v1', controlTitle: 'Global Administrator activation SHALL trigger an alert',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'roleManagementPolicyAssignments', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'globalAdminActivationAlert',
   },
 
@@ -1284,7 +1299,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.EXO.2.2v3', controlTitle: 'An SPF policy SHALL be published for each domain',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'domainDnsRecords', property: 'spf',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'spfEnabled',
   },
 
@@ -1293,7 +1308,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.EXO.3.1v1', controlTitle: 'DKIM SHOULD be enabled for all domains',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHOULD', required: false,
     source: 'domainDnsRecords', property: 'dkim',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'dkimEnabled',
   },
 
@@ -1302,7 +1317,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.EXO.4.1v1', controlTitle: 'A DMARC policy SHALL be published for every second-level domain',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'domainDnsRecords', property: 'dmarc',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'dmarcPublished',
   },
 
@@ -1311,7 +1326,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.EXO.4.2v1', controlTitle: 'The DMARC message rejection option SHALL be p=reject',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'domainDnsRecords', property: 'dmarc',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'dmarcReject',
   },
 
@@ -1320,7 +1335,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.EXO.4.3v1', controlTitle: 'DMARC SHALL include reports@dmarc.cyber.dhs.gov as aggregate recipient',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'domainDnsRecords', property: 'dmarc',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'dmarcCISAContact',
   },
 
@@ -1337,7 +1352,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.EXO.6.2v1', controlTitle: 'Calendar details SHALL NOT be shared with all domains',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL NOT', required: true,
     source: 'sharingPolicies', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'calendarSharingRestricted',
   },
 
@@ -1364,7 +1379,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.DEFENDER.1.1v1', controlTitle: 'Standard and strict preset security policies SHALL be enabled',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'atpProtectionPolicyRules', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'presetPoliciesEnabled',
   },
 
@@ -1477,7 +1492,7 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: 'MS.TEAMS.2.1v2', controlTitle: 'External access for users SHALL only be enabled on a per-domain basis',
     frameworkSlug: "scubagear-m365-1.5", level: 'SHALL', required: true,
     source: 'teamsFederationConfiguration', property: '',
-    operator: 'custom' as Operator, expectedValue: null, assertionLogic: "ALL",
+    operator: 'custom', expectedValue: null, assertionLogic: "ALL",
     evaluatorSlug: 'externalAccessPerDomain',
   },
 
