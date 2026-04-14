@@ -999,10 +999,10 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     if (policies.length === 0) return { pass: false, warnings: ["No authorization policy in snapshot"] };
     const assigned: string[] = policies[0]?.permissionGrantPolicyIdsAssignedToDefaultUserRole ?? [];
     const broad = [
-      "managePermissionGrantsForSelf.microsoft-user-default-low",
-      "managePermissionGrantsForSelf.microsoft-user-default-legacy",
+      "managepermissiongrantsforself.microsoft-user-default-low",
+      "managepermissiongrantsforself.microsoft-user-default-legacy",
     ];
-    const found = assigned.filter(p => broad.some(b => p.toLowerCase().includes(b.toLowerCase())));
+    const found = assigned.filter(p => broad.some(b => p.toLowerCase().includes(b)));
     return {
       pass: found.length === 0,
       warnings: found.length === 0 ? [] : [`User consent enabled via: ${found.join(", ")}`],
@@ -1023,9 +1023,8 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
 
   // ── ScubaGear TODO stubs ────────────────────────────────────────────────────
   // The following ScubaGear evaluators require CA policy match engine support
-  // or complex PIM/role management inspection. They are documented here as
-  // stubs that return explicit "not yet implemented" failures so results are
-  // transparent rather than silently wrong.
+  // or complex PIM/role management inspection. They return explicit "not yet
+  // implemented" failures so results are transparent rather than silently wrong.
   //
   // TODO: Implement via CA policy match engine (Phase 5) or dedicated logic:
   //   - blockLegacyAuth (MS.AAD.1.1v1)
@@ -1042,16 +1041,17 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
   //
   // TODO: Implement via Teams federation configuration inspection:
   //   - externalAccessPerDomain (MS.TEAMS.2.1v2)
-  ...[
-    "blockLegacyAuth", "blockHighRiskUsers", "blockHighRiskSignIns",
-    "requireMFAAllUsers", "phishingResistantMFAAdmins",
-    "noPermanentActiveAssignment", "globalAdminApprovalRequired",
-    "assignmentAlertConfigured", "globalAdminActivationAlert",
-    "externalAccessPerDomain",
-  ].reduce((acc, slug) => {
-    acc[slug] = () => ({ pass: false, warnings: [`ScubaGear evaluator "${slug}" not yet implemented — see TODO in engine`] });
-    return acc;
-  }, {} as Record<string, CustomEvaluator>),
+
+  "blockLegacyAuth":              () => ({ pass: false, warnings: ['ScubaGear evaluator "blockLegacyAuth" not yet implemented'] }),
+  "blockHighRiskUsers":           () => ({ pass: false, warnings: ['ScubaGear evaluator "blockHighRiskUsers" not yet implemented'] }),
+  "blockHighRiskSignIns":         () => ({ pass: false, warnings: ['ScubaGear evaluator "blockHighRiskSignIns" not yet implemented'] }),
+  "requireMFAAllUsers":           () => ({ pass: false, warnings: ['ScubaGear evaluator "requireMFAAllUsers" not yet implemented'] }),
+  "phishingResistantMFAAdmins":   () => ({ pass: false, warnings: ['ScubaGear evaluator "phishingResistantMFAAdmins" not yet implemented'] }),
+  "noPermanentActiveAssignment":  () => ({ pass: false, warnings: ['ScubaGear evaluator "noPermanentActiveAssignment" not yet implemented'] }),
+  "globalAdminApprovalRequired":  () => ({ pass: false, warnings: ['ScubaGear evaluator "globalAdminApprovalRequired" not yet implemented'] }),
+  "assignmentAlertConfigured":    () => ({ pass: false, warnings: ['ScubaGear evaluator "assignmentAlertConfigured" not yet implemented'] }),
+  "globalAdminActivationAlert":   () => ({ pass: false, warnings: ['ScubaGear evaluator "globalAdminActivationAlert" not yet implemented'] }),
+  "externalAccessPerDomain":      () => ({ pass: false, warnings: ['ScubaGear evaluator "externalAccessPerDomain" not yet implemented'] }),
 
 };
 
