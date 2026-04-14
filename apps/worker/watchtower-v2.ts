@@ -102,13 +102,6 @@ const MOCKED_SELECT_MAP: Record<string, string[]> = {
   ],
 };
 
-// Sources that return a single object (not an array) — noTop: true in v1
-const SINGLETON_SOURCES = new Set([
-  "appsAndServices", "formsSettings", "deviceManagementSettings",
-  "authorizationPolicy", "deviceRegistrationPolicy", "adminConsentRequestPolicy",
-  "authMethodsPolicy", "authMethodConfigurations", "sharepointSettings",
-]);
-
 // ─── Timer ────────────────────────────────────────────────────────────────────
 
 const timer = {
@@ -167,7 +160,7 @@ const GRAPH_SOURCES: Record<string, {
   userRegistrationDetails: { path: "/reports/authenticationMethods/userRegistrationDetails",                                            beta: false, label: "User Registration Details" },
   authMethodConfigurations:{ path: "/policies/authenticationMethodsPolicy",                                                              beta: true,  label: "Auth Method Configurations",  noTop: true },
   pimEligibleAssignments:  { path: "/roleManagement/directory/roleEligibilityScheduleInstances",                                         beta: false, label: "PIM Eligible Assignments" },
-  accessReviews:           { path: "/identityGovernance/accessReviews/definitions?$top=100",                                             beta: false, label: "Access Reviews",              noTop: true },
+  accessReviews:           { path: "/identityGovernance/accessReviews/definitions?$top=100",                                             beta: false, label: "Access Reviews" },
   roleManagementPolicyAssignments: { path: "/policies/roleManagementPolicyAssignments?$filter=scopeId eq '/' and scopeType eq 'DirectoryRole'", beta: true, label: "Role Management Policy Assignments" },
   thirdPartyStorage:       { path: "/servicePrincipals(appId='c1f33bc0-bdb4-4248-ba9b-096807ddb43e')",                                  beta: false, label: "Third Party Storage SP",      noTop: true },
   compliancePolicies:      { path: "/deviceManagement/deviceCompliancePolicies?$expand=assignments",                                    beta: false, label: "Compliance Policies" },
@@ -200,10 +193,52 @@ function buildPath(key: string, basePath: string, selectMap: Record<string, stri
 
 // ─── Graph fetch helpers ──────────────────────────────────────────────────────
 
+/**
+ * graphFetch — wrapper around the Graph SDK's .get() with retry-after / backoff.
+ * Per Code-Conventions.md §6: retries live inside the adapter with exponential
+ * backoff, jitter, and respect for Retry-After.
+ */
+const GRAPH_MAX_RETRIES = 3;   // up to 4 total attempts
+const GRAPH_BASE_DELAY  = 1000; // 1 s
+const GRAPH_MAX_DELAY   = 30_000; // 30 s
+
+async function graphFetch(request: { get: () => Promise<any> }): Promise<any> {
+  for (let attempt = 0; attempt <= GRAPH_MAX_RETRIES; attempt++) {
+    try {
+      return await request.get();
+    } catch (err: any) {
+      const statusCode = err?.statusCode ?? err?.code;
+      if (statusCode !== 429 || attempt === GRAPH_MAX_RETRIES) {
+        throw err;
+      }
+
+      // Respect Retry-After header if available (seconds)
+      const retryAfterHeader = err?.headers?.get?.("Retry-After")
+        ?? err?.headers?.["retry-after"]
+        ?? err?.headers?.["Retry-After"];
+      const retryAfterMs = retryAfterHeader
+        ? Number(retryAfterHeader) * 1000
+        : undefined;
+
+      // Exponential backoff with jitter, capped at GRAPH_MAX_DELAY
+      const backoffMs = Math.min(
+        GRAPH_BASE_DELAY * Math.pow(2, attempt) + Math.random() * 1000,
+        GRAPH_MAX_DELAY,
+      );
+      const waitMs = retryAfterMs ?? backoffMs;
+
+      console.warn(
+        `graphFetch: 429 throttled — retrying in ${(waitMs / 1000).toFixed(1)}s (attempt ${attempt + 1}/${GRAPH_MAX_RETRIES})`,
+      );
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+  // unreachable, but satisfies TS
+  throw new Error("graphFetch: exhausted retries");
+}
+
 async function graphGet(client: Client, path: string, beta: boolean): Promise<any> {
-  const base = beta ? "https://graph.microsoft.com/beta" : "https://graph.microsoft.com/v1.0";
-  const res  = await client.api(path).version(beta ? "beta" : "v1.0").get();
-  return res;
+  return graphFetch(client.api(path).version(beta ? "beta" : "v1.0"));
 }
 
 async function fetchAll(client: Client, path: string, beta: boolean, noTop: boolean): Promise<any[]> {
@@ -216,7 +251,7 @@ async function fetchAll(client: Client, path: string, beta: boolean, noTop: bool
   let   nextLink: string | undefined = path;
 
   while (nextLink) {
-    const res = await client.api(nextLink).version(beta ? "beta" : "v1.0").get();
+    const res = await graphFetch(client.api(nextLink).version(beta ? "beta" : "v1.0"));
     items.push(...(res.value ?? []));
     nextLink = res["@odata.nextLink"];
   }
@@ -228,8 +263,9 @@ async function fetchBatch(
   client: Client,
   ids: string[],
   urlBuilder: (id: string) => string,
-): Promise<Record<string, any>> {
+): Promise<{ results: Record<string, any>; errors: string[] }> {
   const results: Record<string, any> = {};
+  const errors: string[] = [];
   const BATCH_SIZE = 20;
 
   for (let i = 0; i < ids.length; i += BATCH_SIZE) {
@@ -246,16 +282,20 @@ async function fetchBatch(
         const id = chunk[parseInt(r.id)];
         if (r.status === 200 && id !== undefined) results[id] = r.body;
         else if (r.status !== 404) {
-          console.warn(`Batch sub-request ${id} failed: ${r.body?.error?.message}`);
+          const errMsg = `Batch sub-request ${id} failed (${r.status}): ${r.body?.error?.message ?? "unknown"}`;
+          console.warn(errMsg);
+          errors.push(errMsg);
         }
         // 404s are expected for service principals / managed identities — silently skip
       }
     } catch (err: any) {
-      console.error(`Batch request failed: ${err.message}`);
+      const errMsg = `Batch request failed: ${err.message}`;
+      console.error(errMsg);
+      errors.push(errMsg);
     }
   }
 
-  return results;
+  return { results, errors };
 }
 
 // ─── Source collector ─────────────────────────────────────────────────────────
@@ -349,13 +389,15 @@ const dnsOutPath        = "/tmp/watchtower-v2-dns.json";
 const exoOutPath        = "/tmp/watchtower-v2-exchange.json";
 const spoOutPath        = "/tmp/watchtower-v2-sharepoint.json";
 const teamsOutPath      = "/tmp/watchtower-v2-teams.json";
+const complianceOutPath = "/tmp/watchtower-v2-compliance.json";
 
 // DNS needs verified domains — spawn with placeholder, it will wait for input
-// Exchange, SharePoint, Teams have no Graph dependency — spawn immediately
+// Exchange, SharePoint, Teams, Compliance have no Graph dependency — spawn immediately
 const exoProcess        = Bun.spawn(["bun", "run", "apps/worker/plugins/exchange-connector.ts"],   { stdout: "inherit", stderr: "inherit", env: { ...process.env, EXO_OUT_PATH: exoOutPath } });
 const spoProcess        = process.env.SPO_TENANT_NAME ? Bun.spawn(["bun", "run", "apps/worker/plugins/sharepoint-connector.ts"], { stdout: "inherit", stderr: "inherit", env: { ...process.env, SPO_OUT_PATH: spoOutPath } }) : null;
 const teamsProcess      = Bun.spawn(["bun", "run", "apps/worker/plugins/teams-connector.ts"],     { stdout: "inherit", stderr: "inherit", env: { ...process.env, TEAMS_OUT_PATH: teamsOutPath } });
-timer.log("Exchange, SharePoint, Teams connectors spawned");
+const complianceProcess = Bun.spawn(["bun", "run", "apps/worker/plugins/compliance-connector.ts"], { stdout: "inherit", stderr: "inherit", env: { ...process.env, COMPLIANCE_OUT_PATH: complianceOutPath } });
+timer.log("Exchange, SharePoint, Teams, Compliance connectors spawned");
 
 timer.log("Phase 1: collecting all sources in parallel");
 
@@ -380,17 +422,24 @@ for (const res of allResults) {
       items:      result.rawValue.length,
       status:     result.status,
     });
+  } else {
+    console.error("Phase 1: source collection rejected unexpectedly:", res.reason);
   }
 }
 
 timer.log(`Phase 1: complete — ${sourceEntries.length} sources`);
 
+// ── Phase helper functions ────────────────────────────────────────────────────
+// Phases 2, 3, 4 are extracted into async functions so they can run in parallel
+// after Phase 1 completes.
+
 // ── Endpoint security settings (Phase 2) ─────────────────────────────────────
+async function collectEndpointSettings(): Promise<void> {
+  const endpointPolicies: any[] = sources.endpointSecurity?.rawValue ?? [];
+  const policiesNeedingSettings = endpointPolicies.filter((p: any) => (p.settingCount ?? 0) > 0);
 
-const endpointPolicies: any[] = sources.endpointSecurity?.rawValue ?? [];
-const policiesNeedingSettings = endpointPolicies.filter((p: any) => (p.settingCount ?? 0) > 0);
+  if (policiesNeedingSettings.length === 0) return;
 
-if (policiesNeedingSettings.length > 0) {
   timer.log(`Phase 2: fetching settings for ${policiesNeedingSettings.length} endpoint policies`);
   const t0 = performance.now();
 
@@ -404,8 +453,8 @@ if (policiesNeedingSettings.length > 0) {
           false
         );
         return { id: policy.id, settings: data };
-      } catch {
-        return { id: policy.id, settings: [] };
+      } catch (err: any) {
+        return { id: policy.id, settings: [], error: err?.message ?? String(err) };
       }
     })
   );
@@ -413,13 +462,24 @@ if (policiesNeedingSettings.length > 0) {
   const settingsById: Record<string, any[]> = {};
   for (const res of settingResults) {
     if (res.status === "fulfilled") {
+      if (res.value.error) {
+        console.warn(`Phase 2: settings for policy ${res.value.id} failed: ${res.value.error}`);
+      }
       settingsById[res.value.id] = res.value.settings;
+    } else {
+      console.error("Phase 2: settings fetch rejected unexpectedly:", res.reason);
     }
   }
 
-  // Attach settings to policies
-  for (const policy of (sources.endpointSecurity?.rawValue ?? [])) {
-    policy.settings = settingsById[policy.id] ?? [];
+  // Attach settings to policies — immutable update (don't mutate rawValue)
+  if (sources.endpointSecurity) {
+    sources.endpointSecurity = {
+      ...sources.endpointSecurity,
+      rawValue: sources.endpointSecurity.rawValue.map((policy: any) => ({
+        ...policy,
+        settings: settingsById[policy.id] ?? [],
+      })),
+    };
   }
 
   const totalSettings = Object.values(settingsById).reduce((n, s) => n + s.length, 0);
@@ -427,86 +487,98 @@ if (policiesNeedingSettings.length > 0) {
 }
 
 // ── Privileged users (Phase 3) ────────────────────────────────────────────────
+async function collectPrivilegedUsers(): Promise<void> {
+  timer.log("Phase 3: privileged users");
+  const t0 = performance.now();
 
-timer.log("Phase 3: privileged users");
-
-try {
-  const assignments = await fetchAll(
-    client,
-    "/roleManagement/directory/roleAssignments?$select=principalId,roleDefinitionId",
-    false,
-    false
-  );
-
-  const principalIds = [...new Set(assignments.map((a: any) => a.principalId as string))];
-  timer.log(`Phase 3: resolving ${principalIds.length} principals`);
-
-  // Resolve principal types first via /directoryObjects/{id}
-  // @odata.type tells us user vs service principal vs group — no blind /users calls
-  const directoryObjects = await fetchBatch(
-    client,
-    principalIds,
-    (id) => `/directoryObjects/${id}`
-  );
-
-  const userIds = Object.entries(directoryObjects)
-    .filter(([, obj]: [string, any]) => obj?.["@odata.type"] === "#microsoft.graph.user")
-    .map(([id]) => id);
-
-  timer.log(`Phase 3: ${userIds.length} users out of ${principalIds.length} principals`);
-
-  const userFields = "id,displayName,userPrincipalName,onPremisesSyncEnabled,assignedLicenses";
-  const userDetails = userIds.length > 0
-    ? await fetchBatch(client, userIds, (id) => `/users/${id}?$select=${userFields}`)
-    : {};
-
-  sources.privilegedUsers = {
-    rawValue: assignments
-      .filter((a: any) => userIds.includes(a.principalId))
-      .map((a: any) => ({
-        principalId:    a.principalId,
-        roleTemplateId: a.roleDefinitionId,
-        principal:      userDetails[a.principalId] ?? null,
-      }))
-      .filter((a: any) => a.principal?.userPrincipalName),
-    collectedAt: new Date().toISOString(),
-    durationMs:  0,
-    status:      "ok",
-    error:       null,
-  };
-
-  timings.push({ source: "privilegedUsers", label: "Privileged Users", "took (s)": "0.00", items: sources.privilegedUsers.rawValue.length, status: "ok" });
-  timer.log(`Phase 3: ${sources.privilegedUsers.rawValue.length} privileged users`);
-} catch (err: any) {
-  sources.privilegedUsers = { rawValue: [], collectedAt: new Date().toISOString(), durationMs: 0, status: "failed", error: err.message };
-  timer.log("Phase 3: failed");
-}
-
-// ── PRA rules (Phase 4) ───────────────────────────────────────────────────────
-
-try {
-  const PRA_TEMPLATE_ID = "e8611ab8-c189-46e8-94e1-60213ab1f814";
-  const assignments: any[] = sources.roleManagementPolicyAssignments?.rawValue ?? [];
-  const praAssignment = assignments.find((a: any) => a.roleDefinitionId === PRA_TEMPLATE_ID);
-
-  if (praAssignment?.policyId) {
-    const rules = await fetchAll(
+  try {
+    const assignments = await fetchAll(
       client,
-      `/policies/roleManagementPolicies/${praAssignment.policyId}/rules`,
-      true,
+      "/roleManagement/directory/roleAssignments?$select=principalId,roleDefinitionId",
+      false,
       false
     );
-    sources.praRoleManagementPolicyRules = {
-      rawValue:    rules,
+
+    const principalIds = [...new Set(assignments.map((a: any) => a.principalId as string))];
+    timer.log(`Phase 3: resolving ${principalIds.length} principals`);
+
+    // Resolve principal types first via /directoryObjects/{id}
+    // @odata.type tells us user vs service principal vs group — no blind /users calls
+    const { results: directoryObjects } = await fetchBatch(
+      client,
+      principalIds,
+      (id) => `/directoryObjects/${id}`
+    );
+
+    const userIds = Object.entries(directoryObjects)
+      .filter(([, obj]: [string, any]) => obj?.["@odata.type"] === "#microsoft.graph.user")
+      .map(([id]) => id);
+
+    timer.log(`Phase 3: ${userIds.length} users out of ${principalIds.length} principals`);
+
+    const userFields = "id,displayName,userPrincipalName,onPremisesSyncEnabled,assignedLicenses";
+    const { results: userDetails } = userIds.length > 0
+      ? await fetchBatch(client, userIds, (id) => `/users/${id}?$select=${userFields}`)
+      : { results: {} as Record<string, any> };
+
+    const durationMs = Math.round(performance.now() - t0);
+    sources.privilegedUsers = {
+      rawValue: assignments
+        .filter((a: any) => userIds.includes(a.principalId))
+        .map((a: any) => ({
+          principalId:    a.principalId,
+          roleTemplateId: a.roleDefinitionId,
+          principal:      userDetails[a.principalId] ?? null,
+        }))
+        .filter((a: any) => a.principal?.userPrincipalName),
       collectedAt: new Date().toISOString(),
-      durationMs:  0,
+      durationMs,
       status:      "ok",
       error:       null,
     };
-    timer.log(`Phase 4: PRA rules (${rules.length} rules)`);
+
+    timings.push({ source: "privilegedUsers", label: "Privileged Users", "took (s)": (durationMs / 1000).toFixed(2), items: sources.privilegedUsers.rawValue.length, status: "ok" });
+    timer.log(`Phase 3: ${sources.privilegedUsers.rawValue.length} privileged users`);
+  } catch (err: any) {
+    const durationMs = Math.round(performance.now() - t0);
+    sources.privilegedUsers = { rawValue: [], collectedAt: new Date().toISOString(), durationMs, status: "failed", error: err.message };
+    timings.push({ source: "privilegedUsers", label: "Privileged Users", "took (s)": (durationMs / 1000).toFixed(2), items: 0, status: "failed" });
+    timer.log("Phase 3: failed");
   }
-} catch {
-  sources.praRoleManagementPolicyRules = { rawValue: [], collectedAt: new Date().toISOString(), durationMs: 0, status: "failed", error: "PRA rules failed" };
+}
+
+// ── PRA rules (Phase 4) ───────────────────────────────────────────────────────
+async function collectPraRules(): Promise<void> {
+  const t0 = performance.now();
+
+  try {
+    const PRA_TEMPLATE_ID = "e8611ab8-c189-46e8-94e1-60213ab1f814";
+    const assignments: any[] = sources.roleManagementPolicyAssignments?.rawValue ?? [];
+    const praAssignment = assignments.find((a: any) => a.roleDefinitionId === PRA_TEMPLATE_ID);
+
+    if (praAssignment?.policyId) {
+      const rules = await fetchAll(
+        client,
+        `/policies/roleManagementPolicies/${praAssignment.policyId}/rules`,
+        true,
+        false
+      );
+      const durationMs = Math.round(performance.now() - t0);
+      sources.praRoleManagementPolicyRules = {
+        rawValue:    rules,
+        collectedAt: new Date().toISOString(),
+        durationMs,
+        status:      "ok",
+        error:       null,
+      };
+      timings.push({ source: "praRoleManagementPolicyRules", label: "PRA Rules", "took (s)": (durationMs / 1000).toFixed(2), items: rules.length, status: "ok" });
+      timer.log(`Phase 4: PRA rules (${rules.length} rules)`);
+    }
+  } catch (err: any) {
+    const durationMs = Math.round(performance.now() - t0);
+    sources.praRoleManagementPolicyRules = { rawValue: [], collectedAt: new Date().toISOString(), durationMs, status: "failed", error: err?.message ?? "PRA rules failed" };
+    timings.push({ source: "praRoleManagementPolicyRules", label: "PRA Rules", "took (s)": (durationMs / 1000).toFixed(2), items: 0, status: "failed" });
+  }
 }
 
 // ── Spawn DNS connector now that domains are available ────────────────────────
@@ -522,21 +594,46 @@ const dnsProcess = Bun.spawn(
 
 timer.log(`DNS connector spawned for ${verifiedDomains.length} domains`);
 
-// ── Await all connectors ──────────────────────────────────────────────────────
+// ── Run Phases 2, 3, 4 in parallel ───────────────────────────────────────────
+// All three depend only on Phase 1 results — no inter-phase dependencies.
 
 await Promise.all([
-  dnsProcess.exited,
-  exoProcess.exited,
-  spoProcess?.exited ?? Promise.resolve(),
-  teamsProcess.exited,
+  collectEndpointSettings(),   // Phase 2 — depends on sources.endpointSecurity
+  collectPrivilegedUsers(),    // Phase 3 — fresh roleAssignment fetch
+  collectPraRules(),           // Phase 4 — depends on sources.roleManagementPolicyAssignments
 ]);
+
+// ── Await all connectors ──────────────────────────────────────────────────────
+
+const exitCodes = {
+  dns:        await dnsProcess.exited,
+  exchange:   await exoProcess.exited,
+  sharepoint: spoProcess ? await spoProcess.exited : 0,
+  teams:      await teamsProcess.exited,
+  compliance: await complianceProcess.exited,
+};
+
+// Record failed connectors before attempting file merge
+for (const [name, code] of Object.entries(exitCodes)) {
+  if (code !== 0) {
+    console.error(`Connector "${name}" exited with code ${code}`);
+    sources[name] = {
+      rawValue:    [],
+      collectedAt: new Date().toISOString(),
+      durationMs:  0,
+      status:      "failed",
+      error:       `Connector process exited with code ${code}`,
+    };
+  }
+}
 
 // Merge connector outputs
 const connectorMerges: [string, string, "array" | "dict"][] = [
-  ["domainDnsRecords", dnsOutPath,        "array"],  // DNS returns array of domain objects
-  ["_exchange",        exoOutPath,        "dict"],   // Exchange returns { key: data[] }
-  ["_sharepoint",      spoOutPath,        "dict"],   // SharePoint returns { key: data[] }
-  ["_teams",           teamsOutPath,      "dict"],   // Teams returns { key: data[] }
+  ["domainDnsRecords", dnsOutPath,           "array"],  // DNS returns array of domain objects
+  ["_exchange",        exoOutPath,           "dict"],   // Exchange returns { key: data[] }
+  ["_sharepoint",      spoOutPath,           "dict"],   // SharePoint returns { key: data[] }
+  ["_teams",           teamsOutPath,         "dict"],   // Teams returns { key: data[] }
+  ["_compliance",      complianceOutPath,    "dict"],   // Compliance returns { key: data[] }
 ];
 
 for (const [key, path, format] of connectorMerges) {
@@ -552,7 +649,7 @@ for (const [key, path, format] of connectorMerges) {
         error:       null,
       };
     } else {
-      // Exchange/SPO/Teams — each top-level key becomes its own source
+      // Exchange/SPO/Teams/Compliance — each top-level key becomes its own source
       for (const [sourceKey, value] of Object.entries(data as Record<string, any>)) {
         sources[sourceKey] = {
           rawValue:    Array.isArray(value) ? value : [value],
@@ -565,7 +662,15 @@ for (const [key, path, format] of connectorMerges) {
     }
     timer.log(`${key.replace(/^_/, "")} merged`);
   } catch (err: any) {
-    timer.log(`${key.replace(/^_/, "")} — failed: ${err?.message ?? String(err)}`);
+    const sourceKey = key.replace(/^_/, "");
+    sources[sourceKey] = {
+      rawValue:    [],
+      collectedAt: new Date().toISOString(),
+      durationMs:  0,
+      status:      "failed",
+      error:       `Connector output failed: ${err?.message ?? String(err)}`,
+    };
+    timer.log(`${sourceKey} — failed: ${err?.message ?? String(err)}`);
   }
 }
 
