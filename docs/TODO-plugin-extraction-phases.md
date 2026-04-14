@@ -22,16 +22,20 @@ This document tracks the remaining work after Phase 1 and Phase 2, which are com
 
 ## Remaining Phases
 
-### Phase 3 — Testing
+### Phase 3 — Testing ✅
 
 Individual evaluators can now be tested in isolation. This phase adds:
 
-- [ ] Unit tests for each extracted evaluator module
-- [ ] Registry tests: registration, alias resolution, duplicate detection
-- [ ] Integration test: run the full engine against `evidence.json` and verify results match the pre-extraction baseline (regression test)
-- [ ] Test factory helpers for building mock `EvidenceSnapshot` objects
+- [x] Unit tests for each extracted evaluator module (tests/phase2/evaluators/)
+  - DNS evaluators: 55 tests (dmarc-published, dmarc-reject, dmarc-cisa-contact, spf-records-published)
+  - CIS/Entra ID evaluators: 103 tests (idle-session-timeout, pra-requires-approval, privileged-role-access-reviews, guest-access-reviews, pim-used-for-privileged-roles, onprem-password-protection, custom-banned-passwords, b2b-allowed-domains-only, dynamic-guest-group, personal-device-enrollment)
+  - Teams evaluators: 59 tests (teams-security-reporting, teams-unmanaged-inbound, teams-unmanaged-access, teams-external-access)
+  - Exchange/ScubaGear evaluators: 108 tests (no-domain-whitelisting, no-external-forwarding, calendar-sharing, user-consent, preset-policies, 10 stubs)
+- [x] Registry tests: registration, alias resolution, duplicate detection (tests/phase2/evaluator-registry.test.ts — 56 tests)
+- [x] Integration test: run the full engine against `evidence.json` and verify results match the pre-extraction baseline (tests/phase2/engine-regression.test.ts — 44 tests)
+- [x] Test factory helpers for building mock `EvidenceSnapshot` objects (tests/factories/evidence.ts)
 
-**Priority:** High — the extraction is a refactor that must be proven behavior-preserving.
+**Result:** 425 new tests, all passing. Extraction proven behavior-preserving.
 
 ### Phase 4 — CA policy specs as assertion data
 
