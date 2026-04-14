@@ -182,6 +182,102 @@ function evaluate(policy: any, spec: PolicySpec, config: ArgusConfig): Criterion
     }
   }
 
+  // ── Client app types (e.g. "exchangeActiveSync", "other", "browser") ────
+  if (m.clientAppTypes) {
+    const conditions = policy.conditions?.clientAppTypes ?? [];
+    const allPresent = m.clientAppTypes.every((t: string) =>
+      conditions.some((c: string) => c.toLowerCase() === t.toLowerCase())
+    );
+    criteria.push({
+      label: `client app types: ${m.clientAppTypes.join(", ")}`,
+      pass: allPresent,
+    });
+  }
+
+  // ── Authentication flows (e.g. "deviceCodeFlow") ───────────────────────
+  if (m.authenticationFlows) {
+    const transfers = policy.conditions?.authenticationFlows?.transferMethods ?? [];
+    const allPresent = m.authenticationFlows.every((f: string) =>
+      transfers.some((t: string) => t.toLowerCase() === f.toLowerCase())
+    );
+    criteria.push({
+      label: `authentication flows: ${m.authenticationFlows.join(", ")}`,
+      pass: allPresent,
+    });
+  }
+
+  // ── User risk levels (e.g. ["high"]) ───────────────────────────────────
+  if (m.userRisk) {
+    const levels: string[] = policy.conditions?.userRiskLevels ?? [];
+    const allPresent = m.userRisk.every((r: string) =>
+      levels.some((l: string) => l.toLowerCase() === r.toLowerCase())
+    );
+    criteria.push({
+      label: `user risk levels: ${m.userRisk.join(", ")}`,
+      pass: allPresent,
+    });
+  }
+
+  // ── Sign-in risk levels (e.g. ["high", "medium"]) ─────────────────────
+  if (m.signInRisk) {
+    const levels: string[] = policy.conditions?.signInRiskLevels ?? [];
+    const allPresent = m.signInRisk.every((r: string) =>
+      levels.some((l: string) => l.toLowerCase() === r.toLowerCase())
+    );
+    criteria.push({
+      label: `sign-in risk levels: ${m.signInRisk.join(", ")}`,
+      pass: allPresent,
+    });
+  }
+
+  // ── Session controls ──────────────────────────────────────────────────
+  if (m.session) {
+    const sc = policy.sessionControls ?? {};
+
+    if (m.session.appEnforcedRestrictions !== undefined) {
+      const isEnabled = sc.applicationEnforcedRestrictions?.isEnabled === true;
+      criteria.push({
+        label: "app-enforced restrictions enabled",
+        pass: m.session.appEnforcedRestrictions === isEnabled,
+      });
+    }
+
+    if (m.session.signInFrequencyHours !== undefined) {
+      const freq = sc.signInFrequency;
+      if (m.session.signInFrequencyHours === 0) {
+        // 0 means "every time" — signInFrequency must be enabled with isEveryTime or type=everyTime
+        const everyTime = freq?.isEnabled === true &&
+          (freq?.frequencyInterval === "everyTime" || freq?.isEveryTime === true);
+        criteria.push({
+          label: "sign-in frequency: every time",
+          pass: everyTime,
+        });
+      } else {
+        // Specific hour limit
+        const isEnabled = freq?.isEnabled === true;
+        // Convert to hours; unknown frequency types treated as non-compliant (NaN fails <=)
+        const hours = freq?.type === "hours"
+          ? (freq?.value ?? NaN)
+          : freq?.type === "days"
+            ? (freq?.value ?? 0) * 24
+            : NaN;
+        criteria.push({
+          label: `sign-in frequency ≤ ${m.session.signInFrequencyHours}h`,
+          pass: isEnabled && hours <= m.session.signInFrequencyHours,
+        });
+      }
+    }
+
+    if (m.session.persistentBrowser !== undefined) {
+      const persistent = sc.persistentBrowser;
+      const isDisabled = persistent?.isEnabled === true && persistent?.mode === "never";
+      criteria.push({
+        label: "persistent browser disabled",
+        pass: m.session.persistentBrowser === false ? isDisabled : !isDisabled,
+      });
+    }
+  }
+
   if (m.state === "active") {
     const state: string = policy.state ?? "disabled";
     criteria.push({
@@ -1111,7 +1207,7 @@ interface Evidence {
   sources:     Record<string, EvidenceSource>;
 }
 
-export type Operator = "eq" | "neq" | "in" | "lte" | "gte" | "notEmpty" | "manual" | "count" | "allowedValues";
+export type Operator = "eq" | "neq" | "in" | "lte" | "gte" | "notEmpty" | "manual" | "count" | "allowedValues" | "custom" | "contains" | "notContainsAny" | "nestedFind";
 
 export interface ControlAssertion {
   // Control identity
@@ -1135,6 +1231,23 @@ export interface ControlAssertion {
 
   // Assertion grouping (multiple assertions per control)
   assertionLogic: "ALL" | "ANY";  // default ALL
+
+  // Phase 2.1 — Multi-assertion controls: additional property checks on the same control
+  // Each sub-assertion is evaluated AND combined with the primary assertion
+  additionalAssertions?: Array<{
+    source?:        string;   // defaults to parent source if omitted (cross-source if provided)
+    property:       string;
+    operator:       Operator;
+    expectedValue:  any;
+    sourceFilter?:  Record<string, any>;
+  }>;
+
+  // Phase 2.2 — Nested array find: find an item in a nested array, then assert on a property of that item
+  nestedFind?: {
+    arrayPath:     string;   // path to the nested array e.g. "authenticationMethodConfigurations"
+    findBy:        Record<string, any>;  // filter to locate the item e.g. { id: "email" }
+    property:      string;   // property to assert on e.g. "state"
+  };
 }
 
 interface ControlResult {
@@ -1207,13 +1320,68 @@ function evalOperator(actual: any, operator: Operator, expected: any): boolean {
       // expectedValue=false → must be empty     (pass if empty)
       return expected === false ? isEmpty : !isEmpty;
     }
+    case "contains": {
+      // String contains substring, or array contains element
+      if (typeof actual === "string" && typeof expected === "string") {
+        return actual.toLowerCase().includes(expected.toLowerCase());
+      }
+      if (Array.isArray(actual)) {
+        return actual.some(item => item === expected);
+      }
+      return false;
+    }
+    case "notContainsAny": {
+      // Array must not contain any of the specified values
+      // expected is an array of disallowed values
+      if (!Array.isArray(expected)) return true;
+      if (Array.isArray(actual)) {
+        return !actual.some(item =>
+          expected.some((d: any) =>
+            typeof item === "string" && typeof d === "string"
+              ? item.toLowerCase().includes(d.toLowerCase())
+              : item === d
+          )
+        );
+      }
+      if (typeof actual === "string") {
+        return !expected.some((d: any) =>
+          typeof d === "string" && actual.toLowerCase().includes(d.toLowerCase())
+        );
+      }
+      return true;
+    }
     default:         return false;
   }
 }
 
 function getProperty(obj: any, path: string): any {
   if (!path) return obj;
-  return path.split(".").reduce((o, k) => o?.[k], obj);
+  // Support bracket notation for keys with dots (e.g. ["@odata.type"])
+  const segments: string[] = [];
+  let i = 0;
+  while (i < path.length) {
+    if (path[i] === "[" && i + 1 < path.length && path[i + 1] === '"') {
+      // Bracket-escaped segment: ["key.with.dots"]
+      const end = path.indexOf('"]', i + 2);
+      if (end === -1) break;
+      segments.push(path.slice(i + 2, end));
+      i = end + 2;
+      if (path[i] === ".") i++; // skip trailing dot separator
+    } else {
+      // Normal dot-separated segment
+      const dot = path.indexOf(".", i);
+      const bracket = path.indexOf("[", i);
+      let end: number;
+      if (dot === -1 && bracket === -1) end = path.length;
+      else if (dot === -1) end = bracket;
+      else if (bracket === -1) end = dot;
+      else end = Math.min(dot, bracket);
+      segments.push(path.slice(i, end));
+      i = end;
+      if (path[i] === ".") i++; // skip dot separator
+    }
+  }
+  return segments.reduce((o, k) => o?.[k], obj);
 }
 
 
@@ -1289,6 +1457,57 @@ function evaluateControl(
     };
   }
 
+  // nestedFind — find an item in a nested array by key, then assert on a property of that item
+  if (assertion.operator === "nestedFind" && assertion.nestedFind) {
+    const sourceData: any[] = snapshot.data?.[assertion.source] ?? [];
+    if (sourceData.length === 0) {
+      return { ...base, pass: false, actualValues: {}, failures: [`source "${assertion.source}" not available or empty`] };
+    }
+    const { arrayPath, findBy, property } = assertion.nestedFind;
+    const failures: string[] = [];
+    const actualValues: Record<string, any> = {};
+
+    for (const item of sourceData) {
+      const nestedArray: any[] = getProperty(item, arrayPath) ?? [];
+      if (!Array.isArray(nestedArray)) {
+        failures.push(`${arrayPath} is not an array in source "${assertion.source}"`);
+        continue;
+      }
+      const found = nestedArray.find((el: any) =>
+        Object.entries(findBy).every(([k, v]) =>
+          typeof v === "string"
+            ? String(getProperty(el, k) ?? "").toLowerCase() === v.toLowerCase()
+            : getProperty(el, k) === v
+        )
+      );
+      if (!found) {
+        // Not found: if expectedValue is "disabled" or false, not finding the item is a pass
+        // (e.g. email OTP method not present = disabled = pass)
+        // Otherwise it's a failure (expected item not found)
+        actualValues[`${arrayPath}[${JSON.stringify(findBy)}]`] = null;
+        const notFoundIsPass = assertion.expectedValue === "disabled" ||
+          assertion.expectedValue === false ||
+          assertion.expectedValue === null;
+        if (!notFoundIsPass) {
+          failures.push(
+            `${arrayPath}[${JSON.stringify(findBy)}] — item not found, expected ${JSON.stringify(assertion.expectedValue)}`
+          );
+        }
+        continue;
+      }
+      const actual = getProperty(found, property);
+      actualValues[`${arrayPath}[${JSON.stringify(findBy)}].${property}`] = actual;
+      const pass = evalOperator(actual, assertion.operator === "nestedFind" ? "eq" as Operator : assertion.operator, assertion.expectedValue);
+      if (!pass) {
+        failures.push(
+          `${arrayPath}[${JSON.stringify(findBy)}].${property} is ${JSON.stringify(actual)}, ` +
+          `expected ${JSON.stringify(assertion.expectedValue)}`
+        );
+      }
+    }
+    return { ...base, pass: failures.length === 0, actualValues, failures };
+  }
+
   // count — assert the number of (optionally filtered) source items is within {min, max}
   if (assertion.operator === "count") {
     const sourceData: any[] = snapshot.data?.[assertion.source] ?? [];
@@ -1312,7 +1531,17 @@ function evaluateControl(
 
   // allowedValues — every item's property value must be in the allowed set (or null/empty)
   if (assertion.operator === "allowedValues") {
-    const sourceData: any[] = snapshot.data?.[assertion.source] ?? [];
+    const rawData: any[] = snapshot.data?.[assertion.source] ?? [];
+    const avFilter = assertion.sourceFilter as Record<string, any> | undefined;
+    const sourceData = avFilter
+      ? rawData.filter(item =>
+          Object.entries(avFilter).every(([k, v]) => {
+            const itemVal = getProperty(item, k);
+            if (Array.isArray(itemVal)) return itemVal.includes(v);
+            return itemVal === v;
+          })
+        )
+      : rawData;
     if (sourceData.length === 0) {
       return { ...base, pass: false, actualValues: {}, failures: [`source "${assertion.source}" not available or empty`] };
     }
@@ -1345,7 +1574,19 @@ function evaluateControl(
   }
 
   // Simple operator evaluation
-  const sourceData: any[] = snapshot.data?.[assertion.source] ?? [];
+  const rawSourceData: any[] = snapshot.data?.[assertion.source] ?? [];
+  // Apply sourceFilter before evaluation (same logic as count operator)
+  const filter = assertion.sourceFilter as Record<string, any> | undefined;
+  const sourceData = filter
+    ? rawSourceData.filter(item =>
+        Object.entries(filter).every(([k, v]) => {
+          const itemVal = getProperty(item, k);
+          // Support array-contains check (e.g. groupTypes includes "Unified")
+          if (Array.isArray(itemVal)) return itemVal.includes(v);
+          return itemVal === v;
+        })
+      )
+    : rawSourceData;
   const failures: string[] = [];
   const actualValues: Record<string, any> = {};
 
@@ -1376,11 +1617,51 @@ function evaluateControl(
     if (!Array.isArray(sourceData) || sourceData.length === 1) break;
   }
 
-  const pass = assertion.assertionLogic === "ANY"
+  const primaryPass = assertion.assertionLogic === "ANY"
     ? failures.length < sourceData.length  // ANY: at least one passed
     : failures.length === 0;               // ALL: every item passed
 
-  return { ...base, pass, actualValues, failures };
+  // Phase 2.1/2.3 — Evaluate additional assertions (multi-property + cross-source)
+  if (assertion.additionalAssertions && assertion.additionalAssertions.length > 0) {
+    const additionalFailures: string[] = [];
+    for (const sub of assertion.additionalAssertions) {
+      const subSource = sub.source ?? assertion.source;
+      let subData: any[] = snapshot.data?.[subSource] ?? [];
+
+      // Apply sub-assertion's own sourceFilter
+      if (sub.sourceFilter) {
+        subData = subData.filter(item =>
+          Object.entries(sub.sourceFilter!).every(([k, v]) => {
+            const itemVal = getProperty(item, k);
+            if (Array.isArray(itemVal)) return itemVal.includes(v);
+            return itemVal === v;
+          })
+        );
+      }
+
+      if (subData.length === 0) {
+        additionalFailures.push(`source "${subSource}" not available or empty for additional assertion on ${sub.property}`);
+        continue;
+      }
+
+      for (const item of subData) {
+        const actual = getProperty(item, sub.property);
+        const label = item.id ?? item.userPrincipalName ?? item.displayName ?? item.name ?? "item";
+        const subPass = evalOperator(actual, sub.operator, sub.expectedValue);
+        if (!subPass) {
+          additionalFailures.push(
+            `${label}: ${sub.property} is ${JSON.stringify(actual)}, ` +
+            `expected ${sub.operator} ${JSON.stringify(sub.expectedValue)}`
+          );
+        }
+        if (subData.length === 1) break;
+      }
+    }
+    const allPass = primaryPass && additionalFailures.length === 0;
+    return { ...base, pass: allPass, actualValues, failures: [...failures, ...additionalFailures] };
+  }
+
+  return { ...base, pass: primaryPass, actualValues, failures };
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────

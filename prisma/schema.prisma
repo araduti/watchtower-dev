@@ -60,7 +60,7 @@ model Workspace {
   memberships     Membership[]
   roles           Role[]
   findings        Finding[]
-  observations    Observation[]
+  evidence        Evidence[]
   scans           Scan[]
   auditEvents     AuditEvent[]
   auditAccessLogs AuditAccessLog[]
@@ -93,7 +93,7 @@ model Scope {
   tenants         Tenant[]
   memberships     Membership[]
   findings        Finding[]
-  observations    Observation[]
+  evidence        Evidence[]
   scans           Scan[]
   auditEvents     AuditEvent[]
   auditAccessLogs AuditAccessLog[]
@@ -120,9 +120,9 @@ model Tenant {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  findings     Finding[]
-  observations Observation[]
-  scans        Scan[]
+  findings Finding[]
+  evidence Evidence[]
+  scans    Scan[]
 
   @@unique([workspaceId, msTenantId])
   @@index([workspaceId, scopeId, deletedAt])
@@ -147,8 +147,8 @@ enum TenantStatus {
 // custom checks. Findings reference checks by SLUG, not by surrogate id, so
 // findings survive check version bumps.
 //
-// Framework mappings are hybrid: source-of-truth lives in policy source files,
-// and a sync job materializes them into CheckFrameworkMapping for query
+// Controls map checks to frameworks. Source-of-truth lives in policy source
+// files, and a sync job materializes them into the Control table for query
 // performance. The materialized table is a CACHE — safe to drop and rebuild.
 //
 // The "current version of a check" lookup is served by a materialized view
@@ -156,23 +156,29 @@ enum TenantStatus {
 // =============================================================================
 
 model Check {
-  id           String      @id @default(cuid())
-  slug         String // stable public identity, e.g. "wt.entra.ca.require_mfa_admins"
-  version      Int // monotonic per slug
-  title        String
-  description  String      @db.Text
-  rationale    String      @db.Text
-  remediation  String      @db.Text // markdown
-  severity     Severity
-  severityRank Int // numeric mirror of severity for ORDER BY (see design notes)
-  source       CheckSource @default(BUILTIN)
-  pluginRepoId String? // null for builtin
-  pluginRepo   PluginRepo? @relation(fields: [pluginRepoId], references: [id])
-  graphScopes  String[] // required Microsoft Graph permissions
+  id               String      @id @default(cuid())
+  slug             String // stable public identity, e.g. "wt.entra.ca.require_mfa_admins"
+  version          Int // monotonic per slug
+  title            String
+  description      String      @db.Text
+  rationale        String      @db.Text
+  remediation      String      @db.Text // markdown
+  severity         Severity
+  severityRank     Int // numeric mirror of severity for ORDER BY (see design notes)
+  source           CheckSource @default(BUILTIN)
+  pluginRepoId     String? // null for builtin
+  pluginRepo       PluginRepo? @relation(fields: [pluginRepoId], references: [id])
+  graphScopes      String[] // required Microsoft Graph permissions
+  dataSource       String? // e.g. "spoTenant" — the evidence source key
+  property         String? // e.g. "sharingCapability"
+  product          String? // e.g. "M365"
+  connectors       String[] // replaces graphScopes conceptually; both retained
+  allowedValues    Json? // e.g. [{value: 0, label: "Disabled"}, ...]
+  allowedOperators String[] // e.g. ["eq", "in"]
 
   createdAt DateTime @default(now())
 
-  frameworkMappings CheckFrameworkMapping[]
+  controls Control[]
 
   @@unique([slug, version])
   @@index([slug])
@@ -227,10 +233,10 @@ model Framework {
 
   createdAt DateTime @default(now())
 
-  mappings CheckFrameworkMapping[]
+  controls Control[]
 }
 
-model CheckFrameworkMapping {
+model Control {
   checkSlug    String // by slug to survive check version bumps
   frameworkId  String
   framework    Framework @relation(fields: [frameworkId], references: [id])
@@ -241,18 +247,46 @@ model CheckFrameworkMapping {
   // TODO: performance — push framework filter into the join, not the WHERE
   // clause. See Schema-Design-Notes.md "canonical query walkthrough".
 
+  classification   String? // "L1", "SHALL", "MODERATE" — verbatim per framework
+  required         Boolean @default(true)
+  automated        Boolean @default(false)
+  evidenceRequired Boolean @default(false)
+  assertionLogic   String  @default("ALL") // "ALL" | "ANY"
+  description      String? @db.Text
+  rationale        String? @db.Text
+  remediation      String? @db.Text
+
+  assertions ControlAssertion[]
+
   @@id([checkSlug, frameworkId, controlId])
   @@index([frameworkId])
   @@index([checkSlug])
 }
 
+model ControlAssertion {
+  id                 String  @id @default(cuid())
+  controlCheckSlug   String // composite FK part 1
+  controlFrameworkId String // composite FK part 2
+  controlControlId   String // composite FK part 3
+  control            Control @relation(fields: [controlCheckSlug, controlFrameworkId, controlControlId], references: [checkSlug, frameworkId, controlId])
+  checkSlug          String // references Check.slug — survives version bumps
+  operator           String // "eq" | "in" | "lte" | "gte" | "neq" | "notEmpty" | "contains" | "notContainsAny" | "nestedFind" | "count" | "allowedValues" | "custom" | "manual"
+  expectedValue      Json?
+  sourceFilter       Json? // optional row filter before asserting
+
+  createdAt DateTime @default(now())
+
+  @@index([checkSlug])
+  @@index([controlCheckSlug, controlFrameworkId, controlControlId])
+}
+
 // =============================================================================
-// FINDINGS, OBSERVATIONS, SCANS
+// FINDINGS, EVIDENCE, SCANS
 // =============================================================================
 //
-// A Scan is an event that produces Observations. Observations update Findings.
+// A Scan is an event that produces Evidence. Evidence updates Findings.
 // Findings are the durable, stateful objects — one per (tenant, checkSlug)
-// pair, ever. Observations are append-only.
+// pair, ever. Evidence is append-only.
 // =============================================================================
 
 model Finding {
@@ -304,7 +338,10 @@ model Finding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  observations Observation[]
+  latestEvidenceId String? // denormalized, updated by trigger (see 001_rls_setup.sql)
+  evidenceDueAt    DateTime? // deadline for manual evidence
+
+  evidence Evidence[]
   // TODO: add index on (workspaceId, checkSlug) once we ship the
   // "show me every tenant failing check X" view.
 
@@ -332,7 +369,7 @@ enum FindingVisibility {
   MUTED // orthogonal to status: a muted finding still has its real status
 }
 
-model Observation {
+model Evidence {
   id String @id @default(cuid())
 
   // Denormalized for RLS
@@ -348,10 +385,25 @@ model Observation {
   findingId String
   finding   Finding @relation(fields: [findingId], references: [id])
 
-  result   ObservationResult
+  result      EvidenceResult
   // Structured evidence — the raw data the check evaluated.
-  // Phase 1 will add an Evidence table for attached files (PDFs, screenshots).
-  evidence Json              @default("{}")
+  rawEvidence Json           @default("{}")
+
+  type          EvidenceType @default(AUTOMATED)
+  value         Json? // raw collected value
+  storageKey    String? // Garage S3 reference
+  fileName      String?
+  fileSize      Int?
+  mimeType      String?
+  url           String?
+  validFrom     DateTime     @default(now())
+  validUntil    DateTime?
+  collectedBy   ActorType
+  collectedById String
+  reviewStatus  ReviewStatus @default(NOT_REQUIRED)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  reviewNotes   String?      @db.Text
 
   observedAt DateTime @default(now())
 
@@ -365,11 +417,24 @@ model Observation {
   @@index([scanId])
 }
 
-enum ObservationResult {
+enum EvidenceResult {
   PASS
   FAIL
   ERROR
   NOT_APPLICABLE
+}
+
+enum EvidenceType {
+  AUTOMATED
+  MANUAL
+  HYBRID
+}
+
+enum ReviewStatus {
+  NOT_REQUIRED
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
 }
 
 model Scan {
@@ -394,7 +459,7 @@ model Scan {
 
   createdAt DateTime @default(now())
 
-  observations Observation[]
+  evidence Evidence[]
 
   @@index([workspaceId, scopeId, createdAt])
   @@index([tenantId, createdAt])
