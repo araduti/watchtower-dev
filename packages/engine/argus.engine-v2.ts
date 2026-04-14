@@ -1237,6 +1237,19 @@ const CA_POLICY_SPECS: Record<string, PolicySpec> = {
   "5.2.2.12": { id: "5.2.2.12", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Device code sign-in flow is blocked", match: { users: { include: "All" }, apps: { include: "All" }, authenticationFlows: ["deviceCodeFlow"], grant: { anyOf: ["block"] }, exclusions: "break-glass-only", state: "active" } } as any,
 };
 
+// ─── Source filter utility ─────────────────────────────────────────────────────
+
+function applySourceFilter(items: any[], filter: Record<string, any> | undefined): any[] {
+  if (!filter) return items;
+  return items.filter(item =>
+    Object.entries(filter).every(([k, v]) => {
+      const itemVal = getProperty(item, k);
+      if (Array.isArray(itemVal)) return itemVal.includes(v);
+      return itemVal === v;
+    })
+  );
+}
+
 // ─── Control evaluator ────────────────────────────────────────────────────────
 
 function evaluateControl(
@@ -1340,12 +1353,7 @@ function evaluateControl(
   // count — assert the number of (optionally filtered) source items is within {min, max}
   if (assertion.operator === "count") {
     const sourceData: any[] = snapshot.data?.[assertion.source] ?? [];
-    const filter = assertion.sourceFilter as Record<string, any> | undefined;
-    const filtered = filter
-      ? sourceData.filter(item =>
-          Object.entries(filter).every(([k, v]) => getProperty(item, k) === v)
-        )
-      : sourceData;
+    const filtered = applySourceFilter(sourceData, assertion.sourceFilter as Record<string, any> | undefined);
     const count = filtered.length;
     const { min, max } = (assertion.expectedValue as { min?: number; max?: number }) ?? {};
     const pass = (min === undefined || count >= min) && (max === undefined || count <= max);
@@ -1361,16 +1369,7 @@ function evaluateControl(
   // allowedValues — every item's property value must be in the allowed set (or null/empty)
   if (assertion.operator === "allowedValues") {
     const rawData: any[] = snapshot.data?.[assertion.source] ?? [];
-    const avFilter = assertion.sourceFilter as Record<string, any> | undefined;
-    const sourceData = avFilter
-      ? rawData.filter(item =>
-          Object.entries(avFilter).every(([k, v]) => {
-            const itemVal = getProperty(item, k);
-            if (Array.isArray(itemVal)) return itemVal.includes(v);
-            return itemVal === v;
-          })
-        )
-      : rawData;
+    const sourceData = applySourceFilter(rawData, assertion.sourceFilter as Record<string, any> | undefined);
     if (sourceData.length === 0) {
       return { ...base, pass: false, actualValues: {}, failures: [`source "${assertion.source}" not available or empty`] };
     }
@@ -1404,18 +1403,7 @@ function evaluateControl(
 
   // Simple operator evaluation
   const rawSourceData: any[] = snapshot.data?.[assertion.source] ?? [];
-  // Apply sourceFilter before evaluation (same logic as count operator)
-  const filter = assertion.sourceFilter as Record<string, any> | undefined;
-  const sourceData = filter
-    ? rawSourceData.filter(item =>
-        Object.entries(filter).every(([k, v]) => {
-          const itemVal = getProperty(item, k);
-          // Support array-contains check (e.g. groupTypes includes "Unified")
-          if (Array.isArray(itemVal)) return itemVal.includes(v);
-          return itemVal === v;
-        })
-      )
-    : rawSourceData;
+  const sourceData = applySourceFilter(rawSourceData, assertion.sourceFilter as Record<string, any> | undefined);
   const failures: string[] = [];
   const actualValues: Record<string, any> = {};
 
@@ -1458,15 +1446,7 @@ function evaluateControl(
       let subData: any[] = snapshot.data?.[subSource] ?? [];
 
       // Apply sub-assertion's own sourceFilter
-      if (sub.sourceFilter) {
-        subData = subData.filter(item =>
-          Object.entries(sub.sourceFilter!).every(([k, v]) => {
-            const itemVal = getProperty(item, k);
-            if (Array.isArray(itemVal)) return itemVal.includes(v);
-            return itemVal === v;
-          })
-        );
-      }
+      subData = applySourceFilter(subData, sub.sourceFilter as Record<string, any> | undefined);
 
       if (subData.length === 0) {
         additionalFailures.push(`source "${subSource}" not available or empty for additional assertion on ${sub.property}`);
