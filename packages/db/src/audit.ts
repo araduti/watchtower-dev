@@ -230,12 +230,16 @@ function computeRowHash(
 /**
  * Sign `data` with the loaded Ed25519 private key → hex string.
  *
+ * The input `hexHash` is a hex-encoded SHA-256 digest. We convert it to
+ * raw bytes before signing so the signature covers the actual hash value,
+ * not its text encoding.
+ *
  * Ed25519 does not use a separate digest algorithm — pass `null`
  * as the algorithm parameter.
  */
-function signData(data: string): string {
+function signData(hexHash: string): string {
   const privateKey = loadPrivateKey();
-  const signature = sign(null, Buffer.from(data, "utf-8"), privateKey);
+  const signature = sign(null, Buffer.from(hexHash, "hex"), privateKey);
   return signature.toString("hex");
 }
 
