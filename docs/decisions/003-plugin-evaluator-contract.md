@@ -41,9 +41,13 @@ Extracted from the monolithic map into `evaluators/builtin/{slug}.ts`. Each file
 - Adding a new evaluator is adding a file, not modifying the engine
 - Code review of evaluator changes is scoped to one file
 
-### 4. CA policy specs remain typed data (not DB rows yet)
+### 4. CA policy specs are now assertion data (Phase 4 complete)
 
-The CA policy match specifications (`CA_POLICY_SPECS`) were extracted to their own module but remain TypeScript data, not ControlAssertion rows. The principled move is to add an `operator: "ca-match"` with a `matchSpec: Json?` field to the ControlAssertion model, making CA checks data-driven. This is deferred to Phase 4.
+The CA policy match specifications were originally extracted to `evaluators/ca-policy-specs.ts` as typed data in Phase 2. In Phase 4, they were migrated to inline match specs in `ControlAssertion.expectedValue`, using the new `operator: "ca-match"`. This makes CA checks fully data-driven — the same as every other assertion.
+
+The `ca-match` operator routes evaluation through the existing CA policy match engine, reconstructing a `PolicySpec` from the assertion's metadata and `expectedValue`. No separate spec file is needed; the match spec travels with the assertion as serializable JSON data.
+
+The deprecated `evaluators/ca-policy-specs.ts` module and the `ca-policy-match:` evaluatorSlug routing pattern have been removed.
 
 ### 5. This does NOT close the dual-engine open question
 
@@ -55,4 +59,4 @@ Architecture.md §12 asks "Is the dual-engine split worth the complexity?" That 
 - 27 evaluators are individually testable
 - Same contract for built-in and future customer evaluators
 - Registry pattern supports Phase 5 plugin loading
-- CA policy specs still need data-driven migration (Phase 4)
+- CA policy specs are fully data-driven via `operator: "ca-match"` (Phase 4 complete)

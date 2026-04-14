@@ -25,7 +25,6 @@
 
 import { MOCKED_CONTROL_ASSERTIONS } from "./assertions.ts";
 import { getEvaluator, registrySize } from "./evaluators/registry.ts";
-import { CA_POLICY_SPECS } from "./evaluators/ca-policy-specs.ts";
 
 // ─── Inlined from argus.engine.ts ──────────────────────────────────────────────
 // CA policy match engine and assert runner.
@@ -535,7 +534,7 @@ interface Evidence {
   sources:     Record<string, EvidenceSource>;
 }
 
-export type Operator = "eq" | "neq" | "in" | "lte" | "gte" | "notEmpty" | "manual" | "count" | "allowedValues" | "custom" | "contains" | "notContainsAny" | "nestedFind";
+export type Operator = "eq" | "neq" | "in" | "lte" | "gte" | "notEmpty" | "manual" | "count" | "allowedValues" | "custom" | "contains" | "notContainsAny" | "nestedFind" | "ca-match";
 
 export interface ControlAssertion {
   // Control identity
@@ -695,7 +694,9 @@ function getProperty(obj: any, path: string): any {
 
 
 // ─── CA Policy Specs ──────────────────────────────────────────────────────────
-// Extracted to evaluators/ca-policy-specs.ts and imported at the top of this file.
+// Phase 4: CA policy match specs are now inlined in ControlAssertion.expectedValue
+// as data rows with operator: "ca-match". The evaluators/ca-policy-specs.ts file
+// has been removed. See TODO-plugin-extraction-phases.md.
 
 // ─── Source filter utility ─────────────────────────────────────────────────────
 // Supports plain equality, array-includes, and operator objects:
@@ -739,21 +740,29 @@ function evaluateControl(
     evaluatedAt:   new Date().toISOString(),
   };
 
-  // Complex evaluator — delegate to existing custom evaluator
-  if (assertion.evaluatorSlug) {
-    // CA policy match evaluators — route through the match engine
-    if (assertion.evaluatorSlug.startsWith("ca-policy-match:")) {
-      // Look up the spec from the CA_POLICY_SPECS map and run it through match engine
-      const specId = assertion.evaluatorSlug.replace("ca-policy-match:", "");
-      const spec = CA_POLICY_SPECS[specId];
-      if (!spec) return { ...base, pass: false, actualValues: {}, failures: [`No CA policy spec found for id: ${specId}`] };
-      const auditResults = runAudit([spec], snapshot, config);
-      const result = auditResults[0];
-      if (!result) return { ...base, pass: false, actualValues: {}, failures: [`CA policy match returned no result`] };
-      return { ...base, pass: result.pass, actualValues: {}, failures: result.warnings };
+  // CA policy match — match spec is data in expectedValue, not code
+  if (assertion.operator === "ca-match") {
+    const matchSpec = assertion.expectedValue;
+    if (!matchSpec || typeof matchSpec !== "object") {
+      return { ...base, pass: false, actualValues: {}, failures: [`ca-match operator requires a match spec in expectedValue`] };
     }
+    // Reconstruct a PolicySpec from the assertion data + inline match spec
+    const spec: PolicySpec = {
+      id: assertion.controlId,
+      framework: assertion.frameworkSlug,
+      frameworkVersion: "3.0",
+      product: "M365",
+      title: assertion.controlTitle,
+      match: matchSpec as PolicySpec["match"],
+    };
+    const auditResults = runAudit([spec], snapshot, config);
+    const result = auditResults[0];
+    if (!result) return { ...base, pass: false, actualValues: {}, failures: [`CA policy match returned no result`] };
+    return { ...base, pass: result.pass, actualValues: {}, failures: result.warnings };
+  }
 
-    // Custom named evaluators — look up in the evaluator registry
+  // Complex evaluator — delegate to evaluator registry
+  if (assertion.evaluatorSlug) {
     const evaluator = getEvaluator(assertion.evaluatorSlug);
     if (!evaluator) return { ...base, pass: false, actualValues: {}, failures: [`Unknown evaluator slug: "${assertion.evaluatorSlug}"`] };
     const { pass, warnings } = evaluator(snapshot);

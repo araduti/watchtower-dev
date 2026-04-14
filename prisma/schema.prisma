@@ -270,7 +270,7 @@ model ControlAssertion {
   controlControlId   String // composite FK part 3
   control            Control @relation(fields: [controlCheckSlug, controlFrameworkId, controlControlId], references: [checkSlug, frameworkId, controlId])
   checkSlug          String // references Check.slug — survives version bumps
-  operator           String // "eq" | "in" | "lte" | "gte" | "neq" | "notEmpty" | "contains" | "notContainsAny" | "nestedFind" | "count" | "allowedValues" | "custom" | "manual"
+  operator           String // "eq" | "in" | "lte" | "gte" | "neq" | "notEmpty" | "contains" | "notContainsAny" | "nestedFind" | "count" | "allowedValues" | "custom" | "manual" | "ca-match"
   expectedValue      Json?
   sourceFilter       Json? // optional row filter before asserting
 
