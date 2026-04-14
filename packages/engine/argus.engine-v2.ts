@@ -773,58 +773,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     };
   },
 
-  "email-otp-disabled": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authMethodConfigurations ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authentication method configurations in snapshot"] };
-
-    const configs: any[] = policies[0]?.authenticationMethodConfigurations ?? [];
-    const email = configs.find((c: any) => c.id?.toLowerCase() === "email");
-    if (!email) return { pass: true, warnings: [] }; // not present = not enabled = pass
-
-    const pass = email.state === "disabled";
-    return {
-      pass,
-      warnings: pass ? [] : [`Email OTP authentication method is ${email.state ?? "enabled"} — must be disabled`],
-    };
-  },
-
-  "system-preferred-mfa-enabled": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authMethodConfigurations ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authentication method configurations in snapshot"] };
-
-    const prefs = policies[0]?.systemCredentialPreferences;
-    if (!prefs) return { pass: false, warnings: ["systemCredentialPreferences not found — re-run Watchtower with beta API"] };
-
-    const state = prefs.state;
-    const targets: any[] = prefs.includeTargets ?? [];
-    const allUsers = targets.some((t: any) => t.id === "all_users" || t.id === "AllUsers");
-
-    const failing: string[] = [];
-    if (state !== "enabled") failing.push(`System-preferred MFA state is "${state}" (must be enabled)`);
-    if (!allUsers) failing.push(`System-preferred MFA does not target all users`);
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  "weak-auth-methods-disabled": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authMethodConfigurations ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authentication method configurations in snapshot"] };
-
-    const configs: any[] = policies[0]?.authenticationMethodConfigurations ?? [];
-    const weakMethods = ["Sms", "Voice"];
-    const failing: string[] = [];
-
-    for (const method of weakMethods) {
-      const config = configs.find((c: any) => c.id?.toLowerCase() === method.toLowerCase());
-      if (!config) continue; // not present = not enabled = pass
-      if (config.state !== "disabled") {
-        failing.push(`${method} authentication method is ${config.state ?? "enabled"} — must be disabled`);
-      }
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
   "onprem-password-protection-enabled": (snapshot: Record<string, any>) => {
     const allSettings: any[] = snapshot.data?.passwordProtectionSettings ?? [];
     const setting = allSettings.find((s: any) => s.templateId === "5cf42378-d67d-4f36-ba46-e8b86229381d");
@@ -857,28 +805,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     const failing: string[] = [];
     if (enforced !== "True") failing.push(`EnableBannedPasswordCheck is ${enforced ?? "not set"} (must be True)`);
     if (!list.trim()) failing.push("BannedPasswordList is empty — add organization-specific terms");
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  "authenticator-fatigue-protection": (snapshot: Record<string, any>) => {
-    const configs: any[] = snapshot.data?.authMethodsPolicy ?? [];
-    if (configs.length === 0) return { pass: false, warnings: ["No Microsoft Authenticator configuration in snapshot"] };
-
-    const config = configs[0];
-    if (config.state !== "enabled") return { pass: false, warnings: [`Microsoft Authenticator is not enabled (state: ${config.state})`] };
-
-    const features = config.featureSettings ?? {};
-    const failing: string[] = [];
-
-    const numberMatch = features.numberMatchingRequiredState?.state;
-    if (numberMatch !== "enabled") failing.push(`Require number matching is ${numberMatch ?? "not set"} (must be enabled)`);
-
-    const appName = features.displayAppInformationRequiredState?.state;
-    if (appName !== "enabled") failing.push(`Show application name is ${appName ?? "not set"} (must be enabled)`);
-
-    const geoLocation = features.displayLocationInformationRequiredState?.state;
-    if (geoLocation !== "enabled") failing.push(`Show geographic location is ${geoLocation ?? "not set"} (must be enabled)`);
 
     return { pass: failing.length === 0, warnings: failing };
   },

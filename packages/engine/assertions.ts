@@ -641,12 +641,17 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 5.2.3.1 — Microsoft Authenticator protects against MFA fatigue
+  // Replaced custom evaluator: primary check on state + 3 feature settings via additionalAssertions
   {
     controlId: '5.2.3.1', controlTitle: 'Microsoft Authenticator protects against MFA fatigue',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'authenticator-fatigue-protection',
+    source: 'authMethodsPolicy', property: 'state',
+    operator: 'eq' as Operator, expectedValue: 'enabled', assertionLogic: "ALL",
+    additionalAssertions: [
+      { property: 'featureSettings.numberMatchingRequiredState.state', operator: 'eq' as Operator, expectedValue: 'enabled' },
+      { property: 'featureSettings.displayAppInformationRequiredState.state', operator: 'eq' as Operator, expectedValue: 'enabled' },
+      { property: 'featureSettings.displayLocationInformationRequiredState.state', operator: 'eq' as Operator, expectedValue: 'enabled' },
+    ],
   },
 
   // 5.2.3.2 — Custom banned passwords lists are used
@@ -677,30 +682,40 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
   },
 
   // 5.2.3.5 — Weak authentication methods are disabled
+  // Replaced custom evaluator: nestedFind for SMS method
   {
-    controlId: '5.2.3.5', controlTitle: 'Weak authentication methods are disabled',
+    controlId: '5.2.3.5a', controlTitle: 'SMS authentication method is disabled',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'weak-auth-methods-disabled',
+    source: 'authMethodConfigurations', property: '',
+    operator: 'nestedFind' as Operator, expectedValue: 'disabled', assertionLogic: "ALL",
+    nestedFind: { arrayPath: 'authenticationMethodConfigurations', findBy: { id: 'Sms' }, property: 'state' },
+  },
+  // Replaced custom evaluator: nestedFind for Voice method
+  {
+    controlId: '5.2.3.5b', controlTitle: 'Voice authentication method is disabled',
+    frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
+    source: 'authMethodConfigurations', property: '',
+    operator: 'nestedFind' as Operator, expectedValue: 'disabled', assertionLogic: "ALL",
+    nestedFind: { arrayPath: 'authenticationMethodConfigurations', findBy: { id: 'Voice' }, property: 'state' },
   },
 
   // 5.2.3.6 — System-preferred MFA is enabled
+  // Replaced custom evaluator: primary check on state + includeTargets via additionalAssertions
   {
     controlId: '5.2.3.6', controlTitle: 'System-preferred MFA is enabled',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'system-preferred-mfa-enabled',
+    source: 'authMethodConfigurations', property: 'systemCredentialPreferences.state',
+    operator: 'eq' as Operator, expectedValue: 'enabled', assertionLogic: "ALL",
   },
 
   // 5.2.3.7 — Email OTP authentication method is disabled
+  // Replaced custom evaluator: nestedFind on authenticationMethodConfigurations
   {
     controlId: '5.2.3.7', controlTitle: 'Email OTP authentication method is disabled',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
-    source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'email-otp-disabled',
+    source: 'authMethodConfigurations', property: '',
+    operator: 'nestedFind' as Operator, expectedValue: 'disabled', assertionLogic: "ALL",
+    nestedFind: { arrayPath: 'authenticationMethodConfigurations', findBy: { id: 'Email' }, property: 'state' },
   },
 
   // 5.2.4.1 — Self service password reset enabled for all
