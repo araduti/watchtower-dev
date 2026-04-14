@@ -48,7 +48,7 @@ interface PolicySpec {
   match?: {
     users?: { include?: "All"; roles?: string[] };
     userActions?: string[];
-    apps?: { include?: "All"; noExclusions?: boolean };
+    apps?: { include?: string; noExclusions?: boolean };
     grant?: {
       anyOf?: string[];
       authStrength?: string;
