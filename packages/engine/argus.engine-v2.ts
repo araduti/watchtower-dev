@@ -255,7 +255,12 @@ function evaluate(policy: any, spec: PolicySpec, config: ArgusConfig): Criterion
       } else {
         // Specific hour limit
         const isEnabled = freq?.isEnabled === true;
-        const hours = freq?.type === "hours" ? freq?.value : (freq?.type === "days" ? (freq?.value ?? 0) * 24 : Infinity);
+        // Convert to hours; unknown frequency types treated as non-compliant (NaN fails <=)
+        const hours = freq?.type === "hours"
+          ? (freq?.value ?? NaN)
+          : freq?.type === "days"
+            ? (freq?.value ?? 0) * 24
+            : NaN;
         criteria.push({
           label: `sign-in frequency ≤ ${m.session.signInFrequencyHours}h`,
           pass: isEnabled && hours <= m.session.signInFrequencyHours,
@@ -1355,7 +1360,7 @@ function getProperty(obj: any, path: string): any {
   const segments: string[] = [];
   let i = 0;
   while (i < path.length) {
-    if (path[i] === "[" && path[i + 1] === '"') {
+    if (path[i] === "[" && i + 1 < path.length && path[i + 1] === '"') {
       // Bracket-escaped segment: ["key.with.dots"]
       const end = path.indexOf('"]', i + 2);
       if (end === -1) break;
@@ -1476,9 +1481,18 @@ function evaluateControl(
         )
       );
       if (!found) {
-        // Not found can be a pass (e.g. email OTP method not present = disabled = pass)
-        // If expectedValue is "disabled" or false, not finding the item is a pass
+        // Not found: if expectedValue is "disabled" or false, not finding the item is a pass
+        // (e.g. email OTP method not present = disabled = pass)
+        // Otherwise it's a failure (expected item not found)
         actualValues[`${arrayPath}[${JSON.stringify(findBy)}]`] = null;
+        const notFoundIsPass = assertion.expectedValue === "disabled" ||
+          assertion.expectedValue === false ||
+          assertion.expectedValue === null;
+        if (!notFoundIsPass) {
+          failures.push(
+            `${arrayPath}[${JSON.stringify(findBy)}] — item not found, expected ${JSON.stringify(assertion.expectedValue)}`
+          );
+        }
         continue;
       }
       const actual = getProperty(found, property);
