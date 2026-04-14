@@ -24,10 +24,13 @@
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 import { MOCKED_CONTROL_ASSERTIONS } from "./assertions.ts";
+import { getEvaluator, registrySize } from "./evaluators/registry.ts";
+import { CA_POLICY_SPECS } from "./evaluators/ca-policy-specs.ts";
 
 // ─── Inlined from argus.engine.ts ──────────────────────────────────────────────
-// CA policy match engine, custom evaluators, and assert runner.
-// Inlined so argus.engine-v2.ts has zero external dependencies.
+// CA policy match engine and assert runner.
+// Custom evaluators have been extracted to evaluators/builtin/ and are loaded
+// via the evaluator registry (evaluators/registry.ts).
 
 interface ArgusConfig {
   breakGlassAccounts: string[];
@@ -431,621 +434,9 @@ function runAssert(spec: PolicySpec, snapshot: Record<string, any>): V1ControlRe
 }
 
 // ─── Custom evaluators ───────────────────────────────────────────────────────
-// Complex checks that can't be expressed as a simple assert.
-// Each evaluator receives the full snapshot and returns pass + warnings.
-
-type CustomEvaluator = (snapshot: Record<string, any>) => { pass: boolean; warnings: string[] };
-
-const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
-
-  "idle-session-timeout": (snapshot) => {
-    const policies: any[] = snapshot.data?.timeoutPolicies ?? [];
-    const MAX_SECONDS = 3 * 60 * 60; // 3 hours
-
-    if (policies.length === 0) {
-      return { pass: false, warnings: ["No activity-based timeout policy found"] };
-    }
-
-    const warnings: string[] = [];
-    for (const policy of policies) {
-      try {
-        const def = JSON.parse(policy.definition?.[0] ?? "{}");
-        const appPolicies = def?.ActivityBasedTimeoutPolicy?.ApplicationPolicies ?? [];
-        // c44b4083-3bb0-49c1-b47d-974e53cbdf3c = Azure Portal — has its own timeout setting, not in scope
-        const AZURE_PORTAL_ID = "c44b4083-3bb0-49c1-b47d-974e53cbdf3c";
-        for (const app of appPolicies) {
-          if (app?.ApplicationId === AZURE_PORTAL_ID) continue;
-          const timeout = app?.WebSessionIdleTimeout ?? "";
-          // Format is HH:MM:SS
-          const parts = timeout.split(":").map(Number);
-          const seconds = parts.length === 3
-            ? parts[0] * 3600 + parts[1] * 60 + parts[2]
-            : NaN;
-          if (isNaN(seconds) || seconds > MAX_SECONDS) {
-            warnings.push(`Timeout "${timeout}" exceeds 3 hours (ApplicationId: ${app?.ApplicationId})`);
-          }
-        }
-      } catch {
-        warnings.push(`Could not parse policy definition for "${policy.displayName}"`);
-      }
-    }
-
-    return { pass: warnings.length === 0, warnings };
-  },
-
-  "teams-security-reporting-enabled": (snapshot: Record<string, any>) => {
-    const messaging = snapshot.data?.teamsMessagingPolicy?.[0];
-    const policies: any[] = snapshot.data?.threatSubmissionPolicy ?? [];
-    const reportPolicy = policies[0];
-    const warnings: string[] = [];
-
-    // Part 1: Teams messaging policy — AllowSecurityEndUserReporting must be true
-    if (!messaging) {
-      warnings.push("teamsMessagingPolicy: data not available");
-    } else if (messaging.allowSecurityEndUserReporting !== true) {
-      warnings.push(`teamsMessagingPolicy: allowSecurityEndUserReporting is ${messaging.allowSecurityEndUserReporting}, expected true`);
-    }
-
-    // Part 2: Defender threat submission policy (Graph /security/threatSubmission/emailThreatSubmissionPolicies)
-    if (!reportPolicy) {
-      warnings.push("threatSubmissionPolicy: policy not configured — reported messages go to Microsoft only, not org mailbox");
-    } else {
-      // Org mailbox must be configured
-      if (reportPolicy.isReportToCustomizedEmailAddressEnabled !== true) {
-        warnings.push(`threatSubmissionPolicy: isReportToCustomizedEmailAddressEnabled is ${reportPolicy.isReportToCustomizedEmailAddressEnabled}, expected true`);
-      }
-      // Recipient address must be set
-      if (!reportPolicy.customizedReportRecipientEmailAddress) {
-        warnings.push("threatSubmissionPolicy: customizedReportRecipientEmailAddress is empty — no org mailbox configured");
-      }
-    }
-
-    return { pass: warnings.length === 0, warnings };
-  },
-
-  "teams-unmanaged-inbound-disabled": (snapshot: Record<string, any>) => {
-    const policy = snapshot.data?.teamsExternalAccessPolicy?.[0];
-    const federation = snapshot.data?.teamsFederationConfiguration?.[0];
-
-    if (!policy && !federation) {
-      return { pass: false, warnings: ["Teams connector data not available"] };
-    }
-
-    // Org setting takes precedence
-    if (federation && federation.allowTeamsConsumerInbound === false) {
-      return { pass: true, warnings: [] };
-    }
-
-    // Policy level check
-    if (policy && policy.enableTeamsConsumerInbound === false) {
-      return { pass: true, warnings: [] };
-    }
-
-    const warnings = [];
-    if (federation?.allowTeamsConsumerInbound !== false) {
-      warnings.push(`teamsFederationConfiguration: allowTeamsConsumerInbound is ${federation?.allowTeamsConsumerInbound}`);
-    }
-    if (policy?.enableTeamsConsumerInbound !== false) {
-      warnings.push(`teamsExternalAccessPolicy: enableTeamsConsumerInbound is ${policy?.enableTeamsConsumerInbound}`);
-    }
-
-    return { pass: false, warnings };
-  },
-
-  "teams-unmanaged-access-disabled": (snapshot: Record<string, any>) => {
-    const policy = snapshot.data?.teamsExternalAccessPolicy?.[0];
-    const federation = snapshot.data?.teamsFederationConfiguration?.[0];
-
-    if (!policy && !federation) {
-      return { pass: false, warnings: ["Teams connector data not available"] };
-    }
-
-    // Org setting takes precedence — passes if AllowTeamsConsumer is false
-    if (federation && federation.allowTeamsConsumer === false) {
-      return { pass: true, warnings: [] };
-    }
-
-    // Policy level check
-    if (policy && policy.enableTeamsConsumerAccess === false) {
-      return { pass: true, warnings: [] };
-    }
-
-    const warnings = [];
-    if (federation?.allowTeamsConsumer !== false) {
-      warnings.push(`teamsFederationConfiguration: allowTeamsConsumer is ${federation?.allowTeamsConsumer}`);
-    }
-    if (policy?.enableTeamsConsumerAccess !== false) {
-      warnings.push(`teamsExternalAccessPolicy: enableTeamsConsumerAccess is ${policy?.enableTeamsConsumerAccess}`);
-    }
-
-    return { pass: false, warnings };
-  },
-
-  "teams-external-access-restricted": (snapshot: Record<string, any>) => {
-    const policy = snapshot.data?.teamsExternalAccessPolicy?.[0];
-    const federation = snapshot.data?.teamsFederationConfiguration?.[0];
-
-    if (!policy && !federation) {
-      return { pass: false, warnings: ["Teams connector data not available"] };
-    }
-
-    // PASS condition 1: org-level federation is disabled
-    if (federation && federation.allowFederatedUsers === false) {
-      return { pass: true, warnings: [] };
-    }
-
-    // PASS condition 2: org-level uses allowlist (not AllowAllKnownDomains)
-    if (federation && federation.allowFederatedUsers === true) {
-      const allowedDomains = federation.allowedDomains;
-      // AllowAllKnownDomains is the permissive default — fails
-      const isAllowAll = !allowedDomains ||
-        (typeof allowedDomains === "object" && !Array.isArray(allowedDomains) && Object.keys(allowedDomains).length === 0) ||
-        JSON.stringify(allowedDomains).includes("AllowAllKnownDomains");
-
-      if (!isAllowAll) {
-        return { pass: true, warnings: [] };
-      }
-    }
-
-    // PASS condition 3: global policy disables federation access
-    if (policy && policy.enableFederationAccess === false) {
-      return { pass: true, warnings: [] };
-    }
-
-    const warnings = [];
-    if (federation?.allowFederatedUsers !== false) {
-      warnings.push(`teamsFederationConfiguration: allowFederatedUsers is ${federation?.allowFederatedUsers} with AllowAllKnownDomains`);
-    }
-    if (policy?.enableFederationAccess !== false) {
-      warnings.push(`teamsExternalAccessPolicy: enableFederationAccess is ${policy?.enableFederationAccess}`);
-    }
-
-    return { pass: false, warnings };
-  },
-
-  "no-domain-whitelisting-transport-rules": (snapshot: Record<string, any>) => {
-    const rules: any[] = snapshot.data?.transportRules ?? [];
-
-    const whitelisted = rules.filter((r: any) =>
-      r.setScl === -1 && Array.isArray(r.senderDomainIs) && r.senderDomainIs.length > 0
-    );
-
-    return {
-      pass: whitelisted.length === 0,
-      warnings: whitelisted.map((r: any) =>
-        `Transport rule "${r.name}" whitelists domains with SCL=-1: ${r.senderDomainIs.join(", ")}`
-      ),
-    };
-  },
-
-  "no-external-forwarding-transport-rules": (snapshot: Record<string, any>) => {
-    const rules: any[] = snapshot.data?.transportRules ?? [];
-
-    // Find rules that redirect to external addresses
-    const externalForwards = rules.filter((r: any) => {
-      const redirectTo: string[] = r.redirectMessageTo ?? [];
-      return redirectTo.length > 0;
-    });
-
-    if (externalForwards.length === 0) return { pass: true, warnings: [] };
-
-    return {
-      pass: false,
-      warnings: externalForwards.map((r: any) =>
-        `Transport rule "${r.name}" redirects to: ${r.redirectMessageTo?.join(", ")}`
-      ),
-    };
-  },
-
-  "pra-requires-approval": (snapshot: Record<string, any>) => {
-    const rules: any[] = snapshot.data?.praRoleManagementPolicyRules ?? [];
-    if (rules.length === 0) return { pass: false, warnings: ["No PRA policy rules in snapshot — re-run Watchtower"] };
-
-    const approvalRule = rules.find((r: any) =>
-      r["@odata.type"]?.toLowerCase().includes("approvalrule")
-    );
-
-    if (!approvalRule) return { pass: false, warnings: ["No approval rule found in Privileged Role Administrator policy"] };
-
-    const isEnabled = approvalRule.setting?.isApprovalRequired === true;
-    const approvers: any[] = approvalRule.setting?.approvalStages?.[0]?.primaryApprovers ?? [];
-    const hasEnoughApprovers = approvers.length >= 2;
-
-    const failing: string[] = [];
-    if (!isEnabled) failing.push("Require approval to activate is not enabled for Privileged Role Administrator");
-    if (!hasEnoughApprovers) failing.push(`Only ${approvers.length} approver(s) configured — minimum 2 required`);
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  "privileged-role-access-reviews-configured": (snapshot: Record<string, any>) => {
-    const reviews: any[] = snapshot.data?.accessReviews ?? [];
-    if (reviews.length === 0) return { pass: false, warnings: ["No access reviews found"] };
-
-    // Required privileged roles — at minimum these must be covered
-    const requiredRoles = new Set([
-      "62e90394-69f5-4237-9190-012177145e10", // Global Administrator
-      "29232cdf-9323-42fd-ade2-1d097af3e4de", // Exchange Administrator
-      "f28a1f50-f6e7-4571-818b-6a12f2af6b6c", // SharePoint Administrator
-      "69091246-20e8-4a56-aa4d-066075b2a7a8", // Teams Administrator
-      "194ae4cb-b126-40b2-bd5b-6091b380977d", // Security Administrator
-    ]);
-
-    // Find reviews that target directory roles
-    const roleReviews = reviews.filter((r: any) => {
-      const scope = r.scope?.["@odata.type"] ?? "";
-      return scope.includes("principalResourceMembership") || r.scope?.resourceScopes?.some((s: any) =>
-        s.resource?.["@odata.type"]?.includes("role")
-      );
-    });
-
-    if (roleReviews.length === 0) return { pass: false, warnings: ["No access reviews targeting directory roles found"] };
-
-    const passing = roleReviews.find((r: any) => {
-      const s = r.settings ?? {};
-      const recurrenceType = s.recurrence?.pattern?.type ?? "";
-      const frequencyOk = recurrenceType === "absoluteMonthly" || recurrenceType === "weekly";
-      const durationOk = (s.recurrence?.range?.numberOfOccurrences ?? 999) <= 14 ||
-                         s.instanceDurationInDays <= 14;
-      return (
-        r.status === "InProgress" &&
-        s.mailNotificationsEnabled === true &&
-        s.reminderNotificationsEnabled === true &&
-        s.justificationRequiredOnApproval === true &&
-        frequencyOk &&
-        s.autoApplyDecisionsEnabled === true
-      );
-    });
-
-    return {
-      pass: !!passing,
-      warnings: passing ? [] : [
-        `${roleReviews.length} role access review(s) found but none meet all CIS requirements`,
-        "Required: status=InProgress, monthly/weekly, autoApply=true, notifications+justification enabled",
-      ],
-    };
-  },
-
-  "guest-access-reviews-configured": (snapshot: Record<string, any>) => {
-    const reviews: any[] = snapshot.data?.accessReviews ?? [];
-    if (reviews.length === 0) return { pass: false, warnings: ["No access reviews found — configure a guest user access review"] };
-
-    const guestReviews = reviews.filter((r: any) => {
-      const scopeQuery = r.scope?.query ?? "";
-      const principalQuery = (r.scope?.principalScopes ?? []).map((s: any) => s.query).join(" ");
-      return scopeQuery.toLowerCase().includes("usertype eq 'guest'") ||
-             principalQuery.toLowerCase().includes("usertype eq 'guest'");
-    });
-
-    if (guestReviews.length === 0) return { pass: false, warnings: ["No access reviews targeting guest users found"] };
-
-    const passing = guestReviews.find((r: any) => {
-      const s = r.settings ?? {};
-      const recurrenceType = s.recurrence?.pattern?.type ?? "";
-      const frequencyOk = recurrenceType === "absoluteMonthly" || recurrenceType === "weekly";
-      return (
-        r.status === "InProgress" &&
-        s.mailNotificationsEnabled === true &&
-        s.reminderNotificationsEnabled === true &&
-        s.justificationRequiredOnApproval === true &&
-        frequencyOk &&
-        s.autoApplyDecisionsEnabled === true &&
-        s.defaultDecision === "Deny"
-      );
-    });
-
-    return {
-      pass: !!passing,
-      warnings: passing ? [] : [
-        `${guestReviews.length} guest access review(s) found but none meet all CIS requirements`,
-        "Required: status=InProgress, monthly/weekly, autoApply=true, defaultDecision=Deny, notifications+justification enabled",
-      ],
-    };
-  },
-
-  "pim-used-for-privileged-roles": (snapshot: Record<string, any>) => {
-    const sensitiveRoles = new Set(['9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3', 'c4e39bd9-1100-46d3-8c65-fb160da0071f', 'b0f54661-2d74-4c50-afa3-1ec803f12efe', '158c047a-c907-4556-b7ef-446551a6b5f7', '7698a772-787b-4ac8-901f-60d6b08affd2', '17315797-102d-40b4-93e0-432062caca18', '29232cdf-9323-42fd-ade2-1d097af3e4de', '62e90394-69f5-4237-9190-012177145e10', '729827e3-9c14-49f7-bb1b-9608f156bbb8', '3a2c62db-5318-420d-8d74-23affee5d9d5', '966707d0-3269-4727-9be2-8c3a10f19b9d', '7be44c8a-adaf-4e2a-84d6-ab2649e08a13', 'e8611ab8-c189-46e8-94e1-60213ab1f814', '194ae4cb-b126-40b2-bd5b-6091b380977d', 'f28a1f50-f6e7-4571-818b-6a12f2af6b6c', '69091246-20e8-4a56-aa4d-066075b2a7a8', 'fe930be7-5e62-47db-91af-98c3a49a38b1']);
-
-    // Permanent assignments = privilegedUsers with roleTemplateId in sensitive roles
-    const permanent: any[] = (snapshot.data?.privilegedUsers ?? [])
-      .filter((a: any) => sensitiveRoles.has(a.roleTemplateId) && a.principal?.userPrincipalName);
-
-    // Eligible assignments via PIM
-    const eligible: any[] = (snapshot.data?.pimEligibleAssignments ?? [])
-      .filter((a: any) => sensitiveRoles.has(a.roleDefinitionId));
-
-    if (permanent.length === 0 && eligible.length === 0) {
-      return { pass: false, warnings: ["No role assignments found — check snapshot data"] };
-    }
-
-    // Find principals with permanent assignments to sensitive roles that have no eligible assignment
-    const eligiblePrincipals = new Set(eligible.map((a: any) => a.principalId));
-    const permanentOnly = permanent.filter((a: any) => !eligiblePrincipals.has(a.principalId));
-
-    if (permanentOnly.length === 0) {
-      return { pass: true, warnings: [] };
-    }
-
-    return {
-      pass: false,
-      warnings: permanentOnly.map((a: any) =>
-        `${a.principal?.userPrincipalName ?? a.principalId} has permanent assignment to role ${a.roleTemplateId} — should be eligible (JIT) only`
-      ),
-    };
-  },
-
-  "onprem-password-protection-enabled": (snapshot: Record<string, any>) => {
-    const allSettings: any[] = snapshot.data?.passwordProtectionSettings ?? [];
-    const setting = allSettings.find((s: any) => s.templateId === "5cf42378-d67d-4f36-ba46-e8b86229381d");
-    if (!setting) return { pass: false, warnings: ["No password protection settings found"] };
-
-    const values: { name: string; value: string }[] = setting.values ?? [];
-    const get = (name: string) => values.find(v => v.name === name)?.value;
-
-    const enabled = get("EnableBannedPasswordCheckOnPremises");
-    const mode = get("BannedPasswordCheckOnPremisesMode");
-
-    const failing: string[] = [];
-    if (enabled !== "True") failing.push(`EnableBannedPasswordCheckOnPremises is ${enabled ?? "not set"} (must be True)`);
-    if (mode !== "Enforce") failing.push(`BannedPasswordCheckOnPremisesMode is ${mode ?? "not set"} (must be Enforce)`);
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  "custom-banned-passwords-enabled": (snapshot: Record<string, any>) => {
-    const allSettings: any[] = snapshot.data?.passwordProtectionSettings ?? [];
-    const setting = allSettings.find((s: any) => s.templateId === "5cf42378-d67d-4f36-ba46-e8b86229381d");
-    if (!setting) return { pass: false, warnings: ["No password protection settings found — custom banned password list may not be configured"] };
-
-    const values: { name: string; value: string }[] = setting.values ?? [];
-    const get = (name: string) => values.find(v => v.name === name)?.value;
-
-    const enforced = get("EnableBannedPasswordCheck");
-    const list = get("BannedPasswordList") ?? "";
-
-    const failing: string[] = [];
-    if (enforced !== "True") failing.push(`EnableBannedPasswordCheck is ${enforced ?? "not set"} (must be True)`);
-    if (!list.trim()) failing.push("BannedPasswordList is empty — add organization-specific terms");
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  "b2b-allowed-domains-only": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.b2bManagementPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No B2B management policy in snapshot"] };
-
-    const b2bPolicy = policies.find((p: any) => p.type === "B2BManagementPolicy");
-    if (!b2bPolicy) return { pass: false, warnings: ["No B2BManagementPolicy found"] };
-
-    try {
-      const def = JSON.parse(b2bPolicy.definition?.[0] ?? "{}");
-      const domainsPolicy = def?.B2BManagementPolicy?.InvitationsAllowedAndBlockedDomainsPolicy;
-
-      if (!domainsPolicy) return { pass: false, warnings: ["No domain restriction policy defined — all domains are allowed"] };
-      if (domainsPolicy.BlockedDomains !== undefined) return { pass: false, warnings: ["BlockedDomains is set — must use AllowedDomains (most restrictive) instead"] };
-      if (domainsPolicy.AllowedDomains === undefined) return { pass: false, warnings: ["No AllowedDomains defined — all domains are allowed"] };
-
-      return { pass: true, warnings: [] };
-    } catch {
-      return { pass: false, warnings: ["Failed to parse B2B policy definition"] };
-    }
-  },
-
-  "dynamic-guest-group-exists": (snapshot: Record<string, any>) => {
-    const groups: any[] = snapshot.data?.groups ?? [];
-
-    const guestGroup = groups.find((g: any) =>
-      Array.isArray(g.groupTypes) &&
-      g.groupTypes.includes("DynamicMembership") &&
-      g.membershipRule?.toLowerCase().includes('user.usertype -eq "guest"') &&
-      g.membershipRuleProcessingState === "On"
-    );
-
-    return {
-      pass: !!guestGroup,
-      warnings: guestGroup ? [] : ['No dynamic group found with rule (user.userType -eq "Guest") and processing state On'],
-    };
-  },
-
-  "personal-device-enrollment-blocked": (snapshot: Record<string, any>) => {
-    const configs: any[] = snapshot.data?.enrollmentConfigurations ?? [];
-    if (configs.length === 0) return { pass: false, warnings: ["No enrollment configurations in snapshot"] };
-
-    const defaultConfig = configs.find((c: any) =>
-      c.id?.includes("DefaultPlatformRestrictions") && c.priority === 0
-    );
-
-    if (!defaultConfig) return { pass: false, warnings: ["Default platform restriction policy not found"] };
-
-    const platforms = [
-      { key: "windowsRestriction",        label: "Windows"          },
-      { key: "iosRestriction",            label: "iOS/iPadOS"       },
-      { key: "androidRestriction",        label: "Android"          },
-      { key: "androidForWorkRestriction", label: "Android for Work" },
-      { key: "macOSRestriction",          label: "macOS"            },
-    ];
-
-    const failing: string[] = [];
-    for (const { key, label } of platforms) {
-      const restriction = defaultConfig[key];
-      const platformBlocked = restriction?.platformBlocked === true;
-      const personalBlocked = restriction?.personalDeviceEnrollmentBlocked === true;
-      if (!platformBlocked && !personalBlocked) {
-        failing.push(`${label} — personally owned enrollment not blocked`);
-      }
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  "dmarc-published": (snapshot: Record<string, any>) => {
-    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
-    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records — re-run Watchtower"] };
-
-    const failing: string[] = [];
-    for (const d of domains) {
-      // Skip mail routing domains — only the base onmicrosoft.com needs DMARC
-      if (d.domain.endsWith(".mail.onmicrosoft.com")) continue;
-      const record = (d.dmarc ?? [])[0] ?? "";
-      if (!record) {
-        failing.push(`${d.domain} — no DMARC record found`);
-        continue;
-      }
-
-      const tags: Record<string, string> = {};
-      for (const part of record.split(";").map((s: string) => s.trim())) {
-        const [k, v] = part.split("=").map((s: string) => s.trim());
-        if (k && v) tags[k.toLowerCase()] = v.toLowerCase();
-      }
-
-      const issues: string[] = [];
-      if (!["quarantine", "reject"].includes(tags["p"] ?? "")) issues.push(`p=${tags["p"] ?? "missing"} (must be quarantine or reject)`);
-      // pct omitted defaults to 100 per RFC 7489 — only flag if explicitly set to less than 100
-      const pct = tags["pct"] !== undefined ? parseInt(tags["pct"]) : 100;
-      if (pct < 100) issues.push(`pct=${pct} (must be 100)`);
-      if (!record.includes("rua=mailto:")) issues.push("rua missing");
-      if (!record.includes("ruf=mailto:")) issues.push("ruf missing");
-
-      if (issues.length > 0) failing.push(`${d.domain} — ${issues.join(", ")}`);
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-
-  "spf-records-published": (snapshot: Record<string, any>) => {
-    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
-    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records — re-run Watchtower"] };
-
-    // SPF records are DNS TXT strings like "v=spf1 include:spf.protection.outlook.com -all"
-    // Match the include directive specifically to avoid partial-string false positives
-    const SPF_INCLUDE = /\binclude:spf\.protection\.outlook\.com\b/;
-    const failing: string[] = [];
-    for (const d of domains) {
-      const hasSpf = (d.spf ?? []).some((r: string) => SPF_INCLUDE.test(r));
-      if (!hasSpf) failing.push(`${d.domain} — missing SPF record with include:spf.protection.outlook.com`);
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  // ── ScubaGear aliases ───────────────────────────────────────────────────────
-  // Map ScubaGear camelCase evaluator slugs to existing CIS kebab-case evaluators.
-
-  "spfEnabled":   (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["spf-records-published"]!(...args),
-  "dmarcPublished": (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["dmarc-published"]!(...args),
-
-  // dmarcReject — DMARC p=reject (stricter subset of dmarc-published)
-  "dmarcReject": (snapshot: Record<string, any>) => {
-    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
-    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records"] };
-    const failing: string[] = [];
-    for (const d of domains) {
-      if (d.domain.endsWith(".mail.onmicrosoft.com")) continue;
-      const record = (d.dmarc ?? [])[0] ?? "";
-      if (!record) { failing.push(`${d.domain} — no DMARC record`); continue; }
-      // Match the p= tag regardless of position in the record
-      const pMatch = record.match(/\bp=([^;\s]+)/i);
-      if (!pMatch || pMatch[1]?.toLowerCase() !== "reject") {
-        failing.push(`${d.domain} — DMARC p=${pMatch?.[1] ?? "missing"} (must be reject)`);
-      }
-    }
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  // dmarcCISAContact — DMARC rua includes reports@dmarc.cyber.dhs.gov
-  "dmarcCISAContact": (snapshot: Record<string, any>) => {
-    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
-    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records"] };
-    const failing: string[] = [];
-    for (const d of domains) {
-      if (d.domain.endsWith(".mail.onmicrosoft.com")) continue;
-      const record = (d.dmarc ?? [])[0] ?? "";
-      if (!record.includes("mailto:reports@dmarc.cyber.dhs.gov")) {
-        failing.push(`${d.domain} — DMARC rua missing reports@dmarc.cyber.dhs.gov`);
-      }
-    }
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  // calendarSharingRestricted — sharing policies must not share details with all domains
-  "calendarSharingRestricted": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.sharingPolicies ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No sharing policies in snapshot"] };
-    const failing: string[] = [];
-    for (const p of policies) {
-      const domains: string[] = p.domains ?? [];
-      for (const d of domains) {
-        // Format is "domain:action" — "*" means all domains, CalendarSharing* actions share details
-        if (d.startsWith("*:") && d.toLowerCase().includes("calendarsharingfreebusydetail")) {
-          failing.push(`Sharing policy "${p.name ?? p.identity}" shares calendar details with all domains`);
-        }
-      }
-    }
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  // userConsentRestricted — permissionGrantPolicyIds must not allow broad user consent
-  "userConsentRestricted": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authorizationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authorization policy in snapshot"] };
-    const assigned: string[] = policies[0]?.permissionGrantPolicyIdsAssignedToDefaultUserRole ?? [];
-    const broad = [
-      "managepermissiongrantsforself.microsoft-user-default-low",
-      "managepermissiongrantsforself.microsoft-user-default-legacy",
-    ];
-    const found = assigned.filter(p => broad.some(b => p.toLowerCase().includes(b)));
-    return {
-      pass: found.length === 0,
-      warnings: found.length === 0 ? [] : [`User consent enabled via: ${found.join(", ")}`],
-    };
-  },
-
-  // presetPoliciesEnabled — ATP protection policy rules must include standard+strict
-  "presetPoliciesEnabled": (snapshot: Record<string, any>) => {
-    const rules: any[] = snapshot.data?.atpProtectionPolicyRules ?? [];
-    if (rules.length === 0) return { pass: false, warnings: ["No ATP protection policy rules in snapshot"] };
-    const hasStandard = rules.some((r: any) => r.identity?.toLowerCase().includes("standard"));
-    const hasStrict = rules.some((r: any) => r.identity?.toLowerCase().includes("strict"));
-    const failing: string[] = [];
-    if (!hasStandard) failing.push("Standard preset security policy not found or disabled");
-    if (!hasStrict) failing.push("Strict preset security policy not found or disabled");
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  // ── ScubaGear TODO stubs ────────────────────────────────────────────────────
-  // The following ScubaGear evaluators require CA policy match engine support
-  // or complex PIM/role management inspection. They return explicit "not yet
-  // implemented" failures so results are transparent rather than silently wrong.
-  //
-  // TODO: Implement via CA policy match engine (Phase 5) or dedicated logic:
-  //   - blockLegacyAuth (MS.AAD.1.1v1)
-  //   - blockHighRiskUsers (MS.AAD.2.1v1)
-  //   - blockHighRiskSignIns (MS.AAD.2.3v1)
-  //   - requireMFAAllUsers (MS.AAD.3.2v2)
-  //   - phishingResistantMFAAdmins (MS.AAD.3.6v1)
-  //
-  // TODO: Implement via PIM role management policy inspection:
-  //   - noPermanentActiveAssignment (MS.AAD.7.4v1)
-  //   - globalAdminApprovalRequired (MS.AAD.7.6v1)
-  //   - assignmentAlertConfigured (MS.AAD.7.7v1)
-  //   - globalAdminActivationAlert (MS.AAD.7.8v1)
-  //
-  // TODO: Implement via Teams federation configuration inspection:
-  //   - externalAccessPerDomain (MS.TEAMS.2.1v2)
-
-  "blockLegacyAuth":              () => ({ pass: false, warnings: ['ScubaGear evaluator "blockLegacyAuth" not yet implemented'] }),
-  "blockHighRiskUsers":           () => ({ pass: false, warnings: ['ScubaGear evaluator "blockHighRiskUsers" not yet implemented'] }),
-  "blockHighRiskSignIns":         () => ({ pass: false, warnings: ['ScubaGear evaluator "blockHighRiskSignIns" not yet implemented'] }),
-  "requireMFAAllUsers":           () => ({ pass: false, warnings: ['ScubaGear evaluator "requireMFAAllUsers" not yet implemented'] }),
-  "phishingResistantMFAAdmins":   () => ({ pass: false, warnings: ['ScubaGear evaluator "phishingResistantMFAAdmins" not yet implemented'] }),
-  "noPermanentActiveAssignment":  () => ({ pass: false, warnings: ['ScubaGear evaluator "noPermanentActiveAssignment" not yet implemented'] }),
-  "globalAdminApprovalRequired":  () => ({ pass: false, warnings: ['ScubaGear evaluator "globalAdminApprovalRequired" not yet implemented'] }),
-  "assignmentAlertConfigured":    () => ({ pass: false, warnings: ['ScubaGear evaluator "assignmentAlertConfigured" not yet implemented'] }),
-  "globalAdminActivationAlert":   () => ({ pass: false, warnings: ['ScubaGear evaluator "globalAdminActivationAlert" not yet implemented'] }),
-  "externalAccessPerDomain":      () => ({ pass: false, warnings: ['ScubaGear evaluator "externalAccessPerDomain" not yet implemented'] }),
-
-};
+// Extracted to packages/engine/evaluators/builtin/ and loaded via the registry.
+// The registry is imported at the top of this file. Evaluator lookup is via
+// getEvaluator(slug) which returns the evaluate function or undefined.
 
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
@@ -1058,9 +449,9 @@ function runSpec(spec: PolicySpec, policies: any[], config: ArgusConfig, snapsho
     title: spec.title,
   };
 
-  // Custom evaluator mode
+  // Custom evaluator mode — look up in the evaluator registry
   if (spec.custom) {
-    const evaluator = CUSTOM_EVALUATORS[spec.custom];
+    const evaluator = getEvaluator(spec.custom);
     if (!evaluator) return { ...base, pass: false, warnings: [`Unknown custom evaluator: "${spec.custom}"`] };
     const { pass, warnings } = evaluator(snapshot ?? {});
     return { ...base, pass, warnings };
@@ -1161,7 +552,7 @@ export interface ControlAssertion {
   expectedValue: any;      // scalar, array, or null
 
   // For complex evaluations handled by the existing engine
-  evaluatorSlug?: string;  // name in CUSTOM_EVALUATORS map
+  evaluatorSlug?: string;  // name in evaluator registry (see evaluators/registry.ts)
 
   // Optional filter applied before asserting (e.g. {isVerified: true})
   sourceFilter?: Record<string, any>;
@@ -1304,27 +695,7 @@ function getProperty(obj: any, path: string): any {
 
 
 // ─── CA Policy Specs ──────────────────────────────────────────────────────────
-// Match specs for CA policy controls. Keyed by control ID.
-// These are the same specs as the v1 spec files, inlined here so v2 doesn't
-// need to load spec files at runtime.
-
-const ADMIN_ROLES = ['9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3', 'c4e39bd9-1100-46d3-8c65-fb160da0071f', 'b0f54661-2d74-4c50-afa3-1ec803f12efe', '158c047a-c907-4556-b7ef-446551a6b5f7', 'b1be1c3e-b65d-4f19-8427-f6fa0d97feb9', '29232cdf-9323-42fd-ade2-1d097af3e4de', '62e90394-69f5-4237-9190-012177145e10', 'f2ef992c-3afb-46b9-b7cf-a126ee74c451', '729827e3-9c14-49f7-bb1b-9608f156bbb8', '966707d0-3269-4727-9be2-8c3a10f19b9d', '7be44c8a-adaf-4e2a-84d6-ab2649e08a13', 'e8611ab8-c189-46e8-94e1-60213ab1f814', '194ae4cb-b126-40b2-bd5b-6091b380977d', 'f28a1f50-f6e7-4571-818b-6a12f2af6b6c', 'fe930be7-5e62-47db-91af-98c3a49a38b1'];
-
-const CA_POLICY_SPECS: Record<string, PolicySpec> = {
-  "1.3.2b": { id: "1.3.2", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Idle session timeout ≤ 3 hours (CA policy)", match: { users: { include: "All" }, apps: { include: "Office365" }, clientAppTypes: ["browser"], session: { appEnforcedRestrictions: true }, state: "active" } } as any,
-  "5.2.2.1": { id: "5.2.2.1", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "MFA required for admin roles", match: { users: { roles: ADMIN_ROLES }, apps: { include: "All", noExclusions: true }, grant: { anyOf: ["mfa"] }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.2": { id: "5.2.2.2", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "MFA required for all users", match: { users: { include: "All" }, apps: { include: "All", noExclusions: true }, grant: { anyOf: ["mfa"] }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.3": { id: "5.2.2.3", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "CA policies block legacy authentication", match: { users: { include: "All" }, apps: { include: "All" }, clientAppTypes: ["exchangeActiveSync", "other"], grant: { anyOf: ["block"] }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.4": { id: "5.2.2.4", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Sign-in frequency for admins", match: { users: { roles: ADMIN_ROLES }, apps: { include: "All" }, session: { signInFrequencyHours: 4, persistentBrowser: false }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.5": { id: "5.2.2.5", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Phishing-resistant MFA for admins", match: { users: { roles: ADMIN_ROLES }, apps: { include: "All", noExclusions: true }, grant: { authStrength: "00000000-0000-0000-0000-000000000004" }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.6": { id: "5.2.2.6", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Identity Protection user risk policies", match: { users: { include: "All" }, apps: { include: "All" }, userRisk: ["high"], grant: { anyOf: ["mfa", "passwordChange"] }, session: { signInFrequencyHours: 0 }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.7": { id: "5.2.2.7", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Identity Protection sign-in risk policies", match: { users: { include: "All" }, apps: { include: "All" }, signInRisk: ["high", "medium"], grant: { anyOf: ["mfa"] }, session: { signInFrequencyHours: 0 }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.8": { id: "5.2.2.8", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Sign-in risk blocked for medium/high", match: { users: { include: "All" }, apps: { include: "All", noExclusions: true }, signInRisk: ["high", "medium"], grant: { anyOf: ["block"] }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.9": { id: "5.2.2.9", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Managed device required", match: { users: { include: "All" }, apps: { include: "All" }, grant: { anyOf: ["compliantDevice", "domainJoinedDevice"], operator: "OR" }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.10": { id: "5.2.2.10", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Managed device required to register security info", match: { users: { include: "All" }, userActions: ["urn:user:registerSecurityInfo"], grant: { anyOf: ["compliantDevice", "domainJoinedDevice"], operator: "OR" }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.11": { id: "5.2.2.11", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Sign-in frequency for Intune Enrollment", match: { users: { include: "All" }, apps: { include: "d4ebce55-015a-49b5-a083-c84d1797ae8c" }, grant: { anyOf: ["mfa"] }, session: { signInFrequencyHours: 0 }, exclusions: "break-glass-only", state: "active" } } as any,
-  "5.2.2.12": { id: "5.2.2.12", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Device code sign-in flow is blocked", match: { users: { include: "All" }, apps: { include: "All" }, authenticationFlows: ["deviceCodeFlow"], grant: { anyOf: ["block"] }, exclusions: "break-glass-only", state: "active" } } as any,
-};
+// Extracted to evaluators/ca-policy-specs.ts and imported at the top of this file.
 
 // ─── Source filter utility ─────────────────────────────────────────────────────
 // Supports plain equality, array-includes, and operator objects:
@@ -1382,23 +753,15 @@ function evaluateControl(
       return { ...base, pass: result.pass, actualValues: {}, failures: result.warnings };
     }
 
-    // Custom named evaluators — route through runAudit
-    const pseudoSpec = {
-      id:               assertion.controlId,
-      framework:        assertion.frameworkSlug,
-      frameworkVersion: "",
-      product:          "M365",
-      title:            assertion.controlTitle,
-      custom:           assertion.evaluatorSlug,
-    } as unknown as PolicySpec;
-    const auditResults = runAudit([pseudoSpec], snapshot, config);
-    const result = auditResults[0];
-    if (!result) return { ...base, pass: false, actualValues: {}, failures: [`evaluator ${assertion.evaluatorSlug} returned no result`] };
+    // Custom named evaluators — look up in the evaluator registry
+    const evaluator = getEvaluator(assertion.evaluatorSlug);
+    if (!evaluator) return { ...base, pass: false, actualValues: {}, failures: [`Unknown evaluator slug: "${assertion.evaluatorSlug}"`] };
+    const { pass, warnings } = evaluator(snapshot);
     return {
       ...base,
-      pass:         result.pass,
+      pass,
       actualValues: {},
-      failures:     result.warnings,
+      failures:     warnings,
     };
   }
 
@@ -1592,6 +955,7 @@ const snapshot = evidenceToSnapshot(evidence);
 const assertions = await getControlAssertions();
 
 console.log(`📋 ${assertions.length} control assertions loaded`);
+console.log(`🔌 ${registrySize()} evaluators registered`);
 console.log(`📦 ${Object.keys(evidence.sources).length} sources in evidence\n`);
 
 // Evaluate all assertions
