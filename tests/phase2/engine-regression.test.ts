@@ -253,13 +253,13 @@ describe("Engine regression — evaluator results match baseline", () => {
         const result = evaluator!(snapshot);
 
         // Core assertion: pass/fail must match the baseline
-        expect(result.pass).toBe(
-          baselineResult!.pass,
+        expect(
+          result.pass,
           `Control ${controlId} ("${assertion.controlTitle}"): ` +
             `evaluator "${slug}" returned pass=${result.pass} ` +
             `but baseline expected pass=${baselineResult!.pass}. ` +
             `Warnings: ${JSON.stringify(result.warnings)}`,
-        );
+        ).toBe(baselineResult!.pass);
       });
     }
   });
