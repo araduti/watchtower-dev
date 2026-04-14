@@ -19,7 +19,7 @@
 
 import { createHash } from "node:crypto";
 
-import type { PrismaTransactionClient } from "@watchtower/db";
+import type { PrismaTransactionClient, Prisma } from "@watchtower/db";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 
 import { throwWatchtowerError } from "./errors.ts";
@@ -166,12 +166,13 @@ export async function saveIdempotencyResult(
       workspaceId,
       key: idempotencyKey,
       requestHash,
-      responseBody: responseBody as object,
+      responseBody: responseBody as Prisma.InputJsonValue,
       statusCode,
     },
-    update: {
-      // If the row already exists with the same key, keep the original
-      // response. The upsert is a no-op guard against race conditions.
-    },
+    // Prisma requires `update` even when no fields should change.
+    // This is a deliberate no-op: if the row already exists (race condition
+    // between two concurrent requests with the same key), the first write
+    // wins and subsequent upserts leave the row untouched.
+    update: {},
   });
 }
