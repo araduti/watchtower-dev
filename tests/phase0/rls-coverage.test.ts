@@ -79,6 +79,17 @@ while ((m = forceRegex.exec(activeSql)) !== null) {
   forcedRlsTables.add(m[1]!);
 }
 
+// Detect table renames in migrations and remove old names from RLS sets.
+// When a table is renamed (ALTER TABLE "X" RENAME TO "Y"), X is no longer a
+// real table — only Y exists. The old migration still references X, but the
+// new migration handles RLS for Y.
+const renameRegex = /ALTER TABLE "(\w+)" RENAME TO "(\w+)"/g;
+while ((m = renameRegex.exec(activeSql)) !== null) {
+  const oldName = m[1]!;
+  enabledRlsTables.delete(oldName);
+  forcedRlsTables.delete(oldName);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
