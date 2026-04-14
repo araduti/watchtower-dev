@@ -197,7 +197,7 @@ function evaluate(policy: any, spec: PolicySpec, config: ArgusConfig): Criterion
   // ── Authentication flows (e.g. "deviceCodeFlow") ───────────────────────
   if (m.authenticationFlows) {
     const raw = policy.conditions?.authenticationFlows?.transferMethods;
-    const transfers: string[] = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",") : [];
+    const transfers: string[] = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",").map(s => s.trim()) : [];
     const allPresent = m.authenticationFlows.every((f: string) =>
       transfers.some((t: string) => t.toLowerCase() === f.toLowerCase())
     );
