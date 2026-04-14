@@ -18,6 +18,31 @@
  * Run alongside argus.ts to compare results:
  *   bun run argus.ts          → results from snapshot.json + spec files
  *   bun run argus.engine-v2.ts → results from evidence.json + DB assertions
+ *
+ * ─── Design decision: why not JSONPath? ───────────────────────────────────────
+ *
+ * JSONPath (jsonpath-plus) was evaluated and rejected for the Core Engine.
+ * The current approach uses a small declarative DSL (source + property path +
+ * operator + sourceFilter) instead of JSONPath expressions. Reasons:
+ *
+ *   1. Security: jsonpath-plus has 3 historical RCEs from eval-based filter
+ *      expressions. Assertions are headed to the DB — user-stored JSONPath
+ *      strings would become an RCE vector inside the trusted Core Engine.
+ *
+ *   2. Capability gap is marginal: JSONPath would address ~3/177 assertions.
+ *      The 50+ custom evaluators that justify their existence (DMARC parsing,
+ *      CA policy matching, PIM correlation) require imperative code regardless.
+ *
+ *   3. esbuild compatibility: jsonpath-plus uses dynamic Function() which
+ *      breaks tree-shaking and degrades cold-start time.
+ *
+ *   4. Auditability: property path + operator assertions are self-documenting
+ *      and trivially reviewable. JSONPath filter expressions are opaque.
+ *
+ * Extension path: If richer data extraction is needed, extend getProperty(),
+ * sourceFilter operators ($ne/$in/$exists), or add new Operator types.
+ * If the Plugin Engine needs JSONPath for customer-authored checks, that
+ * belongs behind the sandbox boundary — not in the Core Engine.
  */
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -472,26 +497,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     return { pass: warnings.length === 0, warnings };
   },
 
-  "outlook-addins-blocked": (snapshot: Record<string, any>) => {
-    const BLOCKED_ROLES = ["My Custom Apps", "My Marketplace Apps", "My ReadWriteMailbox Apps"];
-    const policies: any[] = snapshot.data?.roleAssignmentPolicies ?? [];
-
-    if (policies.length === 0) return { pass: false, warnings: ["No role assignment policies in snapshot"] };
-
-    const failing: string[] = [];
-    for (const policy of policies) {
-      const assignedRoles: string[] = policy.assignedRoles ?? [];
-      const nonCompliant = assignedRoles.filter((r: string) =>
-        BLOCKED_ROLES.some(b => r.toLowerCase().replace(/\s/g, "") === b.toLowerCase().replace(/\s/g, ""))
-      );
-      if (nonCompliant.length > 0) {
-        failing.push(`Policy "${policy.identity ?? policy.name}" has add-in roles: ${nonCompliant.join(", ")}`);
-      }
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
   "teams-security-reporting-enabled": (snapshot: Record<string, any>) => {
     const messaging = snapshot.data?.teamsMessagingPolicy?.[0];
     const policies: any[] = snapshot.data?.threatSubmissionPolicy ?? [];
@@ -793,58 +798,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     };
   },
 
-  "email-otp-disabled": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authMethodConfigurations ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authentication method configurations in snapshot"] };
-
-    const configs: any[] = policies[0]?.authenticationMethodConfigurations ?? [];
-    const email = configs.find((c: any) => c.id?.toLowerCase() === "email");
-    if (!email) return { pass: true, warnings: [] }; // not present = not enabled = pass
-
-    const pass = email.state === "disabled";
-    return {
-      pass,
-      warnings: pass ? [] : [`Email OTP authentication method is ${email.state ?? "enabled"} — must be disabled`],
-    };
-  },
-
-  "system-preferred-mfa-enabled": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authMethodConfigurations ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authentication method configurations in snapshot"] };
-
-    const prefs = policies[0]?.systemCredentialPreferences;
-    if (!prefs) return { pass: false, warnings: ["systemCredentialPreferences not found — re-run Watchtower with beta API"] };
-
-    const state = prefs.state;
-    const targets: any[] = prefs.includeTargets ?? [];
-    const allUsers = targets.some((t: any) => t.id === "all_users" || t.id === "AllUsers");
-
-    const failing: string[] = [];
-    if (state !== "enabled") failing.push(`System-preferred MFA state is "${state}" (must be enabled)`);
-    if (!allUsers) failing.push(`System-preferred MFA does not target all users`);
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
-  "weak-auth-methods-disabled": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authMethodConfigurations ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authentication method configurations in snapshot"] };
-
-    const configs: any[] = policies[0]?.authenticationMethodConfigurations ?? [];
-    const weakMethods = ["Sms", "Voice"];
-    const failing: string[] = [];
-
-    for (const method of weakMethods) {
-      const config = configs.find((c: any) => c.id?.toLowerCase() === method.toLowerCase());
-      if (!config) continue; // not present = not enabled = pass
-      if (config.state !== "disabled") {
-        failing.push(`${method} authentication method is ${config.state ?? "enabled"} — must be disabled`);
-      }
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
   "onprem-password-protection-enabled": (snapshot: Record<string, any>) => {
     const allSettings: any[] = snapshot.data?.passwordProtectionSettings ?? [];
     const setting = allSettings.find((s: any) => s.templateId === "5cf42378-d67d-4f36-ba46-e8b86229381d");
@@ -881,28 +834,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     return { pass: failing.length === 0, warnings: failing };
   },
 
-  "authenticator-fatigue-protection": (snapshot: Record<string, any>) => {
-    const configs: any[] = snapshot.data?.authMethodsPolicy ?? [];
-    if (configs.length === 0) return { pass: false, warnings: ["No Microsoft Authenticator configuration in snapshot"] };
-
-    const config = configs[0];
-    if (config.state !== "enabled") return { pass: false, warnings: [`Microsoft Authenticator is not enabled (state: ${config.state})`] };
-
-    const features = config.featureSettings ?? {};
-    const failing: string[] = [];
-
-    const numberMatch = features.numberMatchingRequiredState?.state;
-    if (numberMatch !== "enabled") failing.push(`Require number matching is ${numberMatch ?? "not set"} (must be enabled)`);
-
-    const appName = features.displayAppInformationRequiredState?.state;
-    if (appName !== "enabled") failing.push(`Show application name is ${appName ?? "not set"} (must be enabled)`);
-
-    const geoLocation = features.displayLocationInformationRequiredState?.state;
-    if (geoLocation !== "enabled") failing.push(`Show geographic location is ${geoLocation ?? "not set"} (must be enabled)`);
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
   "b2b-allowed-domains-only": (snapshot: Record<string, any>) => {
     const policies: any[] = snapshot.data?.b2bManagementPolicy ?? [];
     if (policies.length === 0) return { pass: false, warnings: ["No B2B management policy in snapshot"] };
@@ -924,58 +855,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     }
   },
 
-  "user-consent-disabled": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authorizationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authorization policy in snapshot"] };
-
-    const assigned: string[] = policies[0].defaultUserRolePermissions?.permissionGrantPoliciesAssigned ?? [];
-    const disallowed = [
-      "ManagePermissionGrantsForSelf.microsoft-user-default-low",
-      "ManagePermissionGrantsForSelf.microsoft-user-default-legacy",
-    ];
-
-    const found = assigned.filter(p => disallowed.some(d => p.toLowerCase().includes(d.toLowerCase())));
-    const pass = found.length === 0;
-
-    return {
-      pass,
-      warnings: pass ? [] : [`User consent is enabled via: ${found.join(", ")}`],
-    };
-  },
-
-  "local-admin-assignment-restricted": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.deviceRegistrationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No device registration policy in snapshot"] };
-
-    const odataType = policies[0].azureADJoin?.localAdmins?.registeringUsers?.["@odata.type"] ?? "";
-    const pass =
-      odataType === "#microsoft.graph.enumeratedDeviceRegistrationMembership" ||
-      odataType === "#microsoft.graph.noDeviceRegistrationMembership";
-
-    return {
-      pass,
-      warnings: pass ? [] : [`azureADJoin.localAdmins.registeringUsers type is "${odataType}" — all registering users get local admin (must be Selected or None)`],
-    };
-  },
-
-  "entra-join-restricted": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.deviceRegistrationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No device registration policy in snapshot"] };
-
-    const policy = policies[0];
-    const odataType = policy.azureADJoin?.allowedToJoin?.["@odata.type"] ?? "";
-
-    // Pass if Selected (specific users/groups) or None (nobody)
-    const pass =
-      odataType === "#microsoft.graph.enumeratedDeviceRegistrationMembership" ||
-      odataType === "#microsoft.graph.noDeviceRegistrationMembership";
-
-    return {
-      pass,
-      warnings: pass ? [] : [`azureADJoin.allowedToJoin type is "${odataType}" — all users can join devices to Entra (must be Selected or None)`],
-    };
-  },
-
   "dynamic-guest-group-exists": (snapshot: Record<string, any>) => {
     const groups: any[] = snapshot.data?.groups ?? [];
 
@@ -989,20 +868,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     return {
       pass: !!guestGroup,
       warnings: guestGroup ? [] : ['No dynamic group found with rule (user.userType -eq "Guest") and processing state On'],
-    };
-  },
-
-  "users-cannot-register-apps": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authorizationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authorization policy in snapshot"] };
-
-    const policy = policies[0];
-    const allowed = policy.defaultUserRolePermissions?.allowedToCreateApps;
-    const pass = allowed === false;
-
-    return {
-      pass,
-      warnings: pass ? [] : [`defaultUserRolePermissions.allowedToCreateApps is ${JSON.stringify(allowed)} — users can register applications`],
     };
   },
 
@@ -1071,43 +936,138 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     return { pass: failing.length === 0, warnings: failing };
   },
 
-  "dkim-enabled": (snapshot: Record<string, any>) => {
-    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
-    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records — re-run Watchtower"] };
-
-    const failing: string[] = [];
-    for (const d of domains) {
-      const hasDkim = (d.dkim ?? []).length > 0;
-      if (!hasDkim) failing.push(`${d.domain} — no DKIM record found (selector1 or selector2._domainkey)`);
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
 
   "spf-records-published": (snapshot: Record<string, any>) => {
     const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
     if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records — re-run Watchtower"] };
 
+    // SPF records are DNS TXT strings like "v=spf1 include:spf.protection.outlook.com -all"
+    // Match the include directive specifically to avoid partial-string false positives
+    const SPF_INCLUDE = /\binclude:spf\.protection\.outlook\.com\b/;
     const failing: string[] = [];
     for (const d of domains) {
-      const hasSpf = (d.spf ?? []).some((r: string) => r.includes("spf.protection.outlook.com"));
-      if (!hasSpf) failing.push(`${d.domain} — missing SPF record with spf.protection.outlook.com`);
+      const hasSpf = (d.spf ?? []).some((r: string) => SPF_INCLUDE.test(r));
+      if (!hasSpf) failing.push(`${d.domain} — missing SPF record with include:spf.protection.outlook.com`);
     }
 
     return { pass: failing.length === 0, warnings: failing };
   },
 
-  "third-party-storage-disabled": (snapshot: Record<string, any>) => {
-    const sps: any[] = snapshot.data?.thirdPartyStorage ?? [];
-    // Pass if SP doesn't exist (never been enabled) or exists but is disabled
-    if (sps.length === 0) return { pass: true, warnings: [] };
-    const sp = sps[0];
-    const pass = sp.accountEnabled === false;
+  // ── ScubaGear aliases ───────────────────────────────────────────────────────
+  // Map ScubaGear camelCase evaluator slugs to existing CIS kebab-case evaluators.
+
+  "spfEnabled":   (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["spf-records-published"]!(...args),
+  "dmarcPublished": (...args: Parameters<CustomEvaluator>) => CUSTOM_EVALUATORS["dmarc-published"]!(...args),
+
+  // dmarcReject — DMARC p=reject (stricter subset of dmarc-published)
+  "dmarcReject": (snapshot: Record<string, any>) => {
+    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
+    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records"] };
+    const failing: string[] = [];
+    for (const d of domains) {
+      if (d.domain.endsWith(".mail.onmicrosoft.com")) continue;
+      const record = (d.dmarc ?? [])[0] ?? "";
+      if (!record) { failing.push(`${d.domain} — no DMARC record`); continue; }
+      // Match the p= tag regardless of position in the record
+      const pMatch = record.match(/\bp=([^;\s]+)/i);
+      if (!pMatch || pMatch[1]?.toLowerCase() !== "reject") {
+        failing.push(`${d.domain} — DMARC p=${pMatch?.[1] ?? "missing"} (must be reject)`);
+      }
+    }
+    return { pass: failing.length === 0, warnings: failing };
+  },
+
+  // dmarcCISAContact — DMARC rua includes reports@dmarc.cyber.dhs.gov
+  "dmarcCISAContact": (snapshot: Record<string, any>) => {
+    const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
+    if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records"] };
+    const failing: string[] = [];
+    for (const d of domains) {
+      if (d.domain.endsWith(".mail.onmicrosoft.com")) continue;
+      const record = (d.dmarc ?? [])[0] ?? "";
+      if (!record.includes("mailto:reports@dmarc.cyber.dhs.gov")) {
+        failing.push(`${d.domain} — DMARC rua missing reports@dmarc.cyber.dhs.gov`);
+      }
+    }
+    return { pass: failing.length === 0, warnings: failing };
+  },
+
+  // calendarSharingRestricted — sharing policies must not share details with all domains
+  "calendarSharingRestricted": (snapshot: Record<string, any>) => {
+    const policies: any[] = snapshot.data?.sharingPolicies ?? [];
+    if (policies.length === 0) return { pass: false, warnings: ["No sharing policies in snapshot"] };
+    const failing: string[] = [];
+    for (const p of policies) {
+      const domains: string[] = p.domains ?? [];
+      for (const d of domains) {
+        // Format is "domain:action" — "*" means all domains, CalendarSharing* actions share details
+        if (d.startsWith("*:") && d.toLowerCase().includes("calendarsharingfreebusydetail")) {
+          failing.push(`Sharing policy "${p.name ?? p.identity}" shares calendar details with all domains`);
+        }
+      }
+    }
+    return { pass: failing.length === 0, warnings: failing };
+  },
+
+  // userConsentRestricted — permissionGrantPolicyIds must not allow broad user consent
+  "userConsentRestricted": (snapshot: Record<string, any>) => {
+    const policies: any[] = snapshot.data?.authorizationPolicy ?? [];
+    if (policies.length === 0) return { pass: false, warnings: ["No authorization policy in snapshot"] };
+    const assigned: string[] = policies[0]?.permissionGrantPolicyIdsAssignedToDefaultUserRole ?? [];
+    const broad = [
+      "managepermissiongrantsforself.microsoft-user-default-low",
+      "managepermissiongrantsforself.microsoft-user-default-legacy",
+    ];
+    const found = assigned.filter(p => broad.some(b => p.toLowerCase().includes(b)));
     return {
-      pass,
-      warnings: pass ? [] : [`Service principal "${sp.displayName}" (${sp.appId}) is enabled — third-party storage is allowed`],
+      pass: found.length === 0,
+      warnings: found.length === 0 ? [] : [`User consent enabled via: ${found.join(", ")}`],
     };
   },
+
+  // presetPoliciesEnabled — ATP protection policy rules must include standard+strict
+  "presetPoliciesEnabled": (snapshot: Record<string, any>) => {
+    const rules: any[] = snapshot.data?.atpProtectionPolicyRules ?? [];
+    if (rules.length === 0) return { pass: false, warnings: ["No ATP protection policy rules in snapshot"] };
+    const hasStandard = rules.some((r: any) => r.identity?.toLowerCase().includes("standard"));
+    const hasStrict = rules.some((r: any) => r.identity?.toLowerCase().includes("strict"));
+    const failing: string[] = [];
+    if (!hasStandard) failing.push("Standard preset security policy not found or disabled");
+    if (!hasStrict) failing.push("Strict preset security policy not found or disabled");
+    return { pass: failing.length === 0, warnings: failing };
+  },
+
+  // ── ScubaGear TODO stubs ────────────────────────────────────────────────────
+  // The following ScubaGear evaluators require CA policy match engine support
+  // or complex PIM/role management inspection. They return explicit "not yet
+  // implemented" failures so results are transparent rather than silently wrong.
+  //
+  // TODO: Implement via CA policy match engine (Phase 5) or dedicated logic:
+  //   - blockLegacyAuth (MS.AAD.1.1v1)
+  //   - blockHighRiskUsers (MS.AAD.2.1v1)
+  //   - blockHighRiskSignIns (MS.AAD.2.3v1)
+  //   - requireMFAAllUsers (MS.AAD.3.2v2)
+  //   - phishingResistantMFAAdmins (MS.AAD.3.6v1)
+  //
+  // TODO: Implement via PIM role management policy inspection:
+  //   - noPermanentActiveAssignment (MS.AAD.7.4v1)
+  //   - globalAdminApprovalRequired (MS.AAD.7.6v1)
+  //   - assignmentAlertConfigured (MS.AAD.7.7v1)
+  //   - globalAdminActivationAlert (MS.AAD.7.8v1)
+  //
+  // TODO: Implement via Teams federation configuration inspection:
+  //   - externalAccessPerDomain (MS.TEAMS.2.1v2)
+
+  "blockLegacyAuth":              () => ({ pass: false, warnings: ['ScubaGear evaluator "blockLegacyAuth" not yet implemented'] }),
+  "blockHighRiskUsers":           () => ({ pass: false, warnings: ['ScubaGear evaluator "blockHighRiskUsers" not yet implemented'] }),
+  "blockHighRiskSignIns":         () => ({ pass: false, warnings: ['ScubaGear evaluator "blockHighRiskSignIns" not yet implemented'] }),
+  "requireMFAAllUsers":           () => ({ pass: false, warnings: ['ScubaGear evaluator "requireMFAAllUsers" not yet implemented'] }),
+  "phishingResistantMFAAdmins":   () => ({ pass: false, warnings: ['ScubaGear evaluator "phishingResistantMFAAdmins" not yet implemented'] }),
+  "noPermanentActiveAssignment":  () => ({ pass: false, warnings: ['ScubaGear evaluator "noPermanentActiveAssignment" not yet implemented'] }),
+  "globalAdminApprovalRequired":  () => ({ pass: false, warnings: ['ScubaGear evaluator "globalAdminApprovalRequired" not yet implemented'] }),
+  "assignmentAlertConfigured":    () => ({ pass: false, warnings: ['ScubaGear evaluator "assignmentAlertConfigured" not yet implemented'] }),
+  "globalAdminActivationAlert":   () => ({ pass: false, warnings: ['ScubaGear evaluator "globalAdminActivationAlert" not yet implemented'] }),
+  "externalAccessPerDomain":      () => ({ pass: false, warnings: ['ScubaGear evaluator "externalAccessPerDomain" not yet implemented'] }),
 
 };
 
@@ -1357,32 +1317,13 @@ function evalOperator(actual: any, operator: Operator, expected: any): boolean {
 
 function getProperty(obj: any, path: string): any {
   if (!path) return obj;
-  // Support bracket notation for keys with dots (e.g. ["@odata.type"])
-  const segments: string[] = [];
-  let i = 0;
-  while (i < path.length) {
-    if (path[i] === "[" && i + 1 < path.length && path[i + 1] === '"') {
-      // Bracket-escaped segment: ["key.with.dots"]
-      const end = path.indexOf('"]', i + 2);
-      if (end === -1) break;
-      segments.push(path.slice(i + 2, end));
-      i = end + 2;
-      if (path[i] === ".") i++; // skip trailing dot separator
-    } else {
-      // Normal dot-separated segment
-      const dot = path.indexOf(".", i);
-      const bracket = path.indexOf("[", i);
-      let end: number;
-      if (dot === -1 && bracket === -1) end = path.length;
-      else if (dot === -1) end = bracket;
-      else if (bracket === -1) end = dot;
-      else end = Math.min(dot, bracket);
-      segments.push(path.slice(i, end));
-      i = end;
-      if (path[i] === ".") i++; // skip dot separator
-    }
-  }
-  return segments.reduce((o, k) => o?.[k], obj);
+  // Parse path into segments: supports dot-notation and bracket-escaped keys
+  // e.g. 'a.b.["@odata.type"]' → ["a", "b", "@odata.type"]
+  const segments = path.match(/\["[^"]*"\]|[^.\[\]]+/g) ?? [];
+  return segments.reduce((o, seg) => {
+    const key = seg.startsWith('["') ? seg.slice(2, -2) : seg;
+    return o?.[key];
+  }, obj);
 }
 
 
@@ -1408,6 +1349,33 @@ const CA_POLICY_SPECS: Record<string, PolicySpec> = {
   "5.2.2.11": { id: "5.2.2.11", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Sign-in frequency for Intune Enrollment", match: { users: { include: "All" }, apps: { include: "d4ebce55-015a-49b5-a083-c84d1797ae8c" }, grant: { anyOf: ["mfa"] }, session: { signInFrequencyHours: 0 }, exclusions: "break-glass-only", state: "active" } } as any,
   "5.2.2.12": { id: "5.2.2.12", framework: "cis-m365-3.0", frameworkVersion: "3.0", product: "M365", title: "Device code sign-in flow is blocked", match: { users: { include: "All" }, apps: { include: "All" }, authenticationFlows: ["deviceCodeFlow"], grant: { anyOf: ["block"] }, exclusions: "break-glass-only", state: "active" } } as any,
 };
+
+// ─── Source filter utility ─────────────────────────────────────────────────────
+// Supports plain equality, array-includes, and operator objects:
+//   { key: value }              → equality / array-includes
+//   { key: { $ne: value } }    → not-equal
+//   { key: { $in: [a, b] } }   → value is one of the listed values
+//   { key: { $exists: true } }  → value is non-null/non-undefined
+
+function applySourceFilter(items: any[], filter: Record<string, any> | undefined): any[] {
+  if (!filter) return items;
+  return items.filter(item =>
+    Object.entries(filter).every(([k, v]) => {
+      const itemVal = getProperty(item, k);
+
+      // Operator objects: { $ne: ... }, { $in: [...] }, { $exists: bool }
+      if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+        if ("$ne" in v)     return itemVal !== v.$ne;
+        if ("$in" in v)     return Array.isArray(v.$in) && v.$in.includes(itemVal);
+        if ("$exists" in v) return v.$exists ? (itemVal != null) : (itemVal == null);
+      }
+
+      // Plain equality / array-includes
+      if (Array.isArray(itemVal)) return itemVal.includes(v);
+      return itemVal === v;
+    })
+  );
+}
 
 // ─── Control evaluator ────────────────────────────────────────────────────────
 
@@ -1512,12 +1480,7 @@ function evaluateControl(
   // count — assert the number of (optionally filtered) source items is within {min, max}
   if (assertion.operator === "count") {
     const sourceData: any[] = snapshot.data?.[assertion.source] ?? [];
-    const filter = assertion.sourceFilter as Record<string, any> | undefined;
-    const filtered = filter
-      ? sourceData.filter(item =>
-          Object.entries(filter).every(([k, v]) => getProperty(item, k) === v)
-        )
-      : sourceData;
+    const filtered = applySourceFilter(sourceData, assertion.sourceFilter as Record<string, any> | undefined);
     const count = filtered.length;
     const { min, max } = (assertion.expectedValue as { min?: number; max?: number }) ?? {};
     const pass = (min === undefined || count >= min) && (max === undefined || count <= max);
@@ -1533,16 +1496,7 @@ function evaluateControl(
   // allowedValues — every item's property value must be in the allowed set (or null/empty)
   if (assertion.operator === "allowedValues") {
     const rawData: any[] = snapshot.data?.[assertion.source] ?? [];
-    const avFilter = assertion.sourceFilter as Record<string, any> | undefined;
-    const sourceData = avFilter
-      ? rawData.filter(item =>
-          Object.entries(avFilter).every(([k, v]) => {
-            const itemVal = getProperty(item, k);
-            if (Array.isArray(itemVal)) return itemVal.includes(v);
-            return itemVal === v;
-          })
-        )
-      : rawData;
+    const sourceData = applySourceFilter(rawData, assertion.sourceFilter as Record<string, any> | undefined);
     if (sourceData.length === 0) {
       return { ...base, pass: false, actualValues: {}, failures: [`source "${assertion.source}" not available or empty`] };
     }
@@ -1576,18 +1530,7 @@ function evaluateControl(
 
   // Simple operator evaluation
   const rawSourceData: any[] = snapshot.data?.[assertion.source] ?? [];
-  // Apply sourceFilter before evaluation (same logic as count operator)
-  const filter = assertion.sourceFilter as Record<string, any> | undefined;
-  const sourceData = filter
-    ? rawSourceData.filter(item =>
-        Object.entries(filter).every(([k, v]) => {
-          const itemVal = getProperty(item, k);
-          // Support array-contains check (e.g. groupTypes includes "Unified")
-          if (Array.isArray(itemVal)) return itemVal.includes(v);
-          return itemVal === v;
-        })
-      )
-    : rawSourceData;
+  const sourceData = applySourceFilter(rawSourceData, assertion.sourceFilter as Record<string, any> | undefined);
   const failures: string[] = [];
   const actualValues: Record<string, any> = {};
 
@@ -1630,15 +1573,7 @@ function evaluateControl(
       let subData: any[] = snapshot.data?.[subSource] ?? [];
 
       // Apply sub-assertion's own sourceFilter
-      if (sub.sourceFilter) {
-        subData = subData.filter(item =>
-          Object.entries(sub.sourceFilter!).every(([k, v]) => {
-            const itemVal = getProperty(item, k);
-            if (Array.isArray(itemVal)) return itemVal.includes(v);
-            return itemVal === v;
-          })
-        );
-      }
+      subData = applySourceFilter(subData, sub.sourceFilter as Record<string, any> | undefined);
 
       if (subData.length === 0) {
         additionalFailures.push(`source "${subSource}" not available or empty for additional assertion on ${sub.property}`);
