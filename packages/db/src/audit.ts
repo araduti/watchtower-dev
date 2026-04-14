@@ -29,7 +29,7 @@ import type { KeyObject } from "node:crypto";
 import { readFileSync, accessSync, constants as fsConstants } from "node:fs";
 
 import { prisma } from "./client.ts";
-import type { PrismaTransactionClient } from "./types.ts";
+import type { PrismaTransactionClient, Prisma } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -327,7 +327,7 @@ export async function createAuditEvent(
       actorId: input.actorId,
       targetType: input.targetType,
       targetId: input.targetId,
-      eventData: input.eventData,
+      eventData: input.eventData as Prisma.InputJsonValue,
       traceId: input.traceId ?? null,
       occurredAt,
       prevHash,
