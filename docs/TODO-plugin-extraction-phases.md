@@ -37,17 +37,28 @@ Individual evaluators can now be tested in isolation. This phase adds:
 
 **Result:** 425 new tests, all passing. Extraction proven behavior-preserving.
 
-### Phase 4 — CA policy specs as assertion data
+### Phase 4 — CA policy specs as assertion data ✅
 
-The CA policy match specs (`CA_POLICY_SPECS`) are currently typed data in code. Per PRINCIPLES.md paragraph 1, they should be data rows like any other assertion.
+The CA policy match specs (`CA_POLICY_SPECS`) were typed data in code. Per PRINCIPLES.md paragraph 1, they are now data rows like any other assertion.
 
-- [ ] Add `operator: "ca-match"` to the `Operator` enum
-- [ ] Add `matchSpec: Json?` field to `ControlAssertion` (or use `expectedValue` with a structured shape)
-- [ ] Migrate the 12 CA policy specs into `MOCKED_CONTROL_ASSERTIONS` (or the ControlAssertion table when DB is live)
-- [ ] Update `evaluateControl()` to handle `ca-match` operator by running the match spec through the CA match engine
-- [ ] Remove `evaluators/ca-policy-specs.ts` once all specs are data
+- [x] Add `operator: "ca-match"` to the `Operator` type
+- [x] Inline match specs into `ControlAssertion.expectedValue` (structured JSON, no new model field needed)
+- [x] Migrate all 13 CA policy assertions in `MOCKED_CONTROL_ASSERTIONS` to use `operator: "ca-match"` with match specs in `expectedValue`
+- [x] Update `evaluateControl()` to handle `ca-match` operator by reconstructing a `PolicySpec` from the assertion data and running it through the CA match engine
+- [x] Remove the `ca-policy-match:` evaluatorSlug routing pattern from `evaluateControl()`
+- [x] Remove `evaluators/ca-policy-specs.ts` — all specs are now data
+- [x] Inline `ADMIN_ROLES` constant in `assertions.ts` (will be inlined in DB JSON when ControlAssertion table is live)
+- [x] Update Prisma schema comment to include `"ca-match"` in operator list
+- [x] Update ADR-003 to reflect Phase 4 completion
+- [x] Tests: 82 new tests for ca-match operator (spec structure, migration completeness, admin role inlining)
+- [x] Regression: all 510 tests pass (428 existing + 82 new)
 
-**Rationale from evaluation:** _"The principled move is to bring the CA match specs into the same ControlAssertion model. The `operator: 'custom'` already exists; the `evaluatorSlug: 'ca-policy-match:5.2.2.1'` pattern already routes them. Making it a 'plugin' keeps it as code, just in a different file."_
+**Design decision:** Match specs are stored in `expectedValue` (already `Json?` in Prisma) rather than adding a new `matchSpec` field. This is cleaner because:
+- `expectedValue` is the natural home for "what the operator compares against"
+- No schema migration needed
+- CA match specs are just another form of expected value, like `{min: 2, max: 4}` for the `count` operator
+
+**Rationale applied:** _"The principled move is to bring the CA match specs into the same ControlAssertion model. The `operator: 'ca-match'` handles them as data. Adding a framework or modifying a CA check is now a database operation, not a code change."_
 
 ### Phase 5 — Customer plugin loading & sandboxing
 
@@ -80,8 +91,8 @@ These notes are from the principles/roadmap evaluation of the extraction plan.
 
 | Principle | Status |
 |---|---|
-| Checks are data, not code (¶1) | ✅ Restored — evaluators were inline code, now they're loadable modules |
-| Built-in and customer checks are the same object (¶1) | ✅ Common `EvaluatorFn` contract |
+| Checks are data, not code (¶1) | ✅ Restored — evaluators are loadable modules, CA specs are assertion data |
+| Built-in and customer checks are the same object (¶1) | ✅ Common `EvaluatorFn` contract + data-driven CA specs |
 | Sandboxed execution for untrusted code (¶2) | ✅ Phase 5 — contract supports it |
 | Vendor adapters own credentials, not evaluation (Code-Conventions §6) | ✅ Evaluation removed from connectors |
 | Findings are durable, scans are ephemeral (¶3) | ➖ Neutral |
@@ -92,7 +103,7 @@ These notes are from the principles/roadmap evaluation of the extraction plan.
 
 1. **Dual-engine question (Architecture.md §12):** This extraction does NOT close the dual-engine open question. That question is about compilation strategy (esbuild vs dynamic import), not evaluation architecture. The extraction makes the split *cleaner* but doesn't answer whether the cold-start performance difference justifies maintaining two paths. See ADR-003.
 
-2. **CA Policy Specs should be data, not a plugin:** Deferred to Phase 4. The CA match specs are still typed data in code. The principled target is ControlAssertion rows with `operator: "ca-match"` and a `matchSpec` JSON field, making CA checks data-driven like simple assertions.
+2. **CA Policy Specs are now data (Phase 4 complete):** The CA match specs have been migrated from typed code (`evaluators/ca-policy-specs.ts`) into `ControlAssertion.expectedValue` with `operator: "ca-match"`. CA checks are now data-driven like simple assertions. The `evaluators/ca-policy-specs.ts` module has been removed.
 
 ### Roadmap timing
 

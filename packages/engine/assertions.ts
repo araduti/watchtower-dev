@@ -16,6 +16,26 @@ import type { ControlAssertion, Operator } from "./argus.engine-v2.ts";
  *   }
  */
 
+// Azure AD privileged role template IDs used by CA policy match specs.
+// When stored in the DB, these will be inlined in each ControlAssertion.expectedValue JSON.
+const ADMIN_ROLES = [
+  '9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3',
+  'c4e39bd9-1100-46d3-8c65-fb160da0071f',
+  'b0f54661-2d74-4c50-afa3-1ec803f12efe',
+  '158c047a-c907-4556-b7ef-446551a6b5f7',
+  'b1be1c3e-b65d-4f19-8427-f6fa0d97feb9',
+  '29232cdf-9323-42fd-ade2-1d097af3e4de',
+  '62e90394-69f5-4237-9190-012177145e10',
+  'f2ef992c-3afb-46b9-b7cf-a126ee74c451',
+  '729827e3-9c14-49f7-bb1b-9608f156bbb8',
+  '966707d0-3269-4727-9be2-8c3a10f19b9d',
+  '7be44c8a-adaf-4e2a-84d6-ab2649e08a13',
+  'e8611ab8-c189-46e8-94e1-60213ab1f814',
+  '194ae4cb-b126-40b2-bd5b-6091b380977d',
+  'f28a1f50-f6e7-4571-818b-6a12f2af6b6c',
+  'fe930be7-5e62-47db-91af-98c3a49a38b1',
+];
+
 const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
 
   // 1.1.1 — Administrative accounts are cloud-only
@@ -75,8 +95,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '1.3.2b', controlTitle: 'Idle session timeout ≤ 3 hours (CA policy)',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:1.3.2b',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "Office365" }, clientAppTypes: ["browser"], session: { appEnforcedRestrictions: true }, state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 1.3.3 — External sharing of calendars is not available
@@ -537,8 +558,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.1', controlTitle: 'MFA required for all users in admin roles',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.1',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { roles: ADMIN_ROLES }, apps: { include: "All", noExclusions: true }, grant: { anyOf: ["mfa"] }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.2 — MFA required for all users
@@ -546,8 +568,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.2', controlTitle: 'MFA required for all users',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.2',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "All", noExclusions: true }, grant: { anyOf: ["mfa"] }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.3 — CA policies block legacy authentication
@@ -555,8 +578,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.3', controlTitle: 'CA policies block legacy authentication',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.3',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "All" }, clientAppTypes: ["exchangeActiveSync", "other"], grant: { anyOf: ["block"] }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.4 — Sign-in frequency enabled for admins
@@ -564,8 +588,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.4', controlTitle: 'Sign-in frequency enabled for admins',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.4',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { roles: ADMIN_ROLES }, apps: { include: "All" }, session: { signInFrequencyHours: 4, persistentBrowser: false }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.5 — Phishing-resistant MFA required for admins
@@ -573,8 +598,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.5', controlTitle: 'Phishing-resistant MFA required for admins',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.5',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { roles: ADMIN_ROLES }, apps: { include: "All", noExclusions: true }, grant: { authStrength: "00000000-0000-0000-0000-000000000004" }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.6 — Identity Protection user risk policies enabled
@@ -582,8 +608,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.6', controlTitle: 'Identity Protection user risk policies enabled',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.6',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "All" }, userRisk: ["high"], grant: { anyOf: ["mfa", "passwordChange"] }, session: { signInFrequencyHours: 0 }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.7 — Identity Protection sign-in risk policies enabled
@@ -591,8 +618,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.7', controlTitle: 'Identity Protection sign-in risk policies enabled',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.7',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "All" }, signInRisk: ["high", "medium"], grant: { anyOf: ["mfa"] }, session: { signInFrequencyHours: 0 }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.8 — Sign-in risk blocked for medium and high risk
@@ -600,8 +628,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.8', controlTitle: 'Sign-in risk blocked for medium and high risk',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.8',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "All", noExclusions: true }, signInRisk: ["high", "medium"], grant: { anyOf: ["block"] }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.9 — Managed device required for authentication
@@ -609,8 +638,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.9', controlTitle: 'Managed device required for authentication',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.9',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "All" }, grant: { anyOf: ["compliantDevice", "domainJoinedDevice"], operator: "OR" }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.10 — Managed device required to register security info
@@ -618,8 +648,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.10', controlTitle: 'Managed device required to register security info',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.10',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, userActions: ["urn:user:registerSecurityInfo"], grant: { anyOf: ["compliantDevice", "domainJoinedDevice"], operator: "OR" }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.11 — Sign-in frequency for Intune Enrollment set to Every time
@@ -627,8 +658,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.11', controlTitle: 'Sign-in frequency for Intune Enrollment set to Every time',
     frameworkSlug: "cis-m365-3.0", level: 'L2', required: false,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.11',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "d4ebce55-015a-49b5-a083-c84d1797ae8c" }, grant: { anyOf: ["mfa"] }, session: { signInFrequencyHours: 0 }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.2.12 — Device code sign-in flow is blocked
@@ -636,8 +668,9 @@ const MOCKED_CONTROL_ASSERTIONS: ControlAssertion[] = [
     controlId: '5.2.2.12', controlTitle: 'Device code sign-in flow is blocked',
     frameworkSlug: "cis-m365-3.0", level: 'L1', required: true,
     source: '', property: "",
-    operator: "eq" as Operator, expectedValue: null, assertionLogic: "ALL",
-    evaluatorSlug: 'ca-policy-match:5.2.2.12',
+    operator: "ca-match" as Operator,
+    expectedValue: { users: { include: "All" }, apps: { include: "All" }, authenticationFlows: ["deviceCodeFlow"], grant: { anyOf: ["block"] }, exclusions: "break-glass-only", state: "active" },
+    assertionLogic: "ALL",
   },
 
   // 5.2.3.1 — Microsoft Authenticator protects against MFA fatigue

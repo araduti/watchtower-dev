@@ -119,14 +119,22 @@ function baselineByControlId(
 }
 
 /**
- * Return control assertions that use registry evaluators (not CA-policy-match).
+ * Return control assertions that use registry evaluators (not CA-match operator).
  */
 function evaluatorBackedAssertions() {
   return MOCKED_CONTROL_ASSERTIONS.filter(
     (a) =>
       a.evaluatorSlug &&
-      a.evaluatorSlug.length > 0 &&
-      !a.evaluatorSlug.startsWith("ca-policy-match:"),
+      a.evaluatorSlug.length > 0,
+  );
+}
+
+/**
+ * Return control assertions that use the ca-match operator.
+ */
+function caMatchAssertions() {
+  return MOCKED_CONTROL_ASSERTIONS.filter(
+    (a) => a.operator === "ca-match",
   );
 }
 
@@ -310,6 +318,38 @@ describe("Engine regression — evaluator results match baseline", () => {
       expect(
         mismatches,
         `Behavior-breaking mismatches:\n${mismatches.join("\n")}`,
+      ).toHaveLength(0);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 7. Phase 4: ca-match operator assertions are data-driven
+  // -----------------------------------------------------------------------
+  describe("Phase 4 — ca-match operator assertions", () => {
+    it("has ca-match assertions in the mock data", () => {
+      const assertions = caMatchAssertions();
+      expect(assertions.length).toBe(13); // 1.3.2b + 5.2.2.1–5.2.2.12
+    });
+
+    it("ca-match assertions have match specs in expectedValue (not evaluatorSlug)", () => {
+      const assertions = caMatchAssertions();
+      for (const a of assertions) {
+        expect(a.operator).toBe("ca-match");
+        expect(a.expectedValue).toBeDefined();
+        expect(typeof a.expectedValue).toBe("object");
+        expect(a.expectedValue).not.toBeNull();
+        // Should NOT have the old ca-policy-match: evaluatorSlug pattern
+        expect(a.evaluatorSlug).toBeUndefined();
+      }
+    });
+
+    it("no assertions use the deprecated ca-policy-match: evaluatorSlug pattern", () => {
+      const legacyAssertions = MOCKED_CONTROL_ASSERTIONS.filter(
+        (a) => a.evaluatorSlug?.startsWith("ca-policy-match:"),
+      );
+      expect(
+        legacyAssertions,
+        `Found ${legacyAssertions.length} assertions still using deprecated ca-policy-match: pattern`,
       ).toHaveLength(0);
     });
   });
