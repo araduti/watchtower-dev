@@ -534,7 +534,7 @@ describe("dmarc-cisa-contact", () => {
 
   // ── edge: partial email match should not pass ─────────────────────────────
 
-  it("fails when email is a substring but not exact (e.g. xreports@dmarc.cyber.dhs.gov)", () => {
+  it("fails when email prefix is modified (xreports instead of reports)", () => {
     // The check is `record.includes("mailto:reports@dmarc.cyber.dhs.gov")`
     // so "mailto:xreports@dmarc.cyber.dhs.gov" does NOT contain the exact
     // substring "mailto:reports@dmarc.cyber.dhs.gov"
@@ -696,7 +696,7 @@ describe("spf-records-published", () => {
 
   // ── edge: word-boundary regex behavior ────────────────────────────────────
 
-  it("uses word-boundary matching — 'spf.protection.outlook.com.evil' does NOT pass", () => {
+  it("matches 'spf.protection.outlook.com.evil' due to word-boundary behavior", () => {
     // The regex is /\binclude:spf\.protection\.outlook\.com\b/
     // "spf.protection.outlook.com.evil" — the \b after "com" fails because
     // the next char is '.' which is a non-word char, so \b actually matches.
