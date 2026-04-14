@@ -98,10 +98,11 @@ function loadPrivateKey(): KeyObject {
   // Validate the file is readable before attempting to load it.
   try {
     accessSync(keyPath, fsConstants.R_OK);
-  } catch {
+  } catch (cause) {
     throw new Error(
       `[watchtower/db] Signing key file is not readable at path specified ` +
         `by AUDIT_SIGNING_KEY_PATH. Verify the file exists and has correct permissions.`,
+      { cause },
     );
   }
 
@@ -110,11 +111,12 @@ function loadPrivateKey(): KeyObject {
   let privateKey: KeyObject;
   try {
     privateKey = createPrivateKey({ key: pem, format: "pem", type: "pkcs8" });
-  } catch {
+  } catch (cause) {
     throw new Error(
       "[watchtower/db] Failed to parse Ed25519 private key from " +
         "AUDIT_SIGNING_KEY_PATH. Expected a PKCS#8 PEM produced by " +
         "`openssl genpkey -algorithm Ed25519`.",
+      { cause },
     );
   }
 
