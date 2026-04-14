@@ -941,10 +941,13 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     const domains: any[] = snapshot.data?.domainDnsRecords ?? [];
     if (domains.length === 0) return { pass: false, warnings: ["No domain DNS records — re-run Watchtower"] };
 
+    // SPF records are DNS TXT strings like "v=spf1 include:spf.protection.outlook.com -all"
+    // Match the include directive specifically to avoid partial-string false positives
+    const SPF_INCLUDE = /\binclude:spf\.protection\.outlook\.com\b/;
     const failing: string[] = [];
     for (const d of domains) {
-      const hasSpf = (d.spf ?? []).some((r: string) => r.includes("spf.protection.outlook.com"));
-      if (!hasSpf) failing.push(`${d.domain} — missing SPF record with spf.protection.outlook.com`);
+      const hasSpf = (d.spf ?? []).some((r: string) => SPF_INCLUDE.test(r));
+      if (!hasSpf) failing.push(`${d.domain} — missing SPF record with include:spf.protection.outlook.com`);
     }
 
     return { pass: failing.length === 0, warnings: failing };
@@ -965,7 +968,8 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
       if (d.domain.endsWith(".mail.onmicrosoft.com")) continue;
       const record = (d.dmarc ?? [])[0] ?? "";
       if (!record) { failing.push(`${d.domain} — no DMARC record`); continue; }
-      const pMatch = record.match(/;\s*p=([^;\s]+)/i) ?? record.match(/^v=DMARC1;\s*p=([^;\s]+)/i);
+      // Match the p= tag regardless of position in the record
+      const pMatch = record.match(/\bp=([^;\s]+)/i);
       if (!pMatch || pMatch[1]?.toLowerCase() !== "reject") {
         failing.push(`${d.domain} — DMARC p=${pMatch?.[1] ?? "missing"} (must be reject)`);
       }
