@@ -472,26 +472,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     return { pass: warnings.length === 0, warnings };
   },
 
-  "outlook-addins-blocked": (snapshot: Record<string, any>) => {
-    const BLOCKED_ROLES = ["My Custom Apps", "My Marketplace Apps", "My ReadWriteMailbox Apps"];
-    const policies: any[] = snapshot.data?.roleAssignmentPolicies ?? [];
-
-    if (policies.length === 0) return { pass: false, warnings: ["No role assignment policies in snapshot"] };
-
-    const failing: string[] = [];
-    for (const policy of policies) {
-      const assignedRoles: string[] = policy.assignedRoles ?? [];
-      const nonCompliant = assignedRoles.filter((r: string) =>
-        BLOCKED_ROLES.some(b => r.toLowerCase().replace(/\s/g, "") === b.toLowerCase().replace(/\s/g, ""))
-      );
-      if (nonCompliant.length > 0) {
-        failing.push(`Policy "${policy.identity ?? policy.name}" has add-in roles: ${nonCompliant.join(", ")}`);
-      }
-    }
-
-    return { pass: failing.length === 0, warnings: failing };
-  },
-
   "teams-security-reporting-enabled": (snapshot: Record<string, any>) => {
     const messaging = snapshot.data?.teamsMessagingPolicy?.[0];
     const policies: any[] = snapshot.data?.threatSubmissionPolicy ?? [];
@@ -924,58 +904,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     }
   },
 
-  "user-consent-disabled": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authorizationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authorization policy in snapshot"] };
-
-    const assigned: string[] = policies[0].defaultUserRolePermissions?.permissionGrantPoliciesAssigned ?? [];
-    const disallowed = [
-      "ManagePermissionGrantsForSelf.microsoft-user-default-low",
-      "ManagePermissionGrantsForSelf.microsoft-user-default-legacy",
-    ];
-
-    const found = assigned.filter(p => disallowed.some(d => p.toLowerCase().includes(d.toLowerCase())));
-    const pass = found.length === 0;
-
-    return {
-      pass,
-      warnings: pass ? [] : [`User consent is enabled via: ${found.join(", ")}`],
-    };
-  },
-
-  "local-admin-assignment-restricted": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.deviceRegistrationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No device registration policy in snapshot"] };
-
-    const odataType = policies[0].azureADJoin?.localAdmins?.registeringUsers?.["@odata.type"] ?? "";
-    const pass =
-      odataType === "#microsoft.graph.enumeratedDeviceRegistrationMembership" ||
-      odataType === "#microsoft.graph.noDeviceRegistrationMembership";
-
-    return {
-      pass,
-      warnings: pass ? [] : [`azureADJoin.localAdmins.registeringUsers type is "${odataType}" — all registering users get local admin (must be Selected or None)`],
-    };
-  },
-
-  "entra-join-restricted": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.deviceRegistrationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No device registration policy in snapshot"] };
-
-    const policy = policies[0];
-    const odataType = policy.azureADJoin?.allowedToJoin?.["@odata.type"] ?? "";
-
-    // Pass if Selected (specific users/groups) or None (nobody)
-    const pass =
-      odataType === "#microsoft.graph.enumeratedDeviceRegistrationMembership" ||
-      odataType === "#microsoft.graph.noDeviceRegistrationMembership";
-
-    return {
-      pass,
-      warnings: pass ? [] : [`azureADJoin.allowedToJoin type is "${odataType}" — all users can join devices to Entra (must be Selected or None)`],
-    };
-  },
-
   "dynamic-guest-group-exists": (snapshot: Record<string, any>) => {
     const groups: any[] = snapshot.data?.groups ?? [];
 
@@ -989,20 +917,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     return {
       pass: !!guestGroup,
       warnings: guestGroup ? [] : ['No dynamic group found with rule (user.userType -eq "Guest") and processing state On'],
-    };
-  },
-
-  "users-cannot-register-apps": (snapshot: Record<string, any>) => {
-    const policies: any[] = snapshot.data?.authorizationPolicy ?? [];
-    if (policies.length === 0) return { pass: false, warnings: ["No authorization policy in snapshot"] };
-
-    const policy = policies[0];
-    const allowed = policy.defaultUserRolePermissions?.allowedToCreateApps;
-    const pass = allowed === false;
-
-    return {
-      pass,
-      warnings: pass ? [] : [`defaultUserRolePermissions.allowedToCreateApps is ${JSON.stringify(allowed)} — users can register applications`],
     };
   },
 
@@ -1095,18 +1009,6 @@ const CUSTOM_EVALUATORS: Record<string, CustomEvaluator> = {
     }
 
     return { pass: failing.length === 0, warnings: failing };
-  },
-
-  "third-party-storage-disabled": (snapshot: Record<string, any>) => {
-    const sps: any[] = snapshot.data?.thirdPartyStorage ?? [];
-    // Pass if SP doesn't exist (never been enabled) or exists but is disabled
-    if (sps.length === 0) return { pass: true, warnings: [] };
-    const sp = sps[0];
-    const pass = sp.accountEnabled === false;
-    return {
-      pass,
-      warnings: pass ? [] : [`Service principal "${sp.displayName}" (${sp.appId}) is enabled — third-party storage is allowed`],
-    };
   },
 
 };
