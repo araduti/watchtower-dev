@@ -19,30 +19,6 @@
  *   bun run argus.ts          → results from snapshot.json + spec files
  *   bun run argus.engine-v2.ts → results from evidence.json + DB assertions
  *
- * ─── Design decision: why not JSONPath? ───────────────────────────────────────
- *
- * JSONPath (jsonpath-plus) was evaluated and rejected for the Core Engine.
- * The current approach uses a small declarative DSL (source + property path +
- * operator + sourceFilter) instead of JSONPath expressions. Reasons:
- *
- *   1. Security: jsonpath-plus has 3 historical RCEs from eval-based filter
- *      expressions. Assertions are headed to the DB — user-stored JSONPath
- *      strings would become an RCE vector inside the trusted Core Engine.
- *
- *   2. Capability gap is marginal: JSONPath would address ~3/177 assertions.
- *      The 50+ custom evaluators that justify their existence (DMARC parsing,
- *      CA policy matching, PIM correlation) require imperative code regardless.
- *
- *   3. esbuild compatibility: jsonpath-plus uses dynamic Function() which
- *      breaks tree-shaking and degrades cold-start time.
- *
- *   4. Auditability: property path + operator assertions are self-documenting
- *      and trivially reviewable. JSONPath filter expressions are opaque.
- *
- * Extension path: If richer data extraction is needed, extend getProperty(),
- * sourceFilter operators ($ne/$in/$exists), or add new Operator types.
- * If the Plugin Engine needs JSONPath for customer-authored checks, that
- * belongs behind the sandbox boundary — not in the Core Engine.
  */
 
 // ─── Config ───────────────────────────────────────────────────────────────────
