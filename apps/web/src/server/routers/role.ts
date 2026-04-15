@@ -391,6 +391,11 @@ export const roleRouter = router({
         throwWatchtowerError(WATCHTOWER_ERRORS.ROLE.SYSTEM_ROLE_IMMUTABLE);
       }
 
+      // Capture previous permission keys for audit trail before any mutations
+      const previousPermissionKeys = role.permissions.map(
+        (rp) => rp.permissionKey,
+      );
+
       // If permissionKeys provided, validate no locked permissions
       if (input.permissionKeys) {
         await validateNoLockedPermissions(ctx.db, input.permissionKeys);
@@ -434,11 +439,6 @@ export const roleRouter = router({
         where: { id: role.id },
         select: ROLE_SELECT,
       });
-
-      // Capture previous permission keys for audit trail
-      const previousPermissionKeys = role.permissions.map(
-        (rp) => rp.permissionKey,
-      );
 
       // Audit log entry — same transaction as the mutation
       // (Code-Conventions §1: "same transaction, not after")
