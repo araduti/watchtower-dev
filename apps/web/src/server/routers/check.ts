@@ -129,13 +129,10 @@ export const checkRouter = router({
     .query(async ({ input, ctx }) => {
       await ctx.requirePermission("checks:read");
 
-      const where: Record<string, unknown> = {};
-      if (input.severity) {
-        where["severity"] = input.severity;
-      }
-      if (input.source) {
-        where["source"] = input.source;
-      }
+      const where = {
+        ...(input.severity && { severity: input.severity }),
+        ...(input.source && { source: input.source }),
+      };
 
       // Cursor pagination: fetch limit + 1 to detect next page
       const rows = await ctx.db.check.findMany({
