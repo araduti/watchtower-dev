@@ -24,7 +24,7 @@
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 import { MOCKED_CONTROL_ASSERTIONS } from "./assertions.ts";
-import { getEvaluator, registrySize } from "./evaluators/registry.ts";
+import { getBuiltinEvaluator, registrySize } from "./evaluators/registry.ts";
 
 // ─── Inlined from argus.engine.ts ──────────────────────────────────────────────
 // CA policy match engine and assert runner.
@@ -450,7 +450,7 @@ function runSpec(spec: PolicySpec, policies: any[], config: ArgusConfig, snapsho
 
   // Custom evaluator mode — look up in the evaluator registry
   if (spec.custom) {
-    const evaluator = getEvaluator(spec.custom);
+    const evaluator = getBuiltinEvaluator(spec.custom);
     if (!evaluator) return { ...base, pass: false, warnings: [`Unknown custom evaluator: "${spec.custom}"`] };
     const { pass, warnings } = evaluator(snapshot ?? {});
     return { ...base, pass, warnings };
@@ -763,7 +763,7 @@ function evaluateControl(
 
   // Complex evaluator — delegate to evaluator registry
   if (assertion.evaluatorSlug) {
-    const evaluator = getEvaluator(assertion.evaluatorSlug);
+    const evaluator = getBuiltinEvaluator(assertion.evaluatorSlug);
     if (!evaluator) return { ...base, pass: false, actualValues: {}, failures: [`Unknown evaluator slug: "${assertion.evaluatorSlug}"`] };
     const { pass, warnings } = evaluator(snapshot);
     return {

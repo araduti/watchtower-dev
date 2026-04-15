@@ -37,14 +37,24 @@ The schema is identical for both modes; the policy enforcement is at the applica
 
 **Tenant** is one connected M365 environment. Encrypted credentials live here, never returned by default queries, decrypted only inside the connector adapter at execution time.
 
-## 3. The dual-engine model
+## 3. The single execution engine
 
-> ⚠️ **Open design question.** The split below is the current plan, but we have not yet measured whether the cold-start win justifies maintaining two execution paths. A single-engine collapse is on the table if measurement doesn't justify the split.
+> **Resolved.** The earlier dual-engine design (Core Engine via esbuild + Plugin Engine via dynamic import) was collapsed into a single engine. The cold-start optimization was never measured against production workloads, and the complexity of maintaining two execution paths was not justified. See [ADR-004](./decisions/004-single-engine-firecracker-sandbox.md).
 
-To balance speed and flexibility, the execution engine is split:
+All evaluators — built-in and customer-authored — run through one Bun-based engine process using a single evaluator registry (`evaluators/registry.ts`). Built-in evaluators (CIS, NIST, best-practice catalog) load on import as trusted in-process code. Customer-authored evaluators loaded from PluginRepo-synced GitHub repositories are Zod-validated and executed inside **Firecracker microVMs** — hardware-virtualized guest kernels with no network, no host filesystem access, and no database connection.
 
-- **Core Engine (default policies):** pre-compiled into a high-speed binary using `esbuild`, executed natively via Bun. Contains immutable CIS / NIST foundations. Targets <50ms cold start and is aggressively tree-shaken.
-- **Plugin Engine (custom policies):** dynamically loads TypeScript files synced from customer GitHub repositories. Validated at runtime via Zod to prevent crashes and enforce type safety. Treated as an untrusted execution surface — sandboxing strategy is TBD and is the most security-critical open question in the system.
+The engine doesn't know the difference between a built-in and a customer evaluator. Both conform to the `EvaluatorFn` contract. The registry dispatches by slug; for sandboxed evaluators, the dispatch wraps the call in a Firecracker VM lifecycle. This is the same contract described in [ADR-003](./decisions/003-plugin-evaluator-contract.md).
+
+**Plugin sandboxing via Firecracker:**
+
+- Each customer plugin runs in its own microVM (~125ms boot time)
+- The guest receives only: the plugin's TypeScript file and the `EvidenceSnapshot` for the current tenant
+- The guest has no network (no virtio-net device), no host filesystem access, no database connection, no access to other tenants' data
+- Results are returned via stdout as JSON, validated against the `EvaluatorResult` Zod schema
+- Timeout, crash, and invalid output are all handled gracefully — the engine receives an `EvaluatorResult` with `pass: false` and a descriptive warning
+- The attack surface is KVM + the Firecracker VMM — the same boundary AWS trusts for Lambda and Fargate
+
+This is the strongest sandboxing option available, chosen because the platform holds every tenant's compliance findings, audit trails, and encrypted M365 credentials. PRINCIPLES.md ¶2: *"code the platform has never seen is code the platform must not trust."*
 
 ## 4. Permission-first RBAC
 
@@ -112,7 +122,7 @@ External anchoring (posting periodic chain digests to a third party) is the next
 2. **Permission check.** The tRPC handler calls `ctx.requirePermission("scans:trigger", { scopeId })`. Rejected requests return 404 (deliberately, not 403 — "this resource exists but you can't see it" is itself a leak).
 3. **Idempotency check.** The mutation requires an `idempotencyKey` (UUID v4) in its input. The middleware writes to `IdempotencyKey` at the start of the transaction; duplicate keys return the cached response without re-executing.
 4. **Dispatch.** The handler emits an `audit/trigger` event to **Inngest**.
-5. **Stateful execution.** Inngest retrieves tenant credentials from the secrets vault, then invokes the **Bun worker** (Core Engine + GitOps sync for the Plugin Engine). The worker queries **Microsoft Graph** via parallelized batch requests (HTTP/2 multiplexing). Policies are evaluated against the fetched data in-memory.
+5. **Stateful execution.** Inngest retrieves tenant credentials from the secrets vault, then invokes the **Bun worker**. The worker queries **Microsoft Graph** via parallelized batch requests (HTTP/2 multiplexing). Built-in evaluators run in-process; customer plugin evaluators are dispatched to Firecracker microVMs. All evaluators conform to the same `EvaluatorFn` contract and are resolved through the evaluator registry.
 6. **Storage.** Each policy result becomes an `Observation` (append-only). Observations update existing `Finding` rows or create new ones, keyed on `(tenantId, checkSlug)`. State transitions (open → acknowledged, resolved → regression, etc.) are written transactionally. Audit events for any state changes are written in the same transaction, with hash chain and signature.
 7. **Billing.** Inngest reports the completed scan count to **Stripe** for metered billing, keyed off the Workspace ID.
 
@@ -121,7 +131,7 @@ External anchoring (posting periodic chain digests to a third party) is the next
 - **Public internet → Next.js API.** Authenticated via Better Auth sessions, scoped to a Workspace. Rate-limited per role.
 - **Next.js → Inngest → Bun worker.** Internal network only.
 - **Bun worker → Microsoft Graph.** Outbound HTTPS using per-tenant encrypted credentials, decrypted only inside the connector adapter.
-- **GitHub (customer policy repos) → Plugin Engine.** Untrusted code path. All inputs Zod-validated; sandboxing strategy TBD.
+- **GitHub (customer policy repos) → Plugin Engine.** Untrusted code path. All inputs Zod-validated. Customer plugin evaluators execute inside Firecracker microVMs — hardware-virtualized guest kernels with no network, no filesystem beyond a read-only rootfs, and no access to other tenants' data. See [ADR-004](./decisions/004-single-engine-firecracker-sandbox.md).
 - **Bun worker → Garage S3.** Internal network; pre-signed URLs issued for direct browser uploads.
 - **Audit log signing key → Bun worker.** Mounted from the secrets vault as a file, never present in env vars or the database.
 
@@ -160,13 +170,13 @@ None of those are true today. Plain Compose is right for now, with eyes open abo
               (Org session) (Workflow)   (Metered billing)
                                 │
                                 ▼
-                        Bun worker (dual-engine)
+                        Bun worker (single engine)
                    ┌────────────┴────────────┐
                    ▼                         ▼
-              Core Engine             Plugin Engine
-              (esbuild binary,        (Dynamic TS,
-               CIS / NIST,            Zod-validated,
-               <50ms cold start)      sandbox TBD)
+            In-process evaluators    Firecracker microVMs
+            (Built-in: CIS/NIST,    (Customer plugins:
+             27 modules,             Zod-validated TS,
+             trusted code)           ~125ms boot, no network)
                    │                         │
                    ▼                         ▼
               Microsoft Graph API      GitHub App
@@ -190,8 +200,8 @@ These are decisions we have explicitly *not* made and are tracking. They will be
 
 | Question | Status | Notes |
 |---|---|---|
-| Dual-engine split worth the complexity? | Open | Targeting <50ms cold start. Need to measure actual cold start frequency in production before committing. |
-| Plugin Engine sandboxing strategy | Open | Most security-critical question in the system. Options: isolated-vm, separate Bun process with seccomp, Firecracker microVMs. |
+| ~~Dual-engine split worth the complexity?~~ | **Closed** | No. Collapsed to a single Bun-based engine. The cold-start optimization was unmeasured and the complexity unjustified. See [ADR-004](./decisions/004-single-engine-firecracker-sandbox.md). |
+| ~~Plugin Engine sandboxing strategy~~ | **Closed** | Firecracker microVMs — hardware-virtualized guest kernels. Strongest isolation available, consistent with PRINCIPLES.md ¶2. See [ADR-004](./decisions/004-single-engine-firecracker-sandbox.md). |
 | Cross-org analytics path | Designed, not built | Separate `analytics` schema with BYPASSRLS role. Aggregates only — never row-level findings. |
 | GDPR right-to-erasure for audit log actor IDs | Open | Crypto-shredding (encrypted actor IDs, deletion via key destruction) is the likely answer. ADR pending. |
 | External anchoring of audit chain | Deferred | Phase 1+, only if a customer's regulatory regime demands it. |

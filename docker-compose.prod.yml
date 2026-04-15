@@ -1,4 +1,56 @@
 # Watchtower — Production Stack
 #
-# Planned: production Docker Compose configuration.
+# Production Docker Compose configuration.
 # See docker-compose.dev.yml for the local development stack.
+#
+# The worker service requires /dev/kvm access for Firecracker microVM
+# sandboxing of customer-authored plugin evaluators. See ADR-004.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Bun worker (single engine)
+  # ---------------------------------------------------------------------------
+  # The scan execution worker. Runs built-in evaluators in-process and
+  # dispatches customer plugin evaluators to Firecracker microVMs.
+  #
+  # Requires:
+  #   - /dev/kvm for Firecracker (hardware virtualization)
+  #   - Firecracker binary at /usr/local/bin/firecracker
+  #   - Kernel image at /opt/watchtower/vmlinux
+  #   - Rootfs image at /opt/watchtower/rootfs.ext4
+  #   - Audit signing key mounted from secrets vault
+  #
+  # worker:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/worker/Dockerfile
+  #   container_name: watchtower-worker
+  #   restart: unless-stopped
+  #   devices:
+  #     - "/dev/kvm:/dev/kvm"    # Required for Firecracker microVM sandboxing
+  #   volumes:
+  #     - ./secrets:/run/secrets:ro
+  #     - firecracker_artifacts:/opt/watchtower:ro
+  #   environment:
+  #     DATABASE_URL: ${DATABASE_URL}
+  #     INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY}
+  #     INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY}
+  #     AUDIT_SIGNING_KEY_PATH: /run/secrets/audit-signing-key.pem
+  #     WATCHTOWER_SANDBOX_MODE: production  # Never 'dev' in production
+  #     FIRECRACKER_BIN_PATH: /usr/local/bin/firecracker
+  #     FIRECRACKER_KERNEL_PATH: /opt/watchtower/vmlinux
+  #     FIRECRACKER_ROOTFS_PATH: /opt/watchtower/rootfs.ext4
+  #     PLUGIN_TIMEOUT_SECONDS: "30"
+  #     PLUGIN_MEMORY_MIB: "128"
+  #     PLUGIN_VCPU_COUNT: "1"
+  #   networks:
+  #     - watchtower
+
+# volumes:
+#   firecracker_artifacts:
+#     name: watchtower_firecracker_artifacts
+
+# networks:
+#   watchtower:
+#     name: watchtower-prod
+#     driver: bridge

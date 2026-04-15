@@ -47,7 +47,8 @@ watchtower-dev/
 │   ├── auth/                      # Better Auth configuration, Org plugin, session resolver
 │   ├── db/                        # Prisma client wrapper, RLS-aware proxy
 │   ├── errors/                    # Two-layer error code catalog (zero dependencies)
-│   ├── engine/                    # planned: Core engine binary, Zod policy validation
+│   ├── engine/                    # Compliance engine — evaluator registry, built-in evaluators
+│   ├── sandbox/                   # Firecracker microVM lifecycle manager for plugin sandboxing
 │   └── ui/                        # planned: Shared Tailwind / shadcn components
 ├── prisma/
 │   ├── schema.prisma              # Entity model — single source of truth
@@ -91,7 +92,7 @@ The `apps/` and `packages/` directories contain the application foundation built
 | Authentication | Better Auth (Organization plugin) |
 | Background jobs | Inngest (stateful workflow orchestration) |
 | Object storage | Garage S3 (evidence vault) |
-| Execution engine | Bun + esbuild (Core), dynamic TS + Zod (Plugin) |
+| Execution engine | Bun (single engine), Firecracker microVMs (plugin sandbox) |
 | Infrastructure | Docker Compose on a single NUC |
 | Billing | Stripe (metered) |
 | Observability | OpenTelemetry (planned) |

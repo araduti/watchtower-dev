@@ -49,6 +49,13 @@
       "name": "@watchtower/errors",
       "version": "0.0.1",
     },
+    "packages/sandbox": {
+      "name": "@watchtower/sandbox",
+      "version": "0.0.1",
+      "dependencies": {
+        "zod": "^4.3.6",
+      },
+    },
     "packages/scan-pipeline": {
       "name": "@watchtower/scan-pipeline",
       "version": "0.0.1",
@@ -438,6 +445,8 @@
     "@watchtower/errors": ["@watchtower/errors@workspace:packages/errors"],
 
     "@watchtower/scan-pipeline": ["@watchtower/scan-pipeline@workspace:packages/scan-pipeline"],
+
+    "@watchtower/sandbox": ["@watchtower/sandbox@workspace:packages/sandbox"],
 
     "@watchtower/web": ["@watchtower/web@workspace:apps/web"],
 

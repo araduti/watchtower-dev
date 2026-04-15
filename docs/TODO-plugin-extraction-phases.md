@@ -64,19 +64,22 @@ The CA policy match specs (`CA_POLICY_SPECS`) were typed data in code. Per PRINC
 
 This is the most security-critical phase. It extends the registry to load customer-authored evaluators from PluginRepo-synced GitHub files.
 
+**Sandboxing decision: Firecracker microVMs** (see [ADR-004](../decisions/004-single-engine-firecracker-sandbox.md))
+
+The dual-engine model has been collapsed into a single engine. Customer plugins execute inside Firecracker microVMs — hardware-virtualized guest kernels with no network, no host filesystem access, and no database connection. This is the strongest sandboxing option available, consistent with PRINCIPLES.md ¶2.
+
 - [ ] Define plugin file format and Zod validation schema
-- [ ] Implement `registerPlugin()` in the registry — loads, validates, and registers customer evaluators
-- [ ] Choose sandboxing strategy (Architecture.md §12 open question):
-  - Option A: `isolated-vm` (V8 isolate, lowest overhead)
-  - Option B: Separate Bun process with seccomp
-  - Option C: Firecracker microVMs (highest isolation, most complexity)
-- [ ] Implement sandbox execution boundary
+- [ ] Implement `registerPlugin()` in the registry — loads, validates, and registers customer evaluators with `sandboxed: true`
+- [x] Choose sandboxing strategy (Architecture.md §12 open question): **Firecracker microVMs** (ADR-004)
+- [ ] Implement `@watchtower/sandbox` package — Firecracker VM lifecycle manager
+- [ ] Build rootfs image (minimal Alpine + Bun, ~50MB)
 - [ ] Plugin evaluators must not access:
-  - Network
-  - File system outside their sandbox
+  - Network (no virtio-net device)
+  - File system outside the read-only rootfs
   - Other tenants' evidence
   - The database directly
 - [ ] Plugin error handling: timeout, crash, invalid output → `EvaluatorResult` with failure
+- [ ] Dev-mode fallback for macOS contributors (no KVM)
 - [ ] Integrate with `PluginRepo` sync pipeline (Inngest worker)
 
 **PRINCIPLES.md constraint:** _"Customer-authored checks run inside a sandboxed execution boundary, because code the platform has never seen is code the platform must not trust."_
@@ -101,7 +104,7 @@ These notes are from the principles/roadmap evaluation of the extraction plan.
 
 ### Corrections applied
 
-1. **Dual-engine question (Architecture.md §12):** This extraction does NOT close the dual-engine open question. That question is about compilation strategy (esbuild vs dynamic import), not evaluation architecture. The extraction makes the split *cleaner* but doesn't answer whether the cold-start performance difference justifies maintaining two paths. See ADR-003.
+1. **Dual-engine question (Architecture.md §12): CLOSED.** The dual-engine split has been collapsed into a single Bun-based engine. Customer plugin sandboxing uses Firecracker microVMs. See [ADR-004](../decisions/004-single-engine-firecracker-sandbox.md).
 
 2. **CA Policy Specs are now data (Phase 4 complete):** The CA match specs have been migrated from typed code (`evaluators/ca-policy-specs.ts`) into `ControlAssertion.expectedValue` with `operator: "ca-match"`. CA checks are now data-driven like simple assertions. The `evaluators/ca-policy-specs.ts` module has been removed.
 

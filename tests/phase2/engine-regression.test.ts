@@ -21,7 +21,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 import {
-  getEvaluator,
+  getBuiltinEvaluator,
   registrySize,
   registeredSlugs,
 } from "../../packages/engine/evaluators/registry";
@@ -245,7 +245,7 @@ describe("Engine regression — evaluator results match baseline", () => {
 
       it(`[${controlId}] evaluator "${slug}" produces baseline-matching result`, () => {
         // The evaluator must exist in the registry
-        const evaluator = getEvaluator(slug);
+        const evaluator = getBuiltinEvaluator(slug);
         expect(
           evaluator,
           `Evaluator "${slug}" for control ${controlId} not found in registry`,
@@ -297,7 +297,7 @@ describe("Engine regression — evaluator results match baseline", () => {
           continue;
         }
 
-        const evaluator = getEvaluator(slug);
+        const evaluator = getBuiltinEvaluator(slug);
         if (!evaluator) {
           mismatches.push(
             `${controlId}: evaluator "${slug}" not in registry`,
