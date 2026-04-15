@@ -215,7 +215,7 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     // Step 3: Store evidence records
     // ------------------------------------------------------------------
-    // TODO: Phase 3 — Engine integration
+    // TODO: Phase 3 — Engine integration (see docs/Architecture.md §13)
     // Evidence records require a Finding (findingId) and the engine
     // hasn't been integrated yet. When the engine is wired in, this
     // step will:
