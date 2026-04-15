@@ -24,6 +24,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 import { createAuditEvent } from "@watchtower/db";
+import { inngest } from "@watchtower/scan-pipeline";
 import { throwWatchtowerError } from "../errors.ts";
 import {
   checkIdempotencyKey,
@@ -307,6 +308,20 @@ export const scanRouter = router({
         200,
       );
 
+      // Emit scan/execute event to Inngest to start the scan pipeline.
+      // This is fire-and-forget — if Inngest is down, the scan stays in
+      // PENDING and can be retried. The pipeline will guard against
+      // duplicate execution via the PENDING status check in step 1.
+      await inngest.send({
+        name: "scan/execute",
+        data: {
+          scanId: created.id,
+          workspaceId: ctx.session.workspaceId,
+          tenantId: tenant.id,
+          scopeId: tenant.scopeId,
+        },
+      });
+
       return created;
     }),
 
@@ -400,6 +415,16 @@ export const scanRouter = router({
         cancelled,
         200,
       );
+
+      // Emit scan/cancel event to Inngest.
+      // This triggers the cancelOn mechanism on the execute-scan function,
+      // aborting the in-progress scan pipeline if it hasn't completed yet.
+      await inngest.send({
+        name: "scan/cancel",
+        data: {
+          scanId: existing.id,
+        },
+      });
 
       return cancelled;
     }),
