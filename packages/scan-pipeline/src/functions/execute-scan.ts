@@ -28,7 +28,7 @@
 
 import { NonRetriableError } from "inngest";
 
-import { withRLS, createAuditEvent, prisma } from "@watchtower/db";
+import { withRLS, createAuditEvent } from "@watchtower/db";
 import { createGraphAdapter } from "@watchtower/adapters";
 import type { AdapterConfig, AdapterResult } from "@watchtower/adapters";
 
@@ -215,25 +215,21 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     // Step 3: Store evidence records
     // ------------------------------------------------------------------
-    await step.run("store-evidence", async () => {
-      await withRLS(workspaceId, [scopeId], async (tx) => {
-        for (const collected of collectedSources) {
-          await tx.evidence.create({
-            data: {
-              workspaceId,
-              scopeId,
-              tenantId,
-              scanId,
-              source: collected.source,
-              rawEvidence: collected.rawData as Record<string, unknown>,
-              type: "AUTOMATED",
-              collectedBy: "SYSTEM",
-              observedAt: new Date(collected.collectedAt),
-              result: "PASS", // Placeholder — engine integration in Phase 3
-            },
-          });
-        }
-      });
+    // TODO: Phase 3 — Engine integration
+    // Evidence records require a Finding (findingId) and the engine
+    // hasn't been integrated yet. When the engine is wired in, this
+    // step will:
+    //   1. Run the engine against collected data to produce Findings
+    //   2. Create Evidence records linked to each Finding
+    //   3. Track checksRun / checksFailed for the finalize step
+    // For now, the collected data is held in the step result from
+    // "collect-data" and the scan completes with checksRun: 0.
+    const evidenceSummary = await step.run("store-evidence", async () => {
+      return {
+        sourcesCollected: collectedSources.length,
+        sources: collectedSources.map((s) => s.source),
+        note: "Engine not yet integrated — evidence storage deferred to Phase 3",
+      };
     });
 
     // ------------------------------------------------------------------
@@ -264,7 +260,7 @@ export const executeScan = inngest.createFunction(
             status: "SUCCEEDED",
             checksRun: 0,
             checksFailed: 0,
-            sourcesCollected: collectedSources.length,
+            sourcesCollected: evidenceSummary.sourcesCollected,
           },
         });
       });
