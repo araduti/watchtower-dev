@@ -527,8 +527,9 @@ async function fetchPaginatedList(
   const version = useBeta ? "beta" : "v1.0";
 
   while (nextLink) {
+    const currentLink = nextLink;
     const response: Record<string, unknown> = await withRetry(
-      () => client.api(nextLink!).version(version).get(),
+      () => client.api(currentLink).version(version).get(),
       dataSource,
     );
     apiCalls++;
@@ -885,21 +886,26 @@ async function collectB2bPolicy(
 
   const raw = result.data as Record<string, unknown>;
 
-  // Extract B2B-relevant fields from the authorization policy
+  // Extract B2B-relevant fields from the authorization policy.
+  // Graph API: GET /policies/authorizationPolicy returns a flat object with
+  // `allowInvitesFrom`, and domain restrictions under `defaultUserRolePermissions`.
   const allowInvitesFrom = String(raw["allowInvitesFrom"] ?? "everyone");
 
-  // The allowedDomains/blockedDomains may be nested under
-  // invitedUserInviteRestrictions or a similar sub-object
   const restrictions = (raw["defaultUserRolePermissions"] ?? {}) as Record<
     string,
     unknown
   >;
 
+  // Graph's authorizationPolicy may expose domain allowlists either under
+  // `defaultUserRolePermissions.allowedDomains` or at the top-level
+  // `allowedDomains` field, depending on the API version. We check both
+  // locations for compatibility.
   const allowedDomains = extractStringArray(
-    restrictions["allowedToInviteUsers"] ??
-      raw["allowedDomains"],
+    restrictions["allowedDomains"] ?? raw["allowedDomains"],
   );
-  const blockedDomains = extractStringArray(raw["blockedDomains"]);
+  const blockedDomains = extractStringArray(
+    restrictions["blockedDomains"] ?? raw["blockedDomains"],
+  );
 
   return {
     data: {
