@@ -9,8 +9,8 @@
  * check it" (evaluator logic).
  *
  * Built-in evaluators are trusted code shipped with the platform.
- * Customer-authored evaluators (Phase 5) will run inside a sandboxed
- * execution boundary — same contract, different trust level.
+ * Customer-authored evaluators execute inside Firecracker microVMs —
+ * same contract, hardware-level isolation. See ADR-004.
  */
 
 /**
@@ -39,10 +39,14 @@ export interface EvaluatorResult {
  * know what the evaluator does; it only knows how to call it and read the
  * result.
  *
+ * For customer plugins, the registry wraps the sandbox lifecycle behind
+ * this same signature. The engine never knows whether an evaluator ran
+ * in-process or inside a Firecracker microVM.
+ *
  * @param snapshot - The full evidence snapshot (snapshot.data contains source keys)
  * @returns EvaluatorResult with pass/fail and any warning messages
  */
-export type EvaluatorFn = (snapshot: EvidenceSnapshot) => EvaluatorResult;
+export type EvaluatorFn = (snapshot: EvidenceSnapshot) => EvaluatorResult | Promise<EvaluatorResult>;
 
 /**
  * A named evaluator module. The slug is the stable identifier used in
@@ -53,4 +57,16 @@ export interface EvaluatorModule {
   slug: string;
   /** The evaluator function */
   evaluate: EvaluatorFn;
+}
+
+/**
+ * A registered evaluator entry in the registry.
+ * Tracks whether the evaluator is sandboxed (customer plugin) or
+ * trusted (built-in).
+ */
+export interface RegisteredEvaluator {
+  /** The evaluator function (or sandbox wrapper) */
+  evaluate: EvaluatorFn;
+  /** Whether this evaluator runs inside a Firecracker microVM */
+  sandboxed: boolean;
 }
