@@ -84,15 +84,15 @@ const ROLE_SELECT = {
  * Flatten the Prisma nested `permissions: { permission: { ... } }[]` shape
  * into the output schema's `permissions: { key, category }[]`.
  */
-function flattenPermissions(
-  role: {
+function flattenPermissions<
+  T extends {
     permissions: { permission: { key: string; category: string } }[];
-    [key: string]: unknown;
   },
-) {
+>(role: T) {
+  const { permissions, ...rest } = role;
   return {
-    ...role,
-    permissions: role.permissions.map((rp) => rp.permission),
+    ...rest,
+    permissions: permissions.map((rp) => rp.permission),
   };
 }
 

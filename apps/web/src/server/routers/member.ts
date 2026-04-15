@@ -78,15 +78,13 @@ const MEMBERSHIP_SELECT = {
  * Flatten the Prisma nested `roles: { role: { ... } }[]` shape into
  * the output schema's `roles: { id, name, slug }[]`.
  */
-function flattenRoles(
-  membership: {
-    roles: { role: { id: string; name: string; slug: string } }[];
-    [key: string]: unknown;
-  },
-) {
+function flattenRoles<
+  T extends { roles: { role: { id: string; name: string; slug: string } }[] },
+>(membership: T) {
+  const { roles, ...rest } = membership;
   return {
-    ...membership,
-    roles: membership.roles.map((mr) => mr.role),
+    ...rest,
+    roles: roles.map((mr) => mr.role),
   };
 }
 
