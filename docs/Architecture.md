@@ -278,9 +278,34 @@ To make the milestones explicit:
 - **ADR-003** — Vendor Adapter Boundary decisions (credential decryption, error translation, test seam)
 - **1,084 passing tests** — 46 new scan convention tests across §1–§15
 
+### Phase 2.2 — Scan pipeline & Inngest integration
+
+- **`@watchtower/scan-pipeline` package** — Inngest-based scan orchestration:
+  - `inngest-client.ts` — typed Inngest client for Watchtower events
+  - `events.ts` — event type definitions (`scan/trigger`, `scan/cancel`, `scan/completed`)
+  - `execute-scan` — 4-step Inngest function: transition PENDING→RUNNING, collect data via Graph adapter, store evidence (deferred to engine integration), finalize scan status
+  - `handle-cancellation` — event-driven cancellation with state guard (PENDING/RUNNING only)
+  - `onFailure` handler — ensures scans never stuck in RUNNING on unhandled errors
+- **Graph adapter** (in `@watchtower/adapters`):
+  - AES-256-GCM credential decryption at the adapter boundary
+  - Client-credentials OAuth flow for M365 tenant access
+  - Exponential backoff with jitter (3 retries, max 30s delay)
+  - Per-tenant concurrency limiting (default 4 concurrent requests)
+  - OData pagination support for large result sets
+  - Error translation to `AdapterError` with vendor-specific codes
+- **`@watchtower/sandbox` package** — Firecracker microVM infrastructure:
+  - Config module — VM resource limits, timeout, rootfs path
+  - Plugin schema validation — Zod-based plugin contract enforcement
+  - Dev-mode fallback — in-process execution when Firecracker is unavailable
+  - Registry integration — `registerPlugin()` / `unregisterPlugin()` / `isSandboxed()` / `sandboxedSlugs()`
+- **Inngest serve route** (`/api/inngest`) — Next.js App Router endpoint for function discovery
+- **Scan router wired to Inngest** — `trigger` emits `scan/trigger` event, `cancel` emits `scan/cancel` event
+- **ADR-004** — Single-engine collapse + Firecracker sandboxing decisions
+- **1,226 passing tests** — 81 Phase 2.2 convention tests + 61 sandbox tests
+
 ### Not yet delivered
 
-Application code: Graph adapter implementation, scan execution pipeline, Inngest worker, GitHub App for plugin sync, UI, Stripe billing integration, API token management, webhook/SIEM integrations.
+Application code: engine ↔ scan pipeline integration (evidence storage, finding creation), GitHub App for plugin sync, UI, Stripe billing integration, API token management, webhook/SIEM integrations.
 
 ## 14. The tests that hold the schema honest
 
