@@ -7,6 +7,7 @@ import { frameworkRouter } from "./framework.ts";
 import { memberRouter } from "./member.ts";
 import { permissionRouter } from "./permission.ts";
 import { roleRouter } from "./role.ts";
+import { scanRouter } from "./scan.ts";
 import { scopeRouter } from "./scope.ts";
 import { tenantRouter } from "./tenant.ts";
 import { workspaceRouter } from "./workspace.ts";
@@ -20,6 +21,7 @@ export const appRouter = router({
   member: memberRouter,
   permission: permissionRouter,
   role: roleRouter,
+  scan: scanRouter,
   scope: scopeRouter,
   tenant: tenantRouter,
   workspace: workspaceRouter,
