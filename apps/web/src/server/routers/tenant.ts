@@ -10,7 +10,7 @@
  * - idempotencyKey for mutations (Non-Negotiable #2)
  * - ctx.requirePermission before mutations (Non-Negotiable #3)
  * - Zod input/output schemas (Non-Negotiable #4)
- * - Cursor-based pagination (Non-Negotiable #6, API-Conventions §9)
+ * - Cursor-based pagination (Non-Negotiable #5, API-Conventions §9)
  * - Allowlisted filters (Non-Negotiable #10, API-Conventions §10)
  * - deletedAt: null filter (Non-Negotiable #7)
  * - Scope derived from resource, not from input (API-Conventions §5)
@@ -260,7 +260,7 @@ export const tenantRouter = router({
           displayName: input.displayName,
           msTenantId: input.msTenantId,
           authMethod: input.authMethod,
-          encryptedCredentials: Buffer.alloc(0), // placeholder — rotated via separate flow
+          encryptedCredentials: Buffer.alloc(0), // placeholder — credentials must be set via tenants:rotate_credentials
         },
         select: TENANT_SELECT,
       });
@@ -326,11 +326,7 @@ export const tenantRouter = router({
           workspaceId: ctx.session.workspaceId,
           deletedAt: null,
         },
-        select: {
-          id: true,
-          scopeId: true,
-          displayName: true,
-        },
+        select: TENANT_SELECT,
       });
 
       if (!existing) {
@@ -357,13 +353,9 @@ export const tenantRouter = router({
         };
       }
 
-      // No changes — return current state
+      // No changes — return current state (already fully selected)
       if (Object.keys(data).length === 0) {
-        const current = await ctx.db.tenant.findUniqueOrThrow({
-          where: { id: existing.id },
-          select: TENANT_SELECT,
-        });
-        return current;
+        return existing;
       }
 
       // Update tenant and write audit log in the same transaction.
