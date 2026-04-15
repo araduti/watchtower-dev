@@ -23,3 +23,4 @@ export type {
   GraphDataSourceKey,
 } from "./graph-types.ts";
 export { AdapterError } from "./adapter-error.ts";
+export { MicrosoftGraphAdapter, createGraphAdapter } from "./graph-adapter.ts";

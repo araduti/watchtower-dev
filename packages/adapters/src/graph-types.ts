@@ -34,6 +34,9 @@ export interface GraphAdapterConfig {
  * change — existing keys are never renamed or removed.
  */
 export interface GraphDataSources {
+  /** Index signature for Record<string, unknown> compatibility. */
+  readonly [key: string]: unknown;
+
   /** Conditional Access policies. */
   conditionalAccessPolicies: ConditionalAccessPolicy[];
 

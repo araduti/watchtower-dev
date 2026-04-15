@@ -1,0 +1,24 @@
+{
+  "name": "@watchtower/scan-pipeline",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@watchtower/adapters": "workspace:*",
+    "@watchtower/db": "workspace:*",
+    "@watchtower/errors": "workspace:*",
+    "inngest": "^4.2.2"
+  },
+  "description": "",
+  "main": "index.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
