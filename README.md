@@ -1,4 +1,4 @@
-![Ampliosoft Logo](ampliosoft.png)
+![Ampliosoft Logo](watchtower.png)
 # Watchtower
 
 Watchtower is a multi-tenant compliance platform for Microsoft 365. It runs automated CIS / NIST audits with GitOps-driven custom logic, serving everyone from MSPs managing hundreds of tenants to enterprises managing legally-isolated business units — from the same codebase, with the same data model.
