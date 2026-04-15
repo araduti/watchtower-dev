@@ -259,6 +259,17 @@ TBD.
 - ✅ 12 routers registered in `_app.ts`
 - ✅ 1,084 passing tests (1,038 existing + 46 new scan convention tests across §1–§15)
 
-**Next:** Phase 2.2 (Graph adapter implementation + Inngest scan pipeline), Phase 3.0 (UI foundation).
+**Phase 2.2** (scan pipeline & Inngest integration) is complete:
+- ✅ `@watchtower/scan-pipeline` package — Inngest client, typed events, function registry
+- ✅ `execute-scan` Inngest function — 4-step orchestration (transition → collect → store-evidence → finalize) with `onFailure` handler
+- ✅ `handle-cancellation` Inngest function — graceful scan cancellation via event-driven coordination
+- ✅ Inngest serve route (`/api/inngest`) for function discovery and event-driven invocation
+- ✅ Scan router wired to emit Inngest events on `trigger` and `cancel`
+- ✅ Graph adapter — AES-256-GCM credential decryption, client-credentials OAuth, exponential backoff, per-tenant concurrency limiting, OData pagination
+- ✅ `@watchtower/sandbox` package — Firecracker microVM config, plugin schema validation, dev-mode fallback
+- ✅ ADR-004: Single-engine collapse + Firecracker sandboxing
+- ✅ 1,226 passing tests (1,084 existing + 81 Phase 2.2 convention tests + 61 sandbox tests)
+
+**Next:** Phase 3.0 (UI foundation).
 
 For the full roadmap, see `Architecture.md` section 12 ("Open design questions") and section 13.
