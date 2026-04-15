@@ -53,9 +53,6 @@ const MAX_DELAY_MS = 30_000;
 /** Default concurrent requests per tenant. */
 const DEFAULT_MAX_CONCURRENCY = 4;
 
-/** Default timeout per Graph API call in milliseconds. */
-const DEFAULT_TIMEOUT_MS = 30_000;
-
 /** AES-256-GCM encryption constants. */
 const AES_ALGORITHM: CipherGCMTypes = "aes-256-gcm";
 const AES_IV_LENGTH = 12;
@@ -135,10 +132,12 @@ class ConcurrencySemaphore {
 
   /** Release a slot, unblocking the next waiter. */
   release(): void {
-    this.active--;
     const next = this.waiters.shift();
     if (next) {
+      // Hand the slot directly to the next waiter (active count stays the same)
       next();
+    } else {
+      this.active--;
     }
   }
 }
@@ -1021,9 +1020,6 @@ export class MicrosoftGraphAdapter
 
       // Build Graph client (credentials stay in closure, never stored)
       const client = createGraphClient(accessToken);
-
-      // Set timeout if configured
-      const _timeoutMs = this.graphConfig.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
       // Collect data from the source
       const collectedAt = new Date().toISOString();
