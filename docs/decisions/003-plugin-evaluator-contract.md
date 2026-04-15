@@ -37,7 +37,7 @@ This is the extension point for Phase 5 (customer plugins): the registry gains a
 Extracted from the monolithic map into `evaluators/builtin/{slug}.ts`. Each file exports an `EvaluatorModule` with `slug` and `evaluate`. Benefits:
 
 - Individual evaluators can be tested in isolation
-- esbuild can tree-shake unused evaluators in the Core Engine
+- ~~esbuild can tree-shake unused evaluators in the Core Engine~~ (no longer applicable — single engine, see [ADR-004](./004-single-engine-firecracker-sandbox.md))
 - Adding a new evaluator is adding a file, not modifying the engine
 - Code review of evaluator changes is scoped to one file
 
@@ -49,9 +49,11 @@ The `ca-match` operator routes evaluation through the existing CA policy match e
 
 The deprecated `evaluators/ca-policy-specs.ts` module and the `ca-policy-match:` evaluatorSlug routing pattern have been removed.
 
-### 5. This does NOT close the dual-engine open question
+### 5. The dual-engine question is now closed
 
-Architecture.md §12 asks "Is the dual-engine split worth the complexity?" That question is about compilation strategy (esbuild binary vs dynamic import), not evaluation architecture. This extraction makes the dual-engine split *cleaner* — built-in evaluator files can be pre-compiled via esbuild while customer files are dynamically loaded — but doesn't answer whether the cold-start performance difference justifies the split.
+Architecture.md §12 asked "Is the dual-engine split worth the complexity?" [ADR-004](./004-single-engine-firecracker-sandbox.md) closes this: **No.** The dual-engine split has been collapsed into a single Bun-based engine. All evaluators — built-in and customer-authored — load through the same registry. Built-in evaluators run in-process as trusted code. Customer-authored evaluators execute inside Firecracker microVMs for hardware-level isolation.
+
+The evaluator extraction in this ADR made the collapse trivial: both paths already conformed to the `EvaluatorFn` contract. Removing the distinction eliminated a build pipeline, a deployment artifact, and a categorization decision without changing the evaluation architecture.
 
 ## Consequences
 
