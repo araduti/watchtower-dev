@@ -48,9 +48,17 @@ ALTER TABLE "Evidence" ADD COLUMN "reviewNotes" TEXT;
 CREATE TYPE "EvidenceType" AS ENUM ('AUTOMATED', 'MANUAL', 'HYBRID');
 CREATE TYPE "ReviewStatus" AS ENUM ('NOT_REQUIRED', 'PENDING_REVIEW', 'APPROVED', 'REJECTED');
 
+-- Drop text defaults before casting to enum (PostgreSQL cannot auto-cast text defaults)
+ALTER TABLE "Evidence" ALTER COLUMN "type" DROP DEFAULT;
+ALTER TABLE "Evidence" ALTER COLUMN "reviewStatus" DROP DEFAULT;
+
 -- Convert text columns to proper enums
 ALTER TABLE "Evidence" ALTER COLUMN "type" TYPE "EvidenceType" USING "type"::"EvidenceType";
 ALTER TABLE "Evidence" ALTER COLUMN "reviewStatus" TYPE "ReviewStatus" USING "reviewStatus"::"ReviewStatus";
+
+-- Re-add defaults as proper enum values
+ALTER TABLE "Evidence" ALTER COLUMN "type" SET DEFAULT 'AUTOMATED'::"EvidenceType";
+ALTER TABLE "Evidence" ALTER COLUMN "reviewStatus" SET DEFAULT 'NOT_REQUIRED'::"ReviewStatus";
 
 -- Remove collectedBy default (schema requires it explicitly)
 ALTER TABLE "Evidence" ALTER COLUMN "collectedBy" DROP DEFAULT;

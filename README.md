@@ -22,12 +22,13 @@ chmod 600 secrets/audit-signing-key.pem
 docker compose -f docker-compose.dev.yml up -d
 sleep 15  # wait for the Postgres role bootstrap to complete
 
-# 4. Apply schema and seeds
+# 4. Apply schema, generate client, and seed
 bunx prisma migrate deploy
+bunx prisma generate
 bun run db:seed
 
-# 5. Start the app
-bun run dev
+# 5. Start the app (available from Phase 3.0)
+# bun run dev
 ```
 
 The web app runs at `http://localhost:3000`. The Inngest dev UI runs at `http://localhost:8288`.
@@ -141,6 +142,7 @@ docker compose -f docker-compose.dev.yml down -v
 docker compose -f docker-compose.dev.yml up -d
 sleep 15
 bunx prisma migrate deploy
+bunx prisma generate
 bun run db:seed
 ```
 
