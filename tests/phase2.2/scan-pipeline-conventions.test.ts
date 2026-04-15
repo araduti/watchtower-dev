@@ -78,7 +78,9 @@ describe("§1 — Scan router emits Inngest events", () => {
       scanSrc.indexOf("cancel:"),
     );
     const auditIdx = triggerBlock.lastIndexOf("createAuditEvent");
-    const idempotencyIdx = triggerBlock.lastIndexOf("saveIdempotencyResult");
+    // Use indexOf (not lastIndexOf) to match the actual function call,
+    // not the mention in the JSDoc comment for the cancel procedure.
+    const idempotencyIdx = triggerBlock.indexOf("await saveIdempotencyResult");
     const sendIdx = triggerBlock.indexOf("inngest.send");
     // inngest.send must come after both audit and idempotency
     expect(sendIdx).toBeGreaterThan(auditIdx);
