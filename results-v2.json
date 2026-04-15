@@ -1,5 +1,5 @@
 {
-  "evaluatedAt": "2026-04-14T21:39:26.095Z",
+  "evaluatedAt": "2026-04-15T06:33:08.992Z",
   "evidencePath": "evidence.json",
   "controlCount": 177,
   "passed": 71,
@@ -20,7 +20,7 @@
       "controlTitle": "Admin accounts use licenses with reduced footprint",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.089Z",
+      "evaluatedAt": "2026-04-15T06:33:08.987Z",
       "pass": false,
       "actualValues": {
         "item": [
@@ -77,7 +77,7 @@
       "controlTitle": "Only approved public groups exist",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.089Z",
+      "evaluatedAt": "2026-04-15T06:33:08.987Z",
       "pass": false,
       "actualValues": {
         "2ee8fbe5-ca6e-4952-95c2-1a532114eda4": "Private",
@@ -103,7 +103,7 @@
       "controlTitle": "Idle session timeout ≤ 3 hours (CA policy)",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.089Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -113,7 +113,7 @@
       "controlTitle": "User owned apps restricted (Office Store)",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -127,7 +127,7 @@
       "controlTitle": "User owned apps restricted (trials)",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -141,7 +141,7 @@
       "controlTitle": "Customer lockbox feature is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -153,7 +153,7 @@
       "controlTitle": "Third-party storage services are restricted",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "count": 1
@@ -167,7 +167,7 @@
       "controlTitle": "Sways cannot be shared externally",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -179,7 +179,7 @@
       "controlTitle": "Common Attachment Types Filter is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "Strict Preset Security Policy1652949971786": true,
@@ -195,7 +195,7 @@
       "controlTitle": "Notifications for internal users sending malware",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "Strict Preset Security Policy1652949971786": false,
@@ -213,7 +213,7 @@
       "controlTitle": "Spam policies notify administrators",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "Default": false
@@ -227,7 +227,7 @@
       "controlTitle": "SPF records are published",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -243,7 +243,7 @@
       "controlTitle": "DKIM is enabled for all domains",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "item": []
@@ -264,7 +264,7 @@
       "controlTitle": "DMARC records are published",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -282,7 +282,7 @@
       "controlTitle": "Comprehensive attachment filtering is applied",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "Strict Preset Security Policy1652949971786": true,
@@ -298,7 +298,7 @@
       "controlTitle": "Outbound anti-spam message limits are in place",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "Default": "BlockUserForToday"
@@ -312,7 +312,7 @@
       "controlTitle": "Emergency access account activity is monitored",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -324,7 +324,7 @@
       "controlTitle": "Priority account protection is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -336,7 +336,7 @@
       "controlTitle": "Priority accounts have Strict protection presets",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -348,7 +348,7 @@
       "controlTitle": "Microsoft Defender for Cloud Apps is configured",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -360,7 +360,7 @@
       "controlTitle": "DLP policies are enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -372,7 +372,7 @@
       "controlTitle": "DLP policies are enabled for Microsoft Teams",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -384,7 +384,7 @@
       "controlTitle": "Sensitivity label policies are published",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": false,
       "actualValues": {
         "count": 0
@@ -398,7 +398,7 @@
       "controlTitle": "Per-user MFA is disabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -410,7 +410,7 @@
       "controlTitle": "Access to the Entra admin center is restricted",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -422,7 +422,7 @@
       "controlTitle": "The option to remain signed in is hidden",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -434,7 +434,7 @@
       "controlTitle": "LinkedIn account connections is disabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -446,7 +446,7 @@
       "controlTitle": "A dynamic group for guest users is created",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -458,7 +458,7 @@
       "controlTitle": "Entra device join is restricted",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {
         "deviceRegistrationPolicy": "#microsoft.graph.allDeviceRegistrationMembership"
@@ -472,7 +472,7 @@
       "controlTitle": "Local administrator assignment is limited",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {
         "deviceRegistrationPolicy": "#microsoft.graph.allDeviceRegistrationMembership"
@@ -486,7 +486,7 @@
       "controlTitle": "Users restricted from recovering BitLocker keys",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {
         "authorizationPolicy": true
@@ -500,7 +500,7 @@
       "controlTitle": "Collaboration invitations to allowed domains only",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -512,7 +512,7 @@
       "controlTitle": "Password hash sync enabled for hybrid deployments",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -524,7 +524,7 @@
       "controlTitle": "MFA required for all users in admin roles",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -534,7 +534,7 @@
       "controlTitle": "MFA required for all users",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -544,7 +544,7 @@
       "controlTitle": "Sign-in frequency enabled for admins",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -554,7 +554,7 @@
       "controlTitle": "Phishing-resistant MFA required for admins",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -564,7 +564,7 @@
       "controlTitle": "Identity Protection user risk policies enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -574,7 +574,7 @@
       "controlTitle": "Identity Protection sign-in risk policies enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -584,7 +584,7 @@
       "controlTitle": "Sign-in risk blocked for medium and high risk",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -594,7 +594,7 @@
       "controlTitle": "Sign-in frequency for Intune Enrollment set to Every time",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": []
@@ -604,7 +604,7 @@
       "controlTitle": "Microsoft Authenticator protects against MFA fatigue",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "MicrosoftAuthenticator": "enabled"
@@ -618,7 +618,7 @@
       "controlTitle": "Custom banned passwords lists are used",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -630,7 +630,7 @@
       "controlTitle": "All member users are MFA capable",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "adm-cloud-araduti@ampliosoft.com": true,
@@ -677,7 +677,7 @@
       "controlTitle": "Email OTP authentication method is disabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "authenticationMethodConfigurations[{\"id\":\"Email\"}].state": "enabled"
@@ -691,7 +691,7 @@
       "controlTitle": "Self service password reset enabled for all",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -703,7 +703,7 @@
       "controlTitle": "PIM is used to manage roles",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -718,11 +718,11 @@
       "controlTitle": "Access reviews for guest users are configured",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": [
-        "No access reviews targeting guest users found"
+        "No access reviews found — configure a guest user access review"
       ]
     },
     {
@@ -730,11 +730,11 @@
       "controlTitle": "Access reviews for privileged roles are configured",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": [
-        "No access reviews targeting directory roles found"
+        "No access reviews found"
       ]
     },
     {
@@ -742,7 +742,7 @@
       "controlTitle": "Approval required for PRA activation",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -755,7 +755,7 @@
       "controlTitle": "Outbound spam policy blocks auto-forwarding",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "Default": "Automatic"
@@ -769,7 +769,7 @@
       "controlTitle": "Email from external senders is identified",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": false
@@ -783,7 +783,7 @@
       "controlTitle": "Users installing Outlook add-ins is not allowed",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "Default Role Assignment Policy": [
@@ -810,7 +810,7 @@
       "controlTitle": "Additional storage providers restricted in OWA",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "OwaMailboxPolicy-Default": true
@@ -824,7 +824,7 @@
       "controlTitle": "Direct Send submissions are rejected",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "First Organization": false
@@ -838,7 +838,7 @@
       "controlTitle": "SharePoint/OneDrive Azure AD B2B integration is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": false
@@ -852,7 +852,7 @@
       "controlTitle": "External content sharing is restricted",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": 2
@@ -866,7 +866,7 @@
       "controlTitle": "OneDrive content sharing is restricted",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": 2
@@ -880,7 +880,7 @@
       "controlTitle": "SharePoint guests cannot reshare items",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": false
@@ -894,7 +894,7 @@
       "controlTitle": "SharePoint external sharing restricted to allowed domains",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": 0
@@ -908,7 +908,7 @@
       "controlTitle": "External sharing restricted by security group",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -920,7 +920,7 @@
       "controlTitle": "Guest access to site expires automatically",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": false
@@ -934,7 +934,7 @@
       "controlTitle": "Reauthentication with verification code is restricted",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": false
@@ -948,7 +948,7 @@
       "controlTitle": "SharePoint infected files are disallowed for download",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": false
@@ -962,7 +962,7 @@
       "controlTitle": "OneDrive sync restricted for unmanaged devices",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": false
@@ -976,7 +976,7 @@
       "controlTitle": "External file sharing in Teams limited to approved storage",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -990,7 +990,7 @@
       "controlTitle": "Users can't send emails to a channel email address",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -1004,7 +1004,7 @@
       "controlTitle": "External domains are restricted in Teams",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1017,7 +1017,7 @@
       "controlTitle": "Communication with unmanaged Teams users is disabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1030,7 +1030,7 @@
       "controlTitle": "External Teams users cannot initiate conversations",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1043,7 +1043,7 @@
       "controlTitle": "App permission policies are configured",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1055,7 +1055,7 @@
       "controlTitle": "Anonymous users can't join a meeting",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -1069,7 +1069,7 @@
       "controlTitle": "Meeting chat does not allow anonymous users",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": "Enabled"
@@ -1083,7 +1083,7 @@
       "controlTitle": "Only organizers and co-organizers can present",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": "EveryoneUserOverride"
@@ -1097,7 +1097,7 @@
       "controlTitle": "External meeting chat is off",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -1111,7 +1111,7 @@
       "controlTitle": "Meeting recording is off by default",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -1125,7 +1125,7 @@
       "controlTitle": "Users can report security concerns in Teams",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1137,7 +1137,7 @@
       "controlTitle": "Legacy authentication SHALL be blocked",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1149,7 +1149,7 @@
       "controlTitle": "Users detected as high risk SHALL be blocked",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1161,7 +1161,7 @@
       "controlTitle": "Sign-ins detected as high risk SHALL be blocked",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1173,7 +1173,7 @@
       "controlTitle": "MFA SHALL be enforced for all users",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1185,7 +1185,7 @@
       "controlTitle": "Microsoft Authenticator SHALL show login context and require number matching",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1197,7 +1197,7 @@
       "controlTitle": "Phishing-resistant MFA SHALL be required for highly privileged roles",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1209,7 +1209,7 @@
       "controlTitle": "User passwords SHALL NOT expire",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1223,7 +1223,7 @@
       "controlTitle": "Permanent active role assignments SHALL NOT be allowed for highly privileged roles",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1235,7 +1235,7 @@
       "controlTitle": "Activation of the Global Administrator role SHALL require approval",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1247,7 +1247,7 @@
       "controlTitle": "Highly privileged role assignments SHALL trigger an alert",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1259,7 +1259,7 @@
       "controlTitle": "Global Administrator activation SHALL trigger an alert",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1271,7 +1271,7 @@
       "controlTitle": "An SPF policy SHALL be published for each domain",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1287,7 +1287,7 @@
       "controlTitle": "DKIM SHOULD be enabled for all domains",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": []
@@ -1308,7 +1308,7 @@
       "controlTitle": "A DMARC policy SHALL be published for every second-level domain",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1326,7 +1326,7 @@
       "controlTitle": "The DMARC message rejection option SHALL be p=reject",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1344,7 +1344,7 @@
       "controlTitle": "DMARC SHALL include reports@dmarc.cyber.dhs.gov as aggregate recipient",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1362,7 +1362,7 @@
       "controlTitle": "External sender warnings SHALL be implemented",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": false
@@ -1376,7 +1376,7 @@
       "controlTitle": "Standard and strict preset security policies SHALL be enabled",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1388,7 +1388,7 @@
       "controlTitle": "External sharing for SharePoint SHALL be limited to Existing guests or less",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": 2
@@ -1402,7 +1402,7 @@
       "controlTitle": "External sharing SHALL be restricted to approved external domains",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": 0
@@ -1416,7 +1416,7 @@
       "controlTitle": "Default sharing scope SHALL be set to Specific people only",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": 2
@@ -1430,7 +1430,7 @@
       "controlTitle": "Meeting recording SHOULD be disabled",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -1444,7 +1444,7 @@
       "controlTitle": "External access for users SHALL only be enabled on a per-domain basis",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1456,7 +1456,7 @@
       "controlTitle": "Unmanaged users SHALL NOT be enabled to initiate contact with internal users",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1468,7 +1468,7 @@
       "controlTitle": "Internal users SHOULD NOT be enabled to initiate contact with unmanaged users",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1480,7 +1480,7 @@
       "controlTitle": "Teams email integration SHALL be disabled",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {
         "item": true
@@ -1494,7 +1494,7 @@
       "controlTitle": "Agencies SHOULD only allow installation of approved Microsoft apps",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1506,7 +1506,7 @@
       "controlTitle": "Agencies SHOULD only allow installation of approved third-party apps",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1518,7 +1518,7 @@
       "controlTitle": "Agencies SHOULD only allow installation of approved custom apps",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": false,
       "actualValues": {},
       "failures": [
@@ -1530,7 +1530,7 @@
       "controlTitle": "Administrative accounts are cloud-only",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.089Z",
+      "evaluatedAt": "2026-04-15T06:33:08.987Z",
       "pass": true,
       "actualValues": {
         "item": null
@@ -1542,7 +1542,7 @@
       "controlTitle": "Between two and four global admins are designated",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.089Z",
+      "evaluatedAt": "2026-04-15T06:33:08.987Z",
       "pass": true,
       "actualValues": {
         "count": 4
@@ -1554,7 +1554,7 @@
       "controlTitle": "Password expiration set to never expire",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.089Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "ampliosoft.onmicrosoft.com": 2147483647,
@@ -1573,7 +1573,7 @@
       "controlTitle": "Idle session timeout ≤ 3 hours (policy)",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.089Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {},
       "failures": []
@@ -1583,7 +1583,7 @@
       "controlTitle": "External sharing of calendars is not available",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Default Sharing Policy": false
@@ -1595,7 +1595,7 @@
       "controlTitle": "Internal phishing protection for Forms is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "item": true
@@ -1607,7 +1607,7 @@
       "controlTitle": "Safe Links for Office Applications is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Built-In Protection Policy": true
@@ -1619,7 +1619,7 @@
       "controlTitle": "Safe Attachments policy is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Built-In Protection Policy": true
@@ -1631,7 +1631,7 @@
       "controlTitle": "Safe Attachments for SPO/OneDrive/Teams is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Default": true
@@ -1643,7 +1643,7 @@
       "controlTitle": "Anti-phishing policy is configured",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Office365 AntiPhish Default": true,
@@ -1657,7 +1657,7 @@
       "controlTitle": "Connection filter IP allow list is not used",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Default": []
@@ -1669,7 +1669,7 @@
       "controlTitle": "Connection filter safe list is off",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Default": false
@@ -1681,7 +1681,7 @@
       "controlTitle": "Inbound anti-spam policies have no allowed domains",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Default": [],
@@ -1695,7 +1695,7 @@
       "controlTitle": "Zero-hour auto purge for Teams is on",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "ampliosoft.onmicrosoft.com\\Default Teams Protection Policy": true
@@ -1707,7 +1707,7 @@
       "controlTitle": "Microsoft 365 audit log search is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "Admin Audit Log Settings": true
@@ -1719,7 +1719,7 @@
       "controlTitle": "Devices without compliance policy are not compliant",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {
         "item": true
@@ -1731,7 +1731,7 @@
       "controlTitle": "Personal device enrollment is blocked",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.988Z",
       "pass": true,
       "actualValues": {},
       "failures": []
@@ -1741,7 +1741,7 @@
       "controlTitle": "Third-party integrated applications are not allowed",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": false
@@ -1753,7 +1753,7 @@
       "controlTitle": "Restrict non-admin users from creating tenants",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": false
@@ -1765,7 +1765,7 @@
       "controlTitle": "Users cannot create security groups",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": false
@@ -1777,7 +1777,7 @@
       "controlTitle": "Maximum devices per user is limited",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "deviceRegistrationPolicy": 20
@@ -1789,7 +1789,7 @@
       "controlTitle": "GA role not added as local admin during Entra join",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "deviceRegistrationPolicy": false
@@ -1801,7 +1801,7 @@
       "controlTitle": "LAPS is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.090Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "deviceRegistrationPolicy": true
@@ -1813,7 +1813,7 @@
       "controlTitle": "User consent to apps is not allowed",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": [
@@ -1828,7 +1828,7 @@
       "controlTitle": "Admin consent workflow is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "item": true
@@ -1840,7 +1840,7 @@
       "controlTitle": "Guest user access is restricted",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": "10dae51f-b6af-4016-8d66-8c2a99b929b3"
@@ -1852,7 +1852,7 @@
       "controlTitle": "Guest invitations limited to Guest Inviter role",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": "adminsAndGuestInviters"
@@ -1864,7 +1864,7 @@
       "controlTitle": "CA policies block legacy authentication",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.091Z",
+      "evaluatedAt": "2026-04-15T06:33:08.989Z",
       "pass": true,
       "actualValues": {},
       "failures": [
@@ -1876,7 +1876,7 @@
       "controlTitle": "Managed device required for authentication",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {},
       "failures": [
@@ -1888,7 +1888,7 @@
       "controlTitle": "Managed device required to register security info",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {},
       "failures": [
@@ -1900,7 +1900,7 @@
       "controlTitle": "Device code sign-in flow is blocked",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {},
       "failures": [
@@ -1912,7 +1912,7 @@
       "controlTitle": "Password protection enabled for on-premises AD",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.092Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {},
       "failures": []
@@ -1922,7 +1922,7 @@
       "controlTitle": "SMS authentication method is disabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "authenticationMethodConfigurations[{\"id\":\"Sms\"}].state": "disabled"
@@ -1934,7 +1934,7 @@
       "controlTitle": "Voice authentication method is disabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "authenticationMethodConfigurations[{\"id\":\"Voice\"}].state": "disabled"
@@ -1946,7 +1946,7 @@
       "controlTitle": "System-preferred MFA is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "authenticationMethodsPolicy": "enabled"
@@ -1958,7 +1958,7 @@
       "controlTitle": "AuditDisabled is set to false",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "First Organization": false
@@ -1970,7 +1970,7 @@
       "controlTitle": "Mailbox audit actions are configured",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "adrian.raduti@ampliosoft.com": true,
@@ -1990,7 +1990,7 @@
       "controlTitle": "AuditBypassEnabled is not enabled on mailboxes",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "OrgExtensionProperties0_ED5B1323-0DC1-43D3-96C7-0049903548CF": false,
@@ -2221,17 +2221,17 @@
         "entityserve_tenant_place_EUR.Sub": false,
         "WaveProjectionShard_c2ada927-a9e2-4564-aae2-70775a2fa0af": false,
         "RolloutProgressShard_c2ada927-a9e2-4564-aae2-70775a2fa0af": false,
-        "IDEASIngressAS_TenantRes_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
-        "IDEASIngressAS_Con3Metrics_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
-        "IDEASIngressAS_UsrSearch_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
-        "IDEASIngressAS_UsrRes_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
         "IDEASIngressAS_AgentRes_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
         "IDEASIngressAS_AgentCat_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
         "IDEASIngressAS_Con5Metrics_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
         "IDEASIngressAS_Con4Metrics_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
+        "IDEASIngressAS_UsrSearch_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
+        "IDEASIngressAS_TenantRes_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
         "IDEASIngressAS_UsrAgentRes_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
-        "IDEASIngressAS_Con2Metrics_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
+        "IDEASIngressAS_Con3Metrics_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
+        "IDEASIngressAS_UsrRes_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
         "IDEASIngressAS_Con1Metrics_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
+        "IDEASIngressAS_Con2Metrics_efeae2bd-0297-5ccf-2f19-5120bacc4b45": false,
         "RolloutCheckinShard_c2ada927-a9e2-4564-aae2-70775a2fa0af": false,
         "c587b447-76da-4c49-a1b4-466970c6cd60": false,
         "Vtreat_da5bf381-7146-4b9e-bd8c-859f524eb458": false,
@@ -2248,7 +2248,7 @@
       "controlTitle": "No transport rules redirect to external domains",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {},
       "failures": []
@@ -2258,7 +2258,7 @@
       "controlTitle": "Transport rules do not whitelist domains",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {},
       "failures": []
@@ -2268,7 +2268,7 @@
       "controlTitle": "Modern authentication for Exchange Online is enabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "First Organization": true
@@ -2280,7 +2280,7 @@
       "controlTitle": "MailTips are enabled for end users",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "First Organization": true
@@ -2292,7 +2292,7 @@
       "controlTitle": "SMTP AUTH is disabled",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "Transport Settings": true
@@ -2304,7 +2304,7 @@
       "controlTitle": "Modern authentication for SharePoint is required",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "item": false
@@ -2316,7 +2316,7 @@
       "controlTitle": "Link sharing is restricted in SharePoint and OneDrive",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "item": 2
@@ -2328,7 +2328,7 @@
       "controlTitle": "SharePoint default sharing link permission is View",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L1",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.990Z",
       "pass": true,
       "actualValues": {
         "item": 1
@@ -2340,7 +2340,7 @@
       "controlTitle": "Cannot communicate with trial Teams tenants",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": "Blocked"
@@ -2352,7 +2352,7 @@
       "controlTitle": "Anonymous users and dial-in callers can't start a meeting",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": false
@@ -2364,7 +2364,7 @@
       "controlTitle": "Only people in my org can bypass the lobby",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": "EveryoneInCompany"
@@ -2376,7 +2376,7 @@
       "controlTitle": "Users dialing in can't bypass the lobby",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": false
@@ -2388,7 +2388,7 @@
       "controlTitle": "External participants can't give or request control",
       "frameworkSlug": "cis-m365-3.0",
       "level": "L2",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": false
@@ -2400,7 +2400,7 @@
       "controlTitle": "Authentication Methods migration SHALL be set to Migration Complete",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "authenticationMethodsPolicy": "migrationComplete"
@@ -2412,7 +2412,7 @@
       "controlTitle": "Only administrators SHALL be allowed to register applications",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": false
@@ -2424,7 +2424,7 @@
       "controlTitle": "User consent to applications SHALL be restricted",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {},
       "failures": []
@@ -2434,7 +2434,7 @@
       "controlTitle": "An admin consent workflow SHALL be configured",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": true
@@ -2446,7 +2446,7 @@
       "controlTitle": "Between two and eight users SHALL hold the Global Administrator role",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "count": 4
@@ -2458,7 +2458,7 @@
       "controlTitle": "Privileged users SHALL be provisioned cloud-only accounts",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": null
@@ -2470,7 +2470,7 @@
       "controlTitle": "Guest users SHOULD have limited access to Entra ID directory",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": "10dae51f-b6af-4016-8d66-8c2a99b929b3"
@@ -2482,7 +2482,7 @@
       "controlTitle": "Only users with the Guest Inviter role SHOULD be able to invite guests",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "authorizationPolicy": "adminsAndGuestInviters"
@@ -2494,7 +2494,7 @@
       "controlTitle": "Automatic forwarding to external domains SHALL be disabled",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "Default": "Automatic"
@@ -2506,7 +2506,7 @@
       "controlTitle": "SMTP AUTH SHALL be disabled",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "Transport Settings": true
@@ -2518,7 +2518,7 @@
       "controlTitle": "Calendar details SHALL NOT be shared with all domains",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {},
       "failures": []
@@ -2528,7 +2528,7 @@
       "controlTitle": "Mailbox auditing SHALL be enabled",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "adrian.raduti@ampliosoft.com": true,
@@ -2548,7 +2548,7 @@
       "controlTitle": "Unified Audit logging SHALL be enabled",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "Admin Audit Log Settings": true
@@ -2560,7 +2560,7 @@
       "controlTitle": "Default sharing permissions SHALL be set to view only",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": 1
@@ -2572,7 +2572,7 @@
       "controlTitle": "Expiration days for Anyone links SHALL be set to 30 days or less",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": 30
@@ -2584,7 +2584,7 @@
       "controlTitle": "External participants SHOULD NOT be enabled to request control of shared desktops",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": false
@@ -2596,7 +2596,7 @@
       "controlTitle": "Anonymous users SHALL NOT be enabled to start meetings",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHALL NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": false
@@ -2608,7 +2608,7 @@
       "controlTitle": "Anonymous users and dial-in callers SHOULD NOT be admitted automatically",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": "EveryoneInCompany"
@@ -2620,7 +2620,7 @@
       "controlTitle": "Dial-in users SHOULD NOT be enabled to bypass the lobby",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": false
@@ -2632,7 +2632,7 @@
       "controlTitle": "Record an event SHOULD NOT be set to Always record",
       "frameworkSlug": "scubagear-m365-1.5",
       "level": "SHOULD NOT",
-      "evaluatedAt": "2026-04-14T21:39:26.093Z",
+      "evaluatedAt": "2026-04-15T06:33:08.991Z",
       "pass": true,
       "actualValues": {
         "item": "Disabled"
