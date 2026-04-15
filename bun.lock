@@ -28,6 +28,13 @@
       "name": "@watchtower/web",
       "version": "0.0.1",
     },
+    "packages/adapters": {
+      "name": "@watchtower/adapters",
+      "version": "0.0.1",
+      "dependencies": {
+        "@watchtower/errors": "workspace:*",
+      },
+    },
     "packages/auth": {
       "name": "@watchtower/auth",
       "version": "0.0.1",
@@ -203,6 +210,8 @@
     "@vitest/spy": ["@vitest/spy@4.1.4", "", {}, "sha512-XxNdAsKW7C+FLydqFJLb5KhJtl3PGCMmYwFRfhvIgxJvLSXhhVI1zM8f1qD3Zg7RCjTSzDVyct6sghs9UEgBEQ=="],
 
     "@vitest/utils": ["@vitest/utils@4.1.4", "", { "dependencies": { "@vitest/pretty-format": "4.1.4", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-13QMT+eysM5uVGa1rG4kegGYNp6cnQcsTc67ELFbhNLQO+vgsygtYJx2khvdt4gVQqSSpC/KT5FZZxUpP3Oatw=="],
+
+    "@watchtower/adapters": ["@watchtower/adapters@workspace:packages/adapters"],
 
     "@watchtower/auth": ["@watchtower/auth@workspace:packages/auth"],
 

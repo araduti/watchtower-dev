@@ -42,6 +42,7 @@ watchtower-dev/
 │   ├── web/                       # Next.js 16 app, tRPC server, UI
 │   └── worker/                    # planned: Bun-based worker (Core + Plugin engines)
 ├── packages/                      # shared packages
+│   ├── adapters/                  # Vendor adapter boundary (Graph types, AdapterError)
 │   ├── auth/                      # Better Auth configuration, Org plugin, session resolver
 │   ├── db/                        # Prisma client wrapper, RLS-aware proxy
 │   ├── errors/                    # Two-layer error code catalog (zero dependencies)
@@ -248,6 +249,13 @@ TBD.
 - ✅ 11 routers registered in `_app.ts` (was 3)
 - ✅ 1,038 passing tests (775 existing + 231 Phase 2.0 convention tests + 32 auto-detected)
 
-**Next:** Phase 2.1 (vendor adapter + scan pipeline), Phase 2.2 (UI foundation).
+**Phase 2.1** (scan router & vendor adapter boundary) is complete:
+- ✅ `scan` router — `list` (4 allowlisted filters), `get`, `trigger` (idempotent, duplicate active scan guard), `cancel` (state guard, PENDING/RUNNING only)
+- ✅ `@watchtower/adapters` package — `VendorAdapter<TDataSources>` interface, `GraphDataSources` type map (10 sources), `AdapterError` with retry semantics
+- ✅ ADR-003: Vendor Adapter Boundary — credential decryption, error translation, test seam patterns
+- ✅ 12 routers registered in `_app.ts`
+- ✅ 1,084 passing tests (1,038 existing + 46 new scan convention tests across §1–§15)
+
+**Next:** Phase 2.2 (Graph adapter implementation + Inngest scan pipeline), Phase 3.0 (UI foundation).
 
 For the full roadmap, see `Architecture.md` section 12 ("Open design questions") and section 13.

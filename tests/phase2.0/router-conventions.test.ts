@@ -51,6 +51,7 @@ const PHASE2_ROUTERS = [
   "finding.ts",
   "evidence.ts",
   "audit.ts",
+  "scan.ts",
 ] as const;
 
 /** Routers that contain mutations (create / update / delete / state changes) */
@@ -59,6 +60,7 @@ const MUTATION_ROUTERS = [
   "member.ts",
   "role.ts",
   "finding.ts",
+  "scan.ts",
 ] as const;
 
 /** Routers that are strictly read-only */
@@ -69,7 +71,7 @@ const READ_ONLY_ROUTERS = [
   "audit.ts",
 ] as const;
 
-/** All 11 routers that must be registered in _app.ts */
+/** All 12 routers that must be registered in _app.ts */
 const ALL_REGISTERED_ROUTERS = [
   { key: "audit", export: "auditRouter" },
   { key: "check", export: "checkRouter" },
@@ -79,6 +81,7 @@ const ALL_REGISTERED_ROUTERS = [
   { key: "member", export: "memberRouter" },
   { key: "permission", export: "permissionRouter" },
   { key: "role", export: "roleRouter" },
+  { key: "scan", export: "scanRouter" },
   { key: "scope", export: "scopeRouter" },
   { key: "tenant", export: "tenantRouter" },
   { key: "workspace", export: "workspaceRouter" },
@@ -91,9 +94,9 @@ const ALL_REGISTERED_ROUTERS = [
 describe("§1 — Router registration in _app.ts", () => {
   const appSrc = readRouter("_app.ts");
 
-  it("has exactly 11 routers registered", () => {
+  it("has exactly 12 routers registered", () => {
     const routerFiles = getRouterFiles();
-    expect(routerFiles.length).toBe(11);
+    expect(routerFiles.length).toBe(12);
   });
 
   for (const { key, export: exportName } of ALL_REGISTERED_ROUTERS) {
@@ -407,6 +410,18 @@ describe("§5 — Security conventions", () => {
     });
   });
 
+  describe("scan.ts throws ALREADY_RUNNING and CANNOT_CANCEL", () => {
+    it("throws ALREADY_RUNNING for duplicate active scan", () => {
+      const src = readRouter("scan.ts");
+      expect(src).toContain("ALREADY_RUNNING");
+    });
+
+    it("throws CANNOT_CANCEL for terminal scan states", () => {
+      const src = readRouter("scan.ts");
+      expect(src).toContain("CANNOT_CANCEL");
+    });
+  });
+
   describe("correct permission strings per router", () => {
     it("tenant.ts checks tenants:read, tenants:create, tenants:edit, tenants:delete", () => {
       const src = readRouter("tenant.ts");
@@ -459,6 +474,13 @@ describe("§5 — Security conventions", () => {
     it("audit.ts checks workspace:view_audit_log", () => {
       const src = readRouter("audit.ts");
       expect(src).toContain('"workspace:view_audit_log"');
+    });
+
+    it("scan.ts checks scans:read, scans:trigger, scans:cancel", () => {
+      const src = readRouter("scan.ts");
+      expect(src).toContain('"scans:read"');
+      expect(src).toContain('"scans:trigger"');
+      expect(src).toContain('"scans:cancel"');
     });
   });
 });
@@ -544,6 +566,16 @@ describe("§7 — Scope derivation from resource (not from input)", () => {
       expect(inputSection).not.toContain("scopeId:");
     }
   });
+
+  it("scan.ts derives scopeId from scan/tenant/existing record for permission checks", () => {
+    const src = readRouter("scan.ts");
+    // get procedure derives from scan
+    expect(src).toContain("scopeId: scan.scopeId");
+    // trigger derives from tenant
+    expect(src).toContain("scopeId: tenant.scopeId");
+    // cancel derives from existing record
+    expect(src).toContain("scopeId: existing.scopeId");
+  });
 });
 
 // ==========================================================================
@@ -595,6 +627,17 @@ describe("§8 — deletedAt conventions", () => {
   it("role.ts does NOT filter deletedAt (hard-deleted, no soft-delete)", () => {
     const src = readRouter("role.ts");
     expect(src).not.toContain("deletedAt");
+  });
+
+  it("scan.ts uses deletedAt: null ONLY for tenant lookups (scans are never deleted)", () => {
+    const src = readRouter("scan.ts");
+    // Scan queries themselves never filter on deletedAt — scans are permanent
+    // But the trigger mutation checks tenant.deletedAt: null (tenants can be soft-deleted)
+    expect(src).toContain("deletedAt: null");
+    // The scan findFirst/findMany calls should NOT have deletedAt in their where clauses
+    // Only the tenant lookup has deletedAt: null
+    const triggerBlock = src.slice(src.indexOf("trigger:"), src.indexOf("cancel:"));
+    expect(triggerBlock).toContain("deletedAt: null");
   });
 });
 
@@ -860,6 +903,14 @@ describe("§11 — Router procedure completeness", () => {
     const src = readRouter("audit.ts");
     expect(src).toContain("list:");
   });
+
+  it("scan.ts has list, get, trigger, cancel procedures", () => {
+    const src = readRouter("scan.ts");
+    expect(src).toContain("list:");
+    expect(src).toContain("get:");
+    expect(src).toContain("trigger:");
+    expect(src).toContain("cancel:");
+  });
 });
 
 // ==========================================================================
@@ -951,5 +1002,117 @@ describe("§14 — Tenant-specific conventions", () => {
     expect(src).toContain("softDelete:");
     // Should not have a hard-delete procedure named "delete:"
     expect(src).not.toMatch(/\bdelete:\s*protectedProcedure/);
+  });
+});
+
+// ==========================================================================
+// §15 — Scan-specific conventions
+// ==========================================================================
+
+describe("§15 — Scan-specific conventions", () => {
+  const src = readRouter("scan.ts");
+
+  describe("inngestRunId is NEVER exposed in output", () => {
+    it("SCAN_SELECT does not include inngestRunId", () => {
+      // SCAN_SELECT must not contain inngestRunId: true
+      const selectBlock = src.slice(
+        src.indexOf("SCAN_SELECT"),
+        src.indexOf("// -- list"),
+      );
+      expect(selectBlock).not.toContain("inngestRunId");
+    });
+
+    it("output schema does not include inngestRunId", () => {
+      // Check only the z.object block for scanOutput, not the SCAN_SELECT comment
+      const outputStart = src.indexOf("const scanOutput = z.object");
+      const outputEnd = src.indexOf("});", outputStart) + 3;
+      const outputBlock = src.slice(outputStart, outputEnd);
+      expect(outputBlock).not.toContain("inngestRunId");
+    });
+  });
+
+  describe("trigger procedure conventions", () => {
+    it("trigger creates scan with triggeredBy: MANUAL", () => {
+      const triggerBlock = src.slice(
+        src.indexOf("trigger:"),
+        src.indexOf("cancel:"),
+      );
+      expect(triggerBlock).toContain('"MANUAL"');
+    });
+
+    it("trigger sets triggeredByUserId from session", () => {
+      const triggerBlock = src.slice(
+        src.indexOf("trigger:"),
+        src.indexOf("cancel:"),
+      );
+      expect(triggerBlock).toContain("ctx.session.userId");
+    });
+
+    it("trigger checks for active scans before creating (ALREADY_RUNNING guard)", () => {
+      const triggerBlock = src.slice(
+        src.indexOf("trigger:"),
+        src.indexOf("cancel:"),
+      );
+      expect(triggerBlock).toContain("ALREADY_RUNNING");
+    });
+
+    it("trigger verifies tenant exists and is not soft-deleted", () => {
+      const triggerBlock = src.slice(
+        src.indexOf("trigger:"),
+        src.indexOf("cancel:"),
+      );
+      expect(triggerBlock).toContain("deletedAt: null");
+      expect(triggerBlock).toContain("TENANT.NOT_FOUND");
+    });
+
+    it("trigger writes an audit event", () => {
+      const triggerBlock = src.slice(
+        src.indexOf("trigger:"),
+        src.indexOf("cancel:"),
+      );
+      expect(triggerBlock).toContain("createAuditEvent");
+    });
+  });
+
+  describe("cancel procedure conventions", () => {
+    it("cancel checks state guard (only PENDING or RUNNING can be cancelled)", () => {
+      const cancelBlock = src.slice(src.indexOf("cancel:"));
+      expect(cancelBlock).toContain("CANNOT_CANCEL");
+      expect(cancelBlock).toContain('"PENDING"');
+      expect(cancelBlock).toContain('"RUNNING"');
+    });
+
+    it("cancel sets finishedAt to current time", () => {
+      const cancelBlock = src.slice(src.indexOf("cancel:"));
+      expect(cancelBlock).toContain("finishedAt: new Date()");
+    });
+
+    it("cancel records previousStatus in audit event", () => {
+      const cancelBlock = src.slice(src.indexOf("cancel:"));
+      expect(cancelBlock).toContain("previousStatus: existing.status");
+    });
+
+    it("cancel writes an audit event", () => {
+      const cancelBlock = src.slice(src.indexOf("cancel:"));
+      expect(cancelBlock).toContain("createAuditEvent");
+    });
+  });
+
+  describe("scan list filters are allowlisted", () => {
+    it("list supports scopeId filter", () => {
+      expect(src).toContain("scopeId: z.string().optional()");
+    });
+
+    it("list supports tenantId filter", () => {
+      expect(src).toContain("tenantId: z.string().optional()");
+    });
+
+    it("list supports status filter", () => {
+      expect(src).toContain("status: scanStatus.optional()");
+    });
+
+    it("list supports triggeredBy filter", () => {
+      expect(src).toContain("triggeredBy: scanTrigger.optional()");
+    });
   });
 });
