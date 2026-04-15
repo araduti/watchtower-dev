@@ -24,6 +24,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 import { createAuditEvent } from "@watchtower/db";
+import { inngest } from "@watchtower/scan-pipeline";
 import { throwWatchtowerError } from "../errors.ts";
 import {
   checkIdempotencyKey,
@@ -307,6 +308,25 @@ export const scanRouter = router({
         200,
       );
 
+      // Emit scan/execute event to Inngest to start the scan pipeline.
+      // This is fire-and-forget — if Inngest is down, the scan stays in
+      // PENDING and can be retried. The pipeline will guard against
+      // duplicate execution via the PENDING status check in step 1.
+      try {
+        await inngest.send({
+          name: "scan/execute",
+          data: {
+            scanId: created.id,
+            workspaceId: ctx.session.workspaceId,
+            tenantId: tenant.id,
+            scopeId: tenant.scopeId,
+          },
+        });
+      } catch {
+        // Swallow — the scan record is already persisted in PENDING state.
+        // A retry mechanism or sweeper will pick it up later.
+      }
+
       return created;
     }),
 
@@ -400,6 +420,22 @@ export const scanRouter = router({
         cancelled,
         200,
       );
+
+      // Emit scan/cancel event to Inngest.
+      // This triggers the cancelOn mechanism on the execute-scan function,
+      // aborting the in-progress scan pipeline if it hasn't completed yet.
+      try {
+        await inngest.send({
+          name: "scan/cancel",
+          data: {
+            scanId: existing.id,
+          },
+        });
+      } catch {
+        // Swallow — the cancellation is already recorded in the database.
+        // The execute-scan function will see the CANCELLED status on its
+        // next step and abort naturally.
+      }
 
       return cancelled;
     }),
