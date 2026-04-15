@@ -21,7 +21,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 import {
-  getEvaluator,
+  getBuiltinEvaluator,
   registrySize,
   registeredSlugs,
 } from "../../packages/engine/evaluators/registry";

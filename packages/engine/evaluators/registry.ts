@@ -17,7 +17,7 @@
  * @see docs/decisions/004-single-engine-firecracker-sandbox.md
  */
 
-import type { EvaluatorFn, RegisteredEvaluator } from "./types.ts";
+import type { EvaluatorFn, AsyncEvaluatorFn, RegisteredEvaluator } from "./types.ts";
 import { builtinEvaluators } from "./builtin/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -69,10 +69,10 @@ export function registerAlias(alias: string, targetSlug: string): void {
  * This keeps the registry free of sandbox dependencies.
  *
  * @param slug    - The plugin's stable identifier (must match ControlAssertion.evaluatorSlug)
- * @param wrapper - An EvaluatorFn that wraps the sandbox lifecycle
+ * @param wrapper - An AsyncEvaluatorFn that wraps the sandbox lifecycle
  * @throws If the slug is already registered
  */
-export function registerPlugin(slug: string, wrapper: EvaluatorFn): void {
+export function registerPlugin(slug: string, wrapper: AsyncEvaluatorFn): void {
   if (registry.has(slug)) {
     throw new Error(
       `Plugin slug "${slug}" conflicts with an existing evaluator — ` +
@@ -105,9 +105,25 @@ export function unregisterPlugin(slug: string): boolean {
 
 /**
  * Look up an evaluator by slug. Returns undefined if not found.
+ *
+ * For built-in (non-sandboxed) evaluators, the returned function is
+ * synchronous (EvaluatorFn). For sandboxed (plugin) evaluators, it is
+ * async (AsyncEvaluatorFn). Use `isSandboxed()` to check which type.
  */
-export function getEvaluator(slug: string): EvaluatorFn | undefined {
+export function getEvaluator(slug: string): EvaluatorFn | AsyncEvaluatorFn | undefined {
   return registry.get(slug)?.evaluate;
+}
+
+/**
+ * Look up a built-in (non-sandboxed) evaluator by slug.
+ *
+ * Returns undefined if not found or if the slug is a sandboxed plugin.
+ * The returned function is guaranteed to be synchronous (EvaluatorFn).
+ */
+export function getBuiltinEvaluator(slug: string): EvaluatorFn | undefined {
+  const entry = registry.get(slug);
+  if (!entry || entry.sandboxed) return undefined;
+  return entry.evaluate as EvaluatorFn;
 }
 
 /**
