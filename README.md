@@ -211,7 +211,7 @@ TBD.
 
 ## Status
 
-**Phase 0** (database foundation) is complete: schema, RLS, audit log infrastructure, permission catalog, system roles, dev infrastructure.
+**Phase 0** (database foundation) is complete: schema (20 models, 13 enums, ~50 indexes), RLS, audit log infrastructure, permission catalog (41 permissions, 4 system roles), two-role security boundary, dev infrastructure.
 
 **Phase 1.0** (application foundation) is complete:
 - ✅ Monorepo structure with Bun workspaces (`packages/*`, `apps/*`)
@@ -228,8 +228,26 @@ TBD.
 - ✅ `workspace` router — `workspace.get`, `workspace.updateSettings` (with idempotencyKey, audit log, permission check)
 - ✅ `scope` router — `scope.list` (cursor-paginated), `scope.get` (scope-derived permission check)
 - ✅ ADR-002: Better Auth + Organization plugin decisions
-- ✅ 155 passing tests (57 Phase 0 + 98 Phase 1)
 
-**Phase 1.2** (next): Idempotency middleware (table write/lookup), audit log hash chain construction (Ed25519 signing), rate limiting middleware.
+**Phase 1.2** (infrastructure hardening) is complete:
+- ✅ Idempotency middleware — check/store cycle with SHA-256 request hashing, duplicate key detection
+- ✅ Audit hash chain — Ed25519 signing, per-workspace chains, gap-free sequence numbers, genesis block
+- ✅ In-memory rate limiter — 3 tiers (query: 100/60s, mutation: 30/60s, auth: 10/60s), `X-RateLimit-*` headers
+- ✅ `workspace.updateSettings` refactored to use full idempotency + audit chain
+- ✅ Startup validation tests
 
-For the full roadmap, see `Architecture.md` section 12 ("Open design questions") and section 13 ("What Phase 0 actually delivers").
+**Phase 2.0** (core entity routers) is complete:
+- ✅ `tenant` router — `list` (cursor-paginated, scope-filtered), `get`, `create` (idempotency + audit + duplicate guard), `update`, `softDelete`
+- ✅ `member` router — `list`, `get`, `invite` (duplicate guard), `remove` (owner protection), `updateRole`
+- ✅ `role` router — `list`, `get`, `create` (locked permission validation), `update` (system role guard), `delete`
+- ✅ `check` router — `list` (severity/source filters), `get` — read-only (checks are data)
+- ✅ `framework` router — `list`, `get` — read-only (frameworks are data)
+- ✅ `finding` router — `list` (flagship query with severity/status/scope/visibility filters), `get`, `acknowledge`, `mute`, `acceptRisk`, `resolve` — each state transition as a separate procedure
+- ✅ `evidence` router — `list` (scope-filtered, excludes raw data), `get` — read-only (append-only data)
+- ✅ `audit` router — `list` (chain-ordered, excludes tamper-evidence fields) — read-only
+- ✅ 11 routers registered in `_app.ts` (was 3)
+- ✅ 1,038 passing tests (775 existing + 231 Phase 2.0 convention tests + 32 auto-detected)
+
+**Next:** Phase 2.1 (vendor adapter + scan pipeline), Phase 2.2 (UI foundation).
+
+For the full roadmap, see `Architecture.md` section 12 ("Open design questions") and section 13.
