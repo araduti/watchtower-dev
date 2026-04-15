@@ -198,21 +198,64 @@ These are decisions we have explicitly *not* made and are tracking. They will be
 | Observation table partitioning | Deferred | Range partitioning by month. Not needed until volume justifies it. |
 | Connector abstraction beyond Graph | Designed, not built | `Check.graphScopes` will become a generic `dataSource` field with a connector registry when a second connector is added. |
 
-## 13. What Phase 0 actually delivers
+## 13. What each phase delivers
 
-To make the milestone explicit:
+To make the milestones explicit:
 
-- **19 tables, 13 enum types, ~50 indexes** — the full entity model from `schema.prisma`
+### Phase 0 — Database foundation
+
+- **20 tables, 13 enum types, ~50 indexes** — the full entity model from `schema.prisma`
 - **5 helper functions** in the `app` schema for RLS evaluation
 - **2 audit append-only triggers** on `AuditEvent` and `AuditAccessLog`
 - **RLS enabled** on Finding, AuditEvent, AuditAccessLog, Tenant
 - **The `current_check` materialized view**, populated and indexed
 - **Two-role security boundary** between `watchtower_migrate` and `watchtower_app`, verified by `has_table_privilege`
-- **60 permissions** in the catalog, with **4 locked** to system roles
+- **41 permissions** in the catalog, with **6 locked** to system roles
 - **4 system roles** (Owner, Admin, Compliance Officer, Auditor) with the Owner-holds-everything invariant enforced
 - **Hash-chained, Ed25519-signed audit log infrastructure** (signing key generation deferred to runtime)
 
-What Phase 0 does *not* yet deliver: any application code, any tRPC routers, any UI, any actual scans, the connector to Microsoft Graph, the GitHub App for plugin sync. Those are Phase 1.
+### Phase 1.0 — Application foundation
+
+- **Monorepo structure** with Bun workspaces (`packages/*`, `apps/*`)
+- **`@watchtower/db`** — Singleton PrismaClient, `withRLS()` transaction wrapper, startup validation, soft-delete
+- **`@watchtower/errors`** — Two-layer error code catalog (31 codes: 8 domains, Layer 1 transport + Layer 2 business)
+- **`apps/web`** — tRPC v11 skeleton with `protectedProcedure` and `permission.list` router
+- **ADR-001** — Monorepo structure decisions
+
+### Phase 1.1 — Authentication & middleware
+
+- **`@watchtower/auth`** — Better Auth with Organization plugin, `resolveSession(headers)`
+- **tRPC middleware chain** — session resolution → permission loading (SOFT/STRICT) → RLS wiring via `ctx.db`
+- **`workspace` router** — `get`, `updateSettings` (with idempotencyKey, audit log)
+- **`scope` router** — `list` (cursor-paginated), `get` (scope-derived permission check)
+- **ADR-002** — Better Auth + Organization plugin decisions
+- **Three-layer isolation chain** — application permission + explicit SQL filters + Postgres RLS
+
+### Phase 1.2 — Infrastructure hardening
+
+- **Idempotency middleware** — check/store cycle with SHA-256 request hashing, duplicate key detection, 2xx/4xx caching
+- **Audit hash chain** — Ed25519 signing, per-workspace chains, gap-free `chainSequence`, genesis block (`GENESIS`)
+- **In-memory rate limiter** — 3 tiers (query 100/60s, mutation 30/60s, auth 10/60s), `X-RateLimit-*` headers
+- **`workspace.updateSettings` refactored** — full idempotency + audit chain integration
+- **Startup validation tests** — audit key path, env vars, role identity
+
+### Phase 2.0 — Core entity routers
+
+- **8 new routers** (11 total) covering all core entities:
+  - `tenant` — CRUD + soft-delete, scope-filtered, credential exclusion, duplicate M365 tenant guard
+  - `member` — workspace membership lifecycle, owner removal protection, role assignment
+  - `role` — custom role management, system role immutability guard, locked permission validation
+  - `check` — read-only catalog with severity/source filters
+  - `framework` — read-only compliance framework catalog
+  - `finding` — flagship query with 5 allowlisted filters, 4 state transition procedures (acknowledge, mute, acceptRisk, resolve)
+  - `evidence` — read-only append-only data, excludes large payloads from list
+  - `audit` — read-only hash-chain viewer, excludes tamper-evidence fields
+- **Every mutation** follows: idempotency → existence → permission → mutation + audit in same tx → save idempotency
+- **1,038 passing tests** — 231 new convention tests across 14 categories
+
+### Not yet delivered
+
+Application code: scan execution pipeline, Inngest worker, Microsoft Graph connector, GitHub App for plugin sync, UI, Stripe billing integration, API token management, webhook/SIEM integrations.
 
 ## 14. The tests that hold the schema honest
 
