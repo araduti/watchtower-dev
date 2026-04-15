@@ -253,9 +253,24 @@ To make the milestones explicit:
 - **Every mutation** follows: idempotency → existence → permission → mutation + audit in same tx → save idempotency
 - **1,038 passing tests** — 231 new convention tests across 14 categories
 
+### Phase 2.1 — Scan router & vendor adapter boundary
+
+- **`scan` router** (12 routers total):
+  - `list` — cursor-paginated with 4 allowlisted filters (scopeId, tenantId, status, triggeredBy)
+  - `get` — existence-first, permission-after, excludes `inngestRunId`
+  - `trigger` — idempotent manual scan creation, tenant existence + soft-delete guard, duplicate active scan guard (`ALREADY_RUNNING`)
+  - `cancel` — state guard (only PENDING/RUNNING), sets `CANCELLED` + `finishedAt`, records `previousStatus` in audit
+- **`@watchtower/adapters` package** — vendor adapter boundary (ADR-003):
+  - `VendorAdapter<TDataSources>` interface — the contract all vendor connectors implement
+  - `GraphDataSources` type map — 10 data source types for Microsoft Graph
+  - `AdapterError` — structured error with `kind` (transient, rate_limited, insufficient_scope, credentials_invalid, permanent) and Watchtower error code mapping
+  - `AdapterConfig` / `AdapterResult<T>` — adapter input/output contracts
+- **ADR-003** — Vendor Adapter Boundary decisions (credential decryption, error translation, test seam)
+- **1,084 passing tests** — 46 new scan convention tests across §1–§15
+
 ### Not yet delivered
 
-Application code: scan execution pipeline, Inngest worker, Microsoft Graph connector, GitHub App for plugin sync, UI, Stripe billing integration, API token management, webhook/SIEM integrations.
+Application code: Graph adapter implementation, scan execution pipeline, Inngest worker, GitHub App for plugin sync, UI, Stripe billing integration, API token management, webhook/SIEM integrations.
 
 ## 14. The tests that hold the schema honest
 
