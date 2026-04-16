@@ -2,10 +2,17 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Scan, AlertTriangle } from "lucide-react";
+import { Scan, AlertTriangle, Play } from "lucide-react";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import {
   Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
   Select,
   SelectContent,
   SelectItem,
@@ -13,6 +20,7 @@ import {
   SelectValue,
 } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
+import { InteractiveButton } from "@/components/shared/interactive-button";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
@@ -242,6 +250,8 @@ export default function ScansPage() {
 
   /* ---- Filter state ---- */
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
+  const [triggerOpen, setTriggerOpen] = useState(false);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>("");
 
   /* ---- Pagination state ---- */
   const { cursor, hasPrevPage, goToNextPage, goToPrevPage, reset } = useCursorPagination();
@@ -259,6 +269,21 @@ export default function ScansPage() {
   const scans = (data?.items ?? []) as unknown as ScanItem[];
   const nextCursor = data?.nextCursor ?? null;
 
+  /* ---- Tenant list for trigger dialog ---- */
+  const { data: tenantData } = trpc.tenant.list.useQuery({ limit: 100 });
+  const tenants = tenantData?.items ?? [];
+
+  /* ---- Trigger scan mutation ---- */
+  const utils = trpc.useUtils();
+  const triggerMutation = trpc.scan.trigger.useMutation({
+    onSuccess: (scan) => {
+      utils.scan.list.invalidate();
+      setTriggerOpen(false);
+      setSelectedTenantId("");
+      router.push(`/dashboard/scans/${scan.id}`);
+    },
+  });
+
   /* ---- Reset pagination when filters change ---- */
   const handleStatusChange = useCallback((value: string) => {
     setStatusFilter(value);
@@ -274,6 +299,13 @@ export default function ScansPage() {
   /* ---- Filter controls rendered in the header actions slot ---- */
   const filterControls = (
     <div className="flex items-center gap-3">
+      <InteractiveButton
+        icon={<Play className="h-4 w-4" />}
+        onClick={() => setTriggerOpen(true)}
+        size="sm"
+      >
+        Trigger Scan
+      </InteractiveButton>
       <Select value={statusFilter} onValueChange={handleStatusChange}>
         <SelectTrigger className="w-[160px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
           <SelectValue placeholder="All Statuses" />
@@ -335,6 +367,44 @@ export default function ScansPage() {
           />
         </>
       )}
+      {/* Trigger Scan Dialog */}
+      <Dialog open={triggerOpen} onOpenChange={setTriggerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Trigger Scan</DialogTitle>
+            <DialogDescription>
+              Select a tenant to run a compliance scan against.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Select value={selectedTenantId} onValueChange={setSelectedTenantId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a tenant…" />
+              </SelectTrigger>
+              <SelectContent>
+                {(tenants as Array<{ id: string; displayName: string }>).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.displayName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {triggerMutation.error && (
+              <p className="mt-3 text-sm text-red-400">{triggerMutation.error.message}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTriggerOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!selectedTenantId || triggerMutation.isPending}
+              onClick={() => triggerMutation.mutate({
+                idempotencyKey: crypto.randomUUID(),
+                tenantId: selectedTenantId,
+              })}
+            >
+              {triggerMutation.isPending ? "Triggering…" : "Trigger Scan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

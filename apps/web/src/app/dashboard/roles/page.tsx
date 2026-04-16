@@ -1,7 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { Lock, Plus } from "lucide-react";
-import { Badge } from "@watchtower/ui";
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Input,
+} from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { PageContainer } from "@/components/shared/layouts";
@@ -115,6 +126,12 @@ const columns = [
 /* ------------------------------------------------------------------ */
 
 export default function RolesPage() {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [roleName, setRoleName] = useState("");
+  const [roleSlug, setRoleSlug] = useState("");
+  const [roleDescription, setRoleDescription] = useState("");
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+
   /* ---- Pagination state ---- */
   const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
 
@@ -126,11 +143,34 @@ export default function RolesPage() {
   const roles = (data?.items ?? []) as unknown as Role[];
   const nextCursor = data?.nextCursor ?? null;
 
-  /* ---- Header action: create role button (disabled placeholder) ---- */
+  /* ---- Permission list for create dialog ---- */
+  const { data: permData } = trpc.permission.list.useQuery({});
+  const permissions = (permData?.items ?? []) as Array<{ key: string; category: string }>;
+
+  /* ---- Create role mutation ---- */
+  const utils = trpc.useUtils();
+  const createMutation = trpc.role.create.useMutation({
+    onSuccess: () => {
+      utils.role.list.invalidate();
+      setCreateOpen(false);
+      setRoleName("");
+      setRoleSlug("");
+      setRoleDescription("");
+      setSelectedPermissions([]);
+    },
+  });
+
+  const togglePermission = (key: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  };
+
+  /* ---- Header action: create role button ---- */
   const headerActions = (
     <InteractiveButton
       icon={<Plus className="h-4 w-4" />}
-      disabled
+      onClick={() => setCreateOpen(true)}
     >
       Create Role
     </InteractiveButton>
@@ -181,6 +221,80 @@ export default function RolesPage() {
           />
         </>
       )}
+      {/* Create Role Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Custom Role</DialogTitle>
+            <DialogDescription>
+              Define a custom role with specific permissions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="role-name" className="text-sm font-medium">Name</label>
+              <Input
+                id="role-name"
+                placeholder="e.g. Security Analyst"
+                value={roleName}
+                onChange={(e) => setRoleName(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="role-slug" className="text-sm font-medium">Slug</label>
+              <Input
+                id="role-slug"
+                placeholder="e.g. security-analyst"
+                value={roleSlug}
+                onChange={(e) => setRoleSlug(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="role-desc" className="text-sm font-medium">Description (optional)</label>
+              <Input
+                id="role-desc"
+                placeholder="Brief description of this role"
+                value={roleDescription}
+                onChange={(e) => setRoleDescription(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Permissions ({selectedPermissions.length} selected)</label>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-border/40 p-2">
+                {permissions.map((p) => (
+                  <label key={p.key} className="flex items-center gap-2 py-1 px-1 hover:bg-muted/30 rounded cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedPermissions.includes(p.key)}
+                      onChange={() => togglePermission(p.key)}
+                      className="rounded border-border"
+                    />
+                    <span className="font-mono text-xs text-muted-foreground">{p.key}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {createMutation.error && (
+              <p className="text-sm text-red-400">{createMutation.error.message}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!roleName || !roleSlug || selectedPermissions.length === 0 || createMutation.isPending}
+              onClick={() => createMutation.mutate({
+                idempotencyKey: crypto.randomUUID(),
+                name: roleName,
+                slug: roleSlug,
+                ...(roleDescription ? { description: roleDescription } : {}),
+                permissionKeys: selectedPermissions,
+              })}
+            >
+              {createMutation.isPending ? "Creating…" : "Create Role"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }
