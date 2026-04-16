@@ -53,14 +53,13 @@ export function TopNav() {
         {/* Logo */}
         <Link
           href="/dashboard"
-          className="flex items-center shrink-0"
+          className="flex items-center shrink-0 hover:opacity-80 transition-opacity"
         >
           <Image
             src="/logo.png"
             alt="Watchtower"
             width={28}
             height={28}
-            className="h-7 w-auto"
             priority
           />
         </Link>
