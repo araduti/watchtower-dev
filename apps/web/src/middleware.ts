@@ -10,6 +10,17 @@
  * Better Auth stores sessions in a `better-auth.session_token` cookie.
  * If the cookie is absent, the user cannot have a valid session, so we
  * redirect early and avoid rendering the dashboard shell with stale UI.
+ *
+ * Threat model:
+ * - No cookie → definitely no session → redirect (this middleware).
+ * - Cookie present but invalid/expired → dashboard shell renders, but
+ *   every tRPC call returns UNAUTHORIZED via `enforceAuth` middleware,
+ *   which validates the session against the database. The UI handles
+ *   this by showing re-authentication prompts.
+ * - An attacker setting a fake cookie bypasses this middleware but gains
+ *   no data access — all data flows through tRPC which requires a valid
+ *   database-backed session. The middleware is a UX optimization, not a
+ *   security boundary.
  */
 
 import { NextResponse } from "next/server";

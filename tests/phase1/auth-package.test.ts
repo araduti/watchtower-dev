@@ -56,6 +56,8 @@ describe("@watchtower/auth package", () => {
     it("uses Prisma adapter from @watchtower/db (not raw pg connection)", () => {
       expect(src).toContain("prismaAdapter");
       expect(src).toContain("@watchtower/db");
+      // Verify the adapter is wired into the database config
+      expect(src).toMatch(/database:\s*prismaAdapter/);
     });
 
     it("validates BETTER_AUTH_SECRET is set", () => {

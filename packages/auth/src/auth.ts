@@ -19,6 +19,12 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
+// Better Auth operates at the infrastructure layer (below RLS). It manages
+// its own tables (user, session, account, organization) which are NOT
+// workspace-scoped and therefore not subject to RLS policies. Using the
+// unwrapped singleton PrismaClient here is intentional and necessary —
+// Better Auth has no tRPC context and must access session/user tables
+// directly, similar to how startup validation and migration tooling work.
 import { prisma } from "@watchtower/db";
 
 const secret = process.env["BETTER_AUTH_SECRET"];
