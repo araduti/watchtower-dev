@@ -64,4 +64,5 @@ Specialized agents are available in `.github/agents/` for domain-specific tasks.
 - **architect-reviewer** — Multi-tenant architecture decisions
 - **devops-engineer** — CI/CD, Docker Compose, deployment
 - **database-administrator** — PostgreSQL 18, migrations, RLS policies
+- **frontend-designer** — Premium dashboard UI, design tokens, component registries, Phase 3 UI foundation
 - **fullstack-developer** — End-to-end feature development across the stack
