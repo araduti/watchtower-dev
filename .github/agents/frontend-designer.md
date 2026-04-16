@@ -197,9 +197,10 @@ export default async function FindingsPage({
 import { trpc } from "@/lib/trpc";
 
 export function ScanTriggerButton({ tenantId }: { tenantId: string }) {
+  const utils = trpc.useUtils();
   const mutation = trpc.scan.trigger.useMutation({
     onSuccess: () => {
-      trpc.scan.list.invalidate();
+      utils.scan.list.invalidate();
     },
     onError: (error) => {
       switch (error.data?.cause?.errorCode) {
