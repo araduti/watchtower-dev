@@ -3,11 +3,20 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Scan, AlertTriangle } from "lucide-react";
-import { Badge } from "@watchtower/ui/badge";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
+import {
+  Badge,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
+import { CursorPagination } from "@/components/shared/pagination";
 import { ScanStatusIcon } from "@/components/shared/status-icon";
 
 /* ------------------------------------------------------------------ */
@@ -234,9 +243,13 @@ export default function ScansPage() {
   /* ---- Filter state ---- */
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
 
+  /* ---- Pagination state ---- */
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage, reset } = useCursorPagination();
+
   /* ---- Build query input ---- */
   const queryInput = {
     limit: DEFAULT_PAGE_SIZE,
+    cursor,
     ...(statusFilter !== ALL_FILTER && { status: statusFilter }),
   };
 
@@ -244,6 +257,13 @@ export default function ScansPage() {
     trpc.scan.list.useQuery(queryInput);
 
   const scans = (data?.items ?? []) as unknown as ScanItem[];
+  const nextCursor = data?.nextCursor ?? null;
+
+  /* ---- Reset pagination when filters change ---- */
+  const handleStatusChange = useCallback((value: string) => {
+    setStatusFilter(value);
+    reset();
+  }, [reset]);
 
   /* ---- Row click handler ---- */
   const handleRowClick = useCallback(
@@ -254,18 +274,18 @@ export default function ScansPage() {
   /* ---- Filter controls rendered in the header actions slot ---- */
   const filterControls = (
     <div className="flex items-center gap-3">
-      <select
-        value={statusFilter}
-        onChange={(e) => setStatusFilter(e.target.value)}
-        aria-label="Filter by status"
-        className="h-9 rounded-2xl border border-border/40 bg-card/80 px-3 text-xs text-foreground backdrop-blur-md outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
-      >
-        {STATUS_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      <Select value={statusFilter} onValueChange={handleStatusChange}>
+        <SelectTrigger className="w-[160px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
+          <SelectValue placeholder="All Statuses" />
+        </SelectTrigger>
+        <SelectContent className="rounded-2xl border-border/40 bg-card backdrop-blur-md">
+          {STATUS_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 
@@ -298,12 +318,22 @@ export default function ScansPage() {
 
       {/* Data table */}
       {!isLoading && !isError && scans.length > 0 && (
-        <DataTable<ScanItem>
-          columns={columns}
-          data={scans}
-          getKey={(s) => s.id}
-          onRowClick={handleRowClick}
-        />
+        <>
+          <DataTable<ScanItem>
+            columns={columns}
+            data={scans}
+            getKey={(s) => s.id}
+            onRowClick={handleRowClick}
+          />
+          <CursorPagination
+            hasNextPage={nextCursor !== null}
+            hasPrevPage={hasPrevPage}
+            onNextPage={() => { if (nextCursor) goToNextPage(nextCursor); }}
+            onPrevPage={goToPrevPage}
+            isLoading={isLoading}
+            className="mt-2"
+          />
+        </>
       )}
     </PageContainer>
   );

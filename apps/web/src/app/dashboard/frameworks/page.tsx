@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, ExternalLink, Layers } from "lucide-react";
 import { Badge } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
+import { CursorPagination } from "@/components/shared/pagination";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -113,10 +115,14 @@ const columns = [
 export default function FrameworksPage() {
   const router = useRouter();
 
+  /* ---- Pagination state ---- */
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
+
   const { data, isLoading, isError, error } =
-    trpc.framework.list.useQuery({ limit: DEFAULT_PAGE_SIZE });
+    trpc.framework.list.useQuery({ limit: DEFAULT_PAGE_SIZE, cursor });
 
   const frameworks = (data?.items ?? []) as unknown as Framework[];
+  const nextCursor = data?.nextCursor ?? null;
 
   /* ---- Row click handler ---- */
   const handleRowClick = useCallback(
@@ -152,12 +158,22 @@ export default function FrameworksPage() {
 
       {/* Data table */}
       {!isLoading && !isError && frameworks.length > 0 && (
-        <DataTable<Framework>
-          columns={columns}
-          data={frameworks}
-          getKey={(fw) => fw.id}
-          onRowClick={handleRowClick}
-        />
+        <>
+          <DataTable<Framework>
+            columns={columns}
+            data={frameworks}
+            getKey={(fw) => fw.id}
+            onRowClick={handleRowClick}
+          />
+          <CursorPagination
+            hasNextPage={nextCursor !== null}
+            hasPrevPage={hasPrevPage}
+            onNextPage={() => { if (nextCursor) goToNextPage(nextCursor); }}
+            onPrevPage={goToPrevPage}
+            isLoading={isLoading}
+            className="mt-2"
+          />
+        </>
       )}
     </PageContainer>
   );

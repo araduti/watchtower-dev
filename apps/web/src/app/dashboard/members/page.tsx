@@ -3,9 +3,11 @@
 import { Users, UserPlus } from "lucide-react";
 import { Badge } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
+import { CursorPagination } from "@/components/shared/pagination";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 
 /* ------------------------------------------------------------------ */
@@ -115,11 +117,16 @@ const columns = [
 /* ------------------------------------------------------------------ */
 
 export default function MembersPage() {
+  /* ---- Pagination state ---- */
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
+
   const { data, isLoading, isError, error } = trpc.member.list.useQuery({
     limit: DEFAULT_PAGE_SIZE,
+    cursor,
   });
 
   const members = (data?.items ?? []) as unknown as Member[];
+  const nextCursor = data?.nextCursor ?? null;
 
   /* ---- Header action: invite button (disabled placeholder) ---- */
   const headerActions = (
@@ -160,11 +167,21 @@ export default function MembersPage() {
 
       {/* Data table */}
       {!isLoading && !isError && members.length > 0 && (
-        <DataTable<Member>
-          columns={columns}
-          data={members}
-          getKey={(m) => m.id}
-        />
+        <>
+          <DataTable<Member>
+            columns={columns}
+            data={members}
+            getKey={(m) => m.id}
+          />
+          <CursorPagination
+            hasNextPage={nextCursor !== null}
+            hasPrevPage={hasPrevPage}
+            onNextPage={() => { if (nextCursor) goToNextPage(nextCursor); }}
+            onPrevPage={goToPrevPage}
+            isLoading={isLoading}
+            className="mt-2"
+          />
+        </>
       )}
     </PageContainer>
   );

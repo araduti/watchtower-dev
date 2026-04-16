@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import {
   Badge,
   Select,
@@ -15,6 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
+import { CursorPagination } from "@/components/shared/pagination";
 import { FindingStateIcon } from "@/components/shared/status-icon";
 
 /* ------------------------------------------------------------------ */
@@ -206,9 +208,13 @@ export default function FindingsPage() {
   const [severityFilter, setSeverityFilter] = useState<string>(ALL_FILTER);
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
 
+  /* ---- Pagination state ---- */
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage, reset } = useCursorPagination();
+
   /* ---- Build query input ---- */
   const queryInput = {
     limit: DEFAULT_PAGE_SIZE,
+    cursor,
     ...(severityFilter !== ALL_FILTER && { severity: severityFilter }),
     ...(statusFilter !== ALL_FILTER && { status: statusFilter }),
   };
@@ -217,6 +223,18 @@ export default function FindingsPage() {
     trpc.finding.list.useQuery(queryInput);
 
   const findings = (data?.items ?? []) as unknown as Finding[];
+  const nextCursor = data?.nextCursor ?? null;
+
+  /* ---- Reset pagination when filters change ---- */
+  const handleSeverityChange = useCallback((value: string) => {
+    setSeverityFilter(value);
+    reset();
+  }, [reset]);
+
+  const handleStatusChange = useCallback((value: string) => {
+    setStatusFilter(value);
+    reset();
+  }, [reset]);
 
   /* ---- Row click handler ---- */
   const handleRowClick = useCallback(
@@ -228,7 +246,7 @@ export default function FindingsPage() {
   const filterControls = (
     <div className="flex items-center gap-3">
       {/* Severity filter */}
-      <Select value={severityFilter} onValueChange={setSeverityFilter}>
+      <Select value={severityFilter} onValueChange={handleSeverityChange}>
         <SelectTrigger className="w-[160px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
           <SelectValue placeholder="All Severities" />
         </SelectTrigger>
@@ -242,7 +260,7 @@ export default function FindingsPage() {
       </Select>
 
       {/* Status filter */}
-      <Select value={statusFilter} onValueChange={setStatusFilter}>
+      <Select value={statusFilter} onValueChange={handleStatusChange}>
         <SelectTrigger className="w-[160px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
           <SelectValue placeholder="All Statuses" />
         </SelectTrigger>
@@ -286,12 +304,22 @@ export default function FindingsPage() {
 
       {/* Data table */}
       {!isLoading && !isError && findings.length > 0 && (
-        <DataTable<Finding>
-          columns={columns}
-          data={findings}
-          getKey={(f) => f.id}
-          onRowClick={handleRowClick}
-        />
+        <>
+          <DataTable<Finding>
+            columns={columns}
+            data={findings}
+            getKey={(f) => f.id}
+            onRowClick={handleRowClick}
+          />
+          <CursorPagination
+            hasNextPage={nextCursor !== null}
+            hasPrevPage={hasPrevPage}
+            onNextPage={() => { if (nextCursor) goToNextPage(nextCursor); }}
+            onPrevPage={goToPrevPage}
+            isLoading={isLoading}
+            className="mt-2"
+          />
+        </>
       )}
     </PageContainer>
   );

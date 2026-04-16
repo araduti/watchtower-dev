@@ -1,12 +1,15 @@
 "use client";
 
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Plus } from "lucide-react";
 import { Badge } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
+import { CursorPagination } from "@/components/shared/pagination";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 
 /* ------------------------------------------------------------------ */
@@ -110,11 +113,22 @@ const columns = [
 
 export default function TenantsPage() {
   const router = useRouter();
+
+  /* ---- Pagination state ---- */
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
+
   const { data, isLoading, isError, error } = trpc.tenant.list.useQuery({
     limit: DEFAULT_PAGE_SIZE,
+    cursor,
   });
 
   const tenants = (data?.items ?? []) as unknown as Tenant[];
+  const nextCursor = data?.nextCursor ?? null;
+
+  const handleRowClick = useCallback(
+    (t: Tenant) => router.push(`/dashboard/tenants/${t.id}`),
+    [router],
+  );
 
   return (
     <PageContainer
@@ -161,12 +175,22 @@ export default function TenantsPage() {
 
       {/* Data table */}
       {!isLoading && !isError && tenants.length > 0 && (
-        <DataTable<Tenant>
-          columns={columns}
-          data={tenants}
-          getKey={(t) => t.id}
-          onRowClick={(t) => router.push(`/dashboard/tenants/${t.id}`)}
-        />
+        <>
+          <DataTable<Tenant>
+            columns={columns}
+            data={tenants}
+            getKey={(t) => t.id}
+            onRowClick={handleRowClick}
+          />
+          <CursorPagination
+            hasNextPage={nextCursor !== null}
+            hasPrevPage={hasPrevPage}
+            onNextPage={() => { if (nextCursor) goToNextPage(nextCursor); }}
+            onPrevPage={goToPrevPage}
+            isLoading={isLoading}
+            className="mt-2"
+          />
+        </>
       )}
     </PageContainer>
   );
