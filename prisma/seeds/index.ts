@@ -26,6 +26,7 @@ import {
   upsertPermissions,
   upsertSystemRoles,
 } from "./permissions";
+import { DEV_USER, seedDevData, dryRunDevData } from "./dev-data";
 
 // =============================================================================
 // CLI ARGUMENT PARSING
@@ -67,6 +68,7 @@ Usage:
 Available seeders:
   permissions    Permission catalog and locked list
   roles          System role presets (Owner, Admin, Compliance Officer, Auditor)
+  dev-data       Dev user, workspace, scope, and tenant (dev only)
 
 Examples:
   bun run db:seed -- --dry-run
@@ -168,6 +170,23 @@ const SEEDERS: readonly Seeder[] = [
         log.info(`  • ${role.name} (${role.slug}): ${role.permissions.length} permissions`);
       }
       return SYSTEM_ROLES.length;
+    },
+  },
+  {
+    name: "dev-data",
+    description: "Dev user, workspace, scope, and tenant (dev only)",
+    run: async (db) => {
+      const env = process.env.NODE_ENV ?? "development";
+      if (env === "production") {
+        log.warn("Skipping dev-data seeder in production.");
+        return 0;
+      }
+      const count = await seedDevData(db);
+      log.info(`Dev user: ${DEV_USER.email} (password: see .env.example or README)`);
+      return count;
+    },
+    dryRun: async () => {
+      return dryRunDevData();
     },
   },
 ];
