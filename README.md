@@ -3,7 +3,9 @@
 
 Watchtower is a multi-tenant compliance platform for Microsoft 365. It runs automated CIS / NIST audits with GitOps-driven custom logic, serving everyone from MSPs managing hundreds of tenants to enterprises managing legally-isolated business units — from the same codebase, with the same data model.
 
-This document is for contributors. For the system design, see [`Architecture.md`](./Architecture.md). For schema rationale, see [`Schema-Design-Notes.md`](./Schema-Design-Notes.md). For API conventions, see [`API-Conventions.md`](./API-Conventions.md).
+Watchtower treats compliance as structured knowledge, not a product feature. Frameworks, checks, controls, and the mappings between them are rows in a database — a new CIS version is a migration, a customer's internal policy is a pull request against their own GitHub repo, and an auditor's bespoke control is a record, not a release. Built-in checks and customer-authored checks are the same kind of object, executed by the same engine, reviewed through the same approval flow. For the full principles behind the platform, see [`PRINCIPLES.md`](./PRINCIPLES.md).
+
+This document is for contributors. For the system design, see [`docs/Architecture.md`](./docs/Architecture.md). For schema rationale, see [`docs/Schema-Design-Notes.md`](./docs/Schema-Design-Notes.md). For API conventions, see [`docs/API-Conventions.md`](./docs/API-Conventions.md). For broader code conventions (audit logging, soft-delete, testing, vendor adapters), see [`docs/Code-Conventions.md`](./docs/Code-Conventions.md).
 
 ## Quick start
 
@@ -24,12 +26,12 @@ docker compose -f docker-compose.dev.yml up -d
 sleep 15  # wait for the Postgres role bootstrap to complete
 
 # 4. Apply schema, generate client, and seed
-bunx prisma migrate deploy
-bunx prisma generate
-bun run db:seed
+bun run db:migrate          # applies pending migrations via watchtower_migrate role
+bun run db:generate         # regenerates the Prisma client
+bun run db:seed             # seeds permission catalog + system roles
 
-# 5. Start the app (available from Phase 3.0)
-# bun run dev
+# 5. Start the app
+bun run dev
 ```
 
 The web app runs at `http://localhost:3000`. The Inngest dev UI runs at `http://localhost:8288`.
@@ -40,25 +42,32 @@ If anything in steps 3–4 fails, the most likely cause is something else listen
 
 ```
 watchtower-dev/
-├── apps/                          # application code
-│   ├── web/                       # Next.js 16 app, tRPC server, UI
-│   └── worker/                    # planned: Bun-based worker (Core + Plugin engines)
-├── packages/                      # shared packages
+├── apps/
+│   ├── web/                       # Next.js 16 app (App Router, tRPC v11, dashboard UI)
+│   │   └── src/
+│   │       ├── app/dashboard/     # Dashboard pages (findings, scans, tenants, members, …)
+│   │       ├── components/        # React components (compliance, dashboard, shared)
+│   │       ├── lib/               # tRPC client, utilities
+│   │       └── server/            # tRPC routers (13 routers), middleware, error handling
+│   └── worker/                    # Bun-based worker (scan pipeline, plugin evaluation)
+├── packages/
 │   ├── adapters/                  # Vendor adapter boundary (Graph types, AdapterError)
 │   ├── auth/                      # Better Auth configuration, Org plugin, session resolver
 │   ├── db/                        # Prisma client wrapper, RLS-aware proxy
+│   ├── engine/                    # Compliance engine — evaluator registry, assertions
 │   ├── errors/                    # Two-layer error code catalog (zero dependencies)
-│   ├── engine/                    # Compliance engine — evaluator registry, built-in evaluators
 │   ├── sandbox/                   # Firecracker microVM lifecycle manager for plugin sandboxing
-│   └── ui/                        # planned: Shared Tailwind / shadcn components
+│   ├── scan-pipeline/             # Inngest functions (execute-scan, handle-cancellation)
+│   └── ui/                        # Shared Tailwind / shadcn components (button, card, dialog, …)
 ├── prisma/
 │   ├── schema.prisma              # Entity model — single source of truth
-│   ├── migrations/                # Versioned migrations
-│   │   ├── <ts>_init/             # Tables, enums, indexes
-│   │   └── <ts>_rls_setup/        # RLS policies, triggers, helpers, mat views
+│   ├── migrations/                # Versioned migrations (init, RLS, grants, policies, renames)
 │   └── seeds/
 │       ├── permissions.ts         # Permission catalog + system roles
 │       └── index.ts               # Seed runner (dry-run, --only, --force)
+├── tests/                         # Test suites organised by phase
+│   ├── factories/                 # Test factory helpers
+│   ├── phase0/ … phase2.2/       # Convention + integration tests
 ├── docker/
 │   ├── postgres/init/
 │   │   └── 01-create-roles.sh     # Role bootstrap, runs once on first init
@@ -69,19 +78,23 @@ watchtower-dev/
 │   ├── Architecture.md            # System architecture
 │   ├── Schema-Design-Notes.md     # Why the schema is the way it is
 │   ├── API-Conventions.md         # tRPC, errors, pagination, RBAC patterns
+│   ├── Code-Conventions.md        # Audit log, soft-delete, testing, vendor adapters
 │   └── decisions/                 # Architecture Decision Records
 │       ├── 001-monorepo-structure.md
-│       └── 002-better-auth-integration.md
-├── docker-compose.dev.yml         # Local infra (Postgres, Garage, Inngest)
-├── docker-compose.prod.yml        # planned: production stack
+│       ├── 002-better-auth-integration.md
+│       ├── 003-vendor-adapter-boundary.md
+│       ├── 003-plugin-evaluator-contract.md
+│       └── 004-single-engine-firecracker-sandbox.md
+├── docker-compose.dev.yml         # Local infra (Postgres 18, Garage S3, Inngest)
+├── docker-compose.prod.yml        # Production stack (planned)
 ├── prisma.config.ts               # Prisma 7 config — points at MIGRATE URL
+├── PRINCIPLES.md                  # Platform vision and design principles
 ├── .env.example                   # Canonical env var list
 ├── package.json
 ├── tsconfig.json
+├── vitest.config.ts
 └── README.md
 ```
-
-The `apps/` and `packages/` directories contain the application foundation built across Phase 1.0 and 1.1. The database foundation (schema, migrations, RLS, seeds, bootstrap infrastructure) was established in Phase 0.
 
 ## Tech stack
 
@@ -93,7 +106,8 @@ The `apps/` and `packages/` directories contain the application foundation built
 | Authentication | Better Auth (Organization plugin) |
 | Background jobs | Inngest (stateful workflow orchestration) |
 | Object storage | Garage S3 (evidence vault) |
-| Execution engine | Bun (single engine), Firecracker microVMs (plugin sandbox) |
+| Execution engine | Single Bun engine, Firecracker microVMs (plugin sandbox) |
+| UI components | Tailwind CSS 4, shadcn/ui (Radix primitives) |
 | Infrastructure | Docker Compose on a single NUC |
 | Billing | Stripe (metered) |
 | Observability | OpenTelemetry (planned) |
@@ -121,17 +135,22 @@ Copy `.env.example` to `.env` and fill in any blanks. The defaults in `.env.exam
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `GITHUB_APP_ID` | GitHub App for syncing customer policy repos |
 | `GITHUB_APP_PRIVATE_KEY_PATH` | Path to GitHub App private key (file, not value) |
+| `WATCHTOWER_SANDBOX_MODE` | Plugin sandbox: `production` (Firecracker) or `dev` (in-process) |
 
-The two database URLs are deliberate. `DATABASE_URL` is used by the application at runtime and connects as a role with no DDL rights and no RLS bypass. `DATABASE_MIGRATE_URL` is used by Prisma's CLI and the seed runner, connects as a role with full DDL rights and BYPASSRLS, and exists only for ~30 seconds during deploys. **Mixing these up is the worst kind of security bug a future contributor can introduce — application code that connects with the migrate URL silently disables every isolation guarantee in the system.** When we add startup validation in Phase 1, the application will refuse to boot if it detects the wrong role.
+The two database URLs are deliberate. `DATABASE_URL` is used by the application at runtime and connects as a role with no DDL rights and no RLS bypass. `DATABASE_MIGRATE_URL` is used by Prisma's CLI and the seed runner, connects as a role with full DDL rights and BYPASSRLS, and exists only for ~30 seconds during deploys. **Mixing these up is the worst kind of security bug a future contributor can introduce — application code that connects with the migrate URL silently disables every isolation guarantee in the system.**
 
 ## Common tasks
 
 ```bash
+# Development
+bun run dev                       # Start the Next.js app (Turbopack)
+bun run build                     # Production build
+
 # Database
-bunx prisma migrate deploy        # Apply pending migrations
-bunx prisma migrate dev --name x  # Create a new migration from schema changes
-bunx prisma generate              # Regenerate the Prisma client
-bunx prisma studio                # Browse the database in a web UI
+bun run db:migrate                # Apply pending migrations (uses MIGRATE URL)
+bun run db:migrate:dev --name x   # Create a new migration from schema changes
+bun run db:generate               # Regenerate the Prisma client
+bun run db:studio                 # Browse the database in a web UI
 
 # Seeds
 bun run db:seed -- --dry-run      # Validate seed data without writing
@@ -139,27 +158,34 @@ bun run db:seed                   # Apply permission catalog + system roles
 bun run db:seed -- --only=permissions  # Run a single seeder
 bun run db:seed -- --force        # Required in production
 
-# Reset (development only — wipes the database)
-docker compose -f docker-compose.dev.yml down -v
-docker compose -f docker-compose.dev.yml up -d
+# Testing
+bun run test                      # Run all tests (vitest)
+bun run test:unit                 # Pure logic, no I/O
+bun run test:watch                # Watch mode
+
+# Type checking
+bun run typecheck                 # tsc --noEmit
+
+# Full reset (development only — wipes the database)
+bun run db:reset                  # docker compose down -v && up -d
 sleep 15
-bunx prisma migrate deploy
-bunx prisma generate
+bun run db:migrate
+bun run db:generate
 bun run db:seed
 ```
 
 ## Development conventions
 
-The full conventions doc is `API-Conventions.md`. The non-negotiables every contributor needs to know on day one:
+The full conventions are in [`docs/Code-Conventions.md`](./docs/Code-Conventions.md) and [`docs/API-Conventions.md`](./docs/API-Conventions.md). The non-negotiables every contributor needs to know on day one:
 
-- **Never instantiate `new PrismaClient()` directly.** Always use the RLS-wrapped client from tRPC context. Bypassing RLS is a critical security violation.
+- **Never instantiate `new PrismaClient()` directly.** Always use the RLS-wrapped client from tRPC context (`ctx.db`). Bypassing RLS is a critical security violation.
 - **Every tRPC mutation requires an `idempotencyKey` (UUID v4) in its input.** Missing key returns 400.
 - **Every tRPC procedure starts with `ctx.requirePermission("...", { scopeId })`.** Authorization checks happen before any SQL.
 - **Use Zod for every input and output schema.** No `z.any()`, no `z.unknown()`.
 - **Use cursor-based pagination, not offset.** Standard shape: `{ cursor, limit }` in, `{ items, nextCursor }` out.
 - **Audit log entries are written for every state-changing mutation, in the same database transaction as the change itself.**
 - **Soft-delete via `deletedAt` for Workspace, Scope, and Tenant.** Audit log foreign keys use `onDelete: Restrict` — you cannot cascade-destroy compliance evidence.
-- **Filter out `deletedAt: null` on every query** unless the operation explicitly accesses archived data.
+- **Filter `deletedAt: null` on every query** unless the operation explicitly accesses archived data.
 - **No secrets in env vars marked `NEXT_PUBLIC_`.** Browser-accessible variables must use that prefix; secrets must never use it.
 - **No raw `Error` throws in tRPC routers.** Always use `TRPCError` with a hierarchical Layer 2 code in `cause.errorCode`.
 
@@ -174,7 +200,6 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 Every PR must satisfy these before review:
 
 - [ ] `bun run typecheck` passes
-- [ ] `bun run lint` passes
 - [ ] `bun run test` passes
 - [ ] No new `new PrismaClient()` instantiations outside the RLS-wrapped client
 - [ ] No secrets, credentials, or tokens in logs or API responses
@@ -182,95 +207,64 @@ Every PR must satisfy these before review:
 - [ ] Workspace-scoped queries filter on `deletedAt IS NULL` (or document why not)
 - [ ] New tables carrying `workspaceId` have RLS enabled
 - [ ] Schema changes have a corresponding migration committed
-- [ ] API changes have a corresponding entry in `API-Reference.md` (when that doc exists)
 - [ ] Architectural decisions have a corresponding ADR in `docs/decisions/`
 - [ ] New permissions added to the catalog include a description, category, and `scopeApplicability`
 - [ ] If a permission is added, the Owner system role is updated to include it (the seed validator will catch this anyway, but better to do it intentionally)
 
-### Testing tiers
+### Testing
 
 ```bash
-bun run test:unit          # Pure logic, no I/O
-bun run test:integration   # Against the Docker dev stack
-bun run test:e2e           # Full request lifecycle
+bun run test                      # All tests
+bun run test:unit                 # Pure logic, no I/O
+bun run test:watch                # Watch mode
 ```
 
-Integration tests require the dev stack to be running. Use the factory helpers in `tests/factories/` — never hard-code `workspaceId` or `scopeId` values.
+Integration tests require the dev stack to be running (`docker compose -f docker-compose.dev.yml up -d`). Use the factory helpers in `tests/factories/` — never hard-code `workspaceId` or `scopeId` values.
 
 ## Architecture at a glance
 
 Watchtower's data model is built around a few opinionated commitments:
 
-- **Findings are durable, scans are ephemeral.** A scan is an event that produces observations, which update findings. Findings persist across scans and carry the full lifecycle (open, acknowledged, accepted_risk, resolved). Most compliance tools get this backwards.
+- **Findings are durable, scans are ephemeral.** A scan is an event that produces evidence, which updates findings. Findings persist across scans and carry the full lifecycle (open, acknowledged, accepted_risk, resolved). Most compliance tools get this backwards.
 - **Three customer shapes, one model.** A 600-tenant MSP and a 5-legal-entity enterprise share the same Workspace → Scope → Tenant hierarchy. The difference is a single configuration value (`scopeIsolationMode`) per workspace.
 - **Permission-first RBAC.** The catalog of permissions is the source of truth. Roles are bags of permissions. Customers define their own. Four built-in system roles cover ~80% of needs.
 - **Defense in depth on isolation.** Application permission check + explicit SQL filters + Postgres RLS. Three independent layers, each catching a different class of bug.
 - **Audit log is tamper-evident, not tamper-proof.** Hash chain + Ed25519 signatures + database-enforced append-only. Any tampering is provably detectable.
 - **API-first.** The web UI is one client among many. The API is the product.
+- **Self-hosted by design.** The platform deploys where the customer needs it — on their hardware, in their jurisdiction, inside their network boundary.
 
-For the full picture, read `Architecture.md`. For schema rationale, read `Schema-Design-Notes.md`.
+For the full picture, read [`docs/Architecture.md`](./docs/Architecture.md). For schema rationale, read [`docs/Schema-Design-Notes.md`](./docs/Schema-Design-Notes.md).
+
+## Status
+
+**Phase 0** (database foundation) — ✅ complete
+Schema (20+ models, 13 enums, ~50 indexes), RLS, audit log infrastructure, permission catalog (41 permissions, 4 system roles), two-role security boundary, dev infrastructure.
+
+**Phase 1.0** (application foundation) — ✅ complete
+Monorepo structure, `@watchtower/db` (RLS-aware Prisma wrapper), `@watchtower/errors` (two-layer error catalog), tRPC v11 skeleton.
+
+**Phase 1.1** (authentication & middleware) — ✅ complete
+`@watchtower/auth` (Better Auth + Organization plugin), session resolution, permission loading, RLS wiring, `workspace` and `scope` routers.
+
+**Phase 1.2** (infrastructure hardening) — ✅ complete
+Idempotency middleware, audit hash chain (Ed25519), rate limiter (3 tiers), startup validation.
+
+**Phase 2.0** (core entity routers) — ✅ complete
+`tenant`, `member`, `role`, `check`, `framework`, `finding`, `evidence`, `audit` routers — 11 routers, 1,038 passing tests.
+
+**Phase 2.1** (scan router & vendor adapter boundary) — ✅ complete
+`scan` router, `@watchtower/adapters` (vendor adapter contract), 12 routers, 1,084 passing tests.
+
+**Phase 2.2** (scan pipeline & Inngest integration) — ✅ complete
+`@watchtower/scan-pipeline` (Inngest orchestration), Graph adapter (AES-256-GCM, OAuth, backoff), `@watchtower/sandbox` (Firecracker microVMs), 1,226 passing tests.
+
+**Phase 3.0** (UI foundation) — 🔨 in progress
+Next.js 16 dashboard, `@watchtower/ui` component library (shadcn/ui), dashboard pages for findings, scans, tenants, members, roles, frameworks, audit, and settings.
+
+**Next:** Completing Phase 3.0, then Phase 3.1+ (real-time updates, evidence uploads, compliance reporting).
+
+For the full roadmap, see [`docs/Architecture.md`](./docs/Architecture.md).
 
 ## License
 
 TBD.
-
-## Status
-
-**Phase 0** (database foundation) is complete: schema (20 models, 13 enums, ~50 indexes), RLS, audit log infrastructure, permission catalog (41 permissions, 4 system roles), two-role security boundary, dev infrastructure.
-
-**Phase 1.0** (application foundation) is complete:
-- ✅ Monorepo structure with Bun workspaces (`packages/*`, `apps/*`)
-- ✅ `@watchtower/db` — RLS-aware Prisma client wrapper (singleton client, `withRLS()`, startup validation, soft-delete extension)
-- ✅ `@watchtower/errors` — Two-layer error code catalog (31 codes, zero dependencies)
-- ✅ `apps/web` — tRPC v11 skeleton with protected procedure middleware and first router (`permission.list`)
-- ✅ ADR-001: monorepo structure decisions
-
-**Phase 1.1** (authentication & middleware) is complete:
-- ✅ `@watchtower/auth` — Better Auth with Organization plugin, session resolution via `resolveSession(headers)`
-- ✅ tRPC middleware — session resolution from Better Auth cookies/headers
-- ✅ tRPC middleware — permission loading from database (Membership → Role → Permission chain, SOFT/STRICT isolation)
-- ✅ tRPC middleware — RLS wiring via `ctx.db` (three-layer isolation chain complete)
-- ✅ `workspace` router — `workspace.get`, `workspace.updateSettings` (with idempotencyKey, audit log, permission check)
-- ✅ `scope` router — `scope.list` (cursor-paginated), `scope.get` (scope-derived permission check)
-- ✅ ADR-002: Better Auth + Organization plugin decisions
-
-**Phase 1.2** (infrastructure hardening) is complete:
-- ✅ Idempotency middleware — check/store cycle with SHA-256 request hashing, duplicate key detection
-- ✅ Audit hash chain — Ed25519 signing, per-workspace chains, gap-free sequence numbers, genesis block
-- ✅ In-memory rate limiter — 3 tiers (query: 100/60s, mutation: 30/60s, auth: 10/60s), `X-RateLimit-*` headers
-- ✅ `workspace.updateSettings` refactored to use full idempotency + audit chain
-- ✅ Startup validation tests
-
-**Phase 2.0** (core entity routers) is complete:
-- ✅ `tenant` router — `list` (cursor-paginated, scope-filtered), `get`, `create` (idempotency + audit + duplicate guard), `update`, `softDelete`
-- ✅ `member` router — `list`, `get`, `invite` (duplicate guard), `remove` (owner protection), `updateRole`
-- ✅ `role` router — `list`, `get`, `create` (locked permission validation), `update` (system role guard), `delete`
-- ✅ `check` router — `list` (severity/source filters), `get` — read-only (checks are data)
-- ✅ `framework` router — `list`, `get` — read-only (frameworks are data)
-- ✅ `finding` router — `list` (flagship query with severity/status/scope/visibility filters), `get`, `acknowledge`, `mute`, `acceptRisk`, `resolve` — each state transition as a separate procedure
-- ✅ `evidence` router — `list` (scope-filtered, excludes raw data), `get` — read-only (append-only data)
-- ✅ `audit` router — `list` (chain-ordered, excludes tamper-evidence fields) — read-only
-- ✅ 11 routers registered in `_app.ts` (was 3)
-- ✅ 1,038 passing tests (775 existing + 231 Phase 2.0 convention tests + 32 auto-detected)
-
-**Phase 2.1** (scan router & vendor adapter boundary) is complete:
-- ✅ `scan` router — `list` (4 allowlisted filters), `get`, `trigger` (idempotent, duplicate active scan guard), `cancel` (state guard, PENDING/RUNNING only)
-- ✅ `@watchtower/adapters` package — `VendorAdapter<TDataSources>` interface, `GraphDataSources` type map (10 sources), `AdapterError` with retry semantics
-- ✅ ADR-003: Vendor Adapter Boundary — credential decryption, error translation, test seam patterns
-- ✅ 12 routers registered in `_app.ts`
-- ✅ 1,084 passing tests (1,038 existing + 46 new scan convention tests across §1–§15)
-
-**Phase 2.2** (scan pipeline & Inngest integration) is complete:
-- ✅ `@watchtower/scan-pipeline` package — Inngest client, typed events, function registry
-- ✅ `execute-scan` Inngest function — 4-step orchestration (transition → collect → store-evidence → finalize) with `onFailure` handler
-- ✅ `handle-cancellation` Inngest function — graceful scan cancellation via event-driven coordination
-- ✅ Inngest serve route (`/api/inngest`) for function discovery and event-driven invocation
-- ✅ Scan router wired to emit Inngest events on `trigger` and `cancel`
-- ✅ Graph adapter — AES-256-GCM credential decryption, client-credentials OAuth, exponential backoff, per-tenant concurrency limiting, OData pagination
-- ✅ `@watchtower/sandbox` package — Firecracker microVM config, plugin schema validation, dev-mode fallback
-- ✅ ADR-004: Single-engine collapse + Firecracker sandboxing
-- ✅ 1,226 passing tests (1,084 existing + 81 Phase 2.2 convention tests + 61 sandbox tests)
-
-**Next:** Phase 3.0 (UI foundation).
-
-For the full roadmap, see `Architecture.md` section 12 ("Open design questions") and section 13.
