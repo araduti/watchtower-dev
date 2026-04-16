@@ -28,13 +28,15 @@ sleep 15  # wait for the Postgres role bootstrap to complete
 # 4. Apply schema, generate client, and seed
 bun run db:migrate          # applies pending migrations via watchtower_migrate role
 bun run db:generate         # regenerates the Prisma client
-bun run db:seed             # seeds permission catalog + system roles
+bun run db:seed             # seeds permission catalog + system roles + dev data
 
 # 5. Start the app
 bun run dev
 ```
 
 The web app runs at `http://localhost:3000`. The Inngest dev UI runs at `http://localhost:8288`.
+
+Sign in with the dev credentials: **admin@watchtower.dev** / **watchtower-dev**. The seed creates a workspace, scope, and demo tenant so you can explore the dashboard immediately.
 
 If anything in steps 3–4 fails, the most likely cause is something else listening on port 5432 (typically a native Postgres installation). Run `sudo lsof -i :5432` to check, and stop the conflicting service before retrying.
 
