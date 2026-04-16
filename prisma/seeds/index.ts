@@ -182,7 +182,7 @@ const SEEDERS: readonly Seeder[] = [
         return 0;
       }
       const count = await seedDevData(db);
-      log.info(`Dev credentials: ${DEV_USER.email} / ${DEV_USER.password}`);
+      log.info(`Dev user: ${DEV_USER.email} (password: see .env.example or README)`);
       return count;
     },
     dryRun: async () => {
