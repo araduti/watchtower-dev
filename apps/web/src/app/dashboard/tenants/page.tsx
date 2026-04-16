@@ -10,9 +10,23 @@ import { DataTable } from "@/components/shared/data-table";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 
 /* ------------------------------------------------------------------ */
+/*  Constants                                                          */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_PAGE_SIZE = 25;
+
+/* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Local tenant shape matching the tRPC router output.
+ * Extends Record<string, unknown> to satisfy DataTable's generic constraint.
+ *
+ * NOTE: When a shared `RouterOutputs` utility type is added to `@/lib/trpc`,
+ * replace this with `RouterOutputs['tenant']['list']['items'][number]`
+ * intersected with `Record<string, unknown>`.
+ */
 interface Tenant extends Record<string, unknown> {
   id: string;
   workspaceId: string;
@@ -97,10 +111,10 @@ const columns = [
 export default function TenantsPage() {
   const router = useRouter();
   const { data, isLoading, isError, error } = trpc.tenant.list.useQuery({
-    limit: 25,
+    limit: DEFAULT_PAGE_SIZE,
   });
 
-  const tenants = (data?.items ?? []) as Tenant[];
+  const tenants = (data?.items ?? []) as unknown as Tenant[];
 
   return (
     <PageContainer
