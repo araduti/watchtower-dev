@@ -71,20 +71,23 @@ DROP POLICY IF EXISTS observation_insert ON "Evidence";
 
 -- Re-create under new names
 CREATE POLICY evidence_select ON "Evidence"
-  FOR SELECT USING ("workspaceId" = current_setting('app.workspace_id', true));
+  FOR SELECT USING (app.row_visible("workspaceId", "scopeId"));
 
 CREATE POLICY evidence_insert ON "Evidence"
-  FOR INSERT WITH CHECK ("workspaceId" = current_setting('app.workspace_id', true));
+  FOR INSERT WITH CHECK (
+    "workspaceId" = app.current_workspace_id()
+    AND app.row_visible("workspaceId", "scopeId")
+  );
 
 -- Ensure RLS stays enabled on renamed table
 ALTER TABLE "Evidence" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Evidence" FORCE ROW LEVEL SECURITY;
 
 -- Update append-only trigger for Evidence
-DROP TRIGGER IF EXISTS prevent_observation_mutation ON "Evidence";
+DROP TRIGGER IF EXISTS observation_append_only ON "Evidence";
 CREATE TRIGGER prevent_evidence_mutation
   BEFORE UPDATE OR DELETE OR TRUNCATE ON "Evidence"
-  FOR EACH STATEMENT EXECUTE FUNCTION raise_append_only();
+  FOR EACH STATEMENT EXECUTE FUNCTION app.audit_append_only_guard();
 
 -- Update REVOKE for renamed table (re-assert append-only)
 REVOKE UPDATE, DELETE, TRUNCATE ON "Evidence" FROM watchtower_app;
