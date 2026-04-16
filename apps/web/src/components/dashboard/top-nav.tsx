@@ -8,9 +8,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  Shield,
   LayoutDashboard,
   AlertTriangle,
   Scan,
@@ -53,10 +53,15 @@ export function TopNav() {
         {/* Logo */}
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 text-foreground hover:text-primary transition-colors shrink-0"
+          className="flex items-center shrink-0 hover:opacity-80 transition-opacity"
         >
-          <Shield className="h-5 w-5 text-primary" />
-          <span className="font-bold tracking-tight text-sm">Watchtower</span>
+          <Image
+            src="/logo.png"
+            alt="Watchtower"
+            width={28}
+            height={28}
+            priority
+          />
         </Link>
 
         <Separator orientation="vertical" className="h-6" />
