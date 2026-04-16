@@ -1,7 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import { Users, UserPlus } from "lucide-react";
-import { Badge } from "@watchtower/ui";
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { PageContainer } from "@/components/shared/layouts";
@@ -117,6 +133,11 @@ const columns = [
 /* ------------------------------------------------------------------ */
 
 export default function MembersPage() {
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [selectedRoleId, setSelectedRoleId] = useState("");
+  const [selectedScopeId, setSelectedScopeId] = useState("");
+
   /* ---- Pagination state ---- */
   const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
 
@@ -128,11 +149,29 @@ export default function MembersPage() {
   const members = (data?.items ?? []) as unknown as Member[];
   const nextCursor = data?.nextCursor ?? null;
 
-  /* ---- Header action: invite button (disabled placeholder) ---- */
+  /* ---- Roles and scopes for invite dialog ---- */
+  const { data: roleData } = trpc.role.list.useQuery({ limit: 100 });
+  const roles = roleData?.items ?? [];
+  const { data: scopeData } = trpc.scope.list.useQuery({ limit: 100 });
+  const scopes = scopeData?.items ?? [];
+
+  /* ---- Invite mutation ---- */
+  const utils = trpc.useUtils();
+  const inviteMutation = trpc.member.invite.useMutation({
+    onSuccess: () => {
+      utils.member.list.invalidate();
+      setInviteOpen(false);
+      setUserId("");
+      setSelectedRoleId("");
+      setSelectedScopeId("");
+    },
+  });
+
+  /* ---- Header action: invite button ---- */
   const headerActions = (
     <InteractiveButton
       icon={<UserPlus className="h-4 w-4" />}
-      disabled
+      onClick={() => setInviteOpen(true)}
     >
       Invite Member
     </InteractiveButton>
@@ -183,6 +222,71 @@ export default function MembersPage() {
           />
         </>
       )}
+      {/* Invite Member Dialog */}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite Member</DialogTitle>
+            <DialogDescription>
+              Add a user to this workspace with a role assignment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="invite-user-id" className="text-sm font-medium">User ID</label>
+              <Input
+                id="invite-user-id"
+                placeholder="User ID"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Role</label>
+              <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(roles as Array<{ id: string; name: string; isAssignable: boolean }>).filter((r) => r.isAssignable).map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Scope (optional)</label>
+              <Select value={selectedScopeId} onValueChange={setSelectedScopeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Workspace-wide" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(scopes as Array<{ id: string; name: string }>).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {inviteMutation.error && (
+              <p className="text-sm text-red-400">{inviteMutation.error.message}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!userId || !selectedRoleId || inviteMutation.isPending}
+              onClick={() => inviteMutation.mutate({
+                idempotencyKey: crypto.randomUUID(),
+                userId,
+                roleIds: [selectedRoleId],
+                ...(selectedScopeId ? { scopeId: selectedScopeId } : {}),
+              })}
+            >
+              {inviteMutation.isPending ? "Inviting…" : "Invite Member"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

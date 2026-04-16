@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,7 +11,17 @@ import {
   Eye,
   StickyNote,
 } from "lucide-react";
-import { Badge } from "@watchtower/ui";
+import {
+  Badge,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Input,
+  Button,
+} from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { GlowCard } from "@/components/shared/glow-card";
@@ -197,11 +207,46 @@ export default function FindingDetailPage({
 }) {
   const { id } = use(params);
 
+  const utils = trpc.useUtils();
   const { data, isLoading, isError, error } = trpc.finding.get.useQuery({
     findingId: id,
   });
 
   const finding = data as FindingDetail | undefined;
+
+  /* ---- Mutation state ---- */
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [muteOpen, setMuteOpen] = useState(false);
+  const [muteReason, setMuteReason] = useState("");
+  const [muteUntil, setMuteUntil] = useState("");
+  const [acceptOpen, setAcceptOpen] = useState(false);
+  const [acceptReason, setAcceptReason] = useState("");
+  const [acceptExpiry, setAcceptExpiry] = useState("");
+
+  const invalidate = () => {
+    utils.finding.get.invalidate({ findingId: id });
+    utils.finding.list.invalidate();
+  };
+
+  const acknowledgeMutation = trpc.finding.acknowledge.useMutation({
+    onSuccess: () => { invalidate(); setFeedback({ type: "success", message: "Finding acknowledged." }); },
+    onError: (e) => setFeedback({ type: "error", message: e.message }),
+  });
+
+  const resolveMutation = trpc.finding.resolve.useMutation({
+    onSuccess: () => { invalidate(); setFeedback({ type: "success", message: "Finding resolved." }); },
+    onError: (e) => setFeedback({ type: "error", message: e.message }),
+  });
+
+  const muteMutation = trpc.finding.mute.useMutation({
+    onSuccess: () => { invalidate(); setMuteOpen(false); setFeedback({ type: "success", message: "Finding muted." }); },
+    onError: (e) => setFeedback({ type: "error", message: e.message }),
+  });
+
+  const acceptRiskMutation = trpc.finding.acceptRisk.useMutation({
+    onSuccess: () => { invalidate(); setAcceptOpen(false); setFeedback({ type: "success", message: "Risk accepted." }); },
+    onError: (e) => setFeedback({ type: "error", message: e.message }),
+  });
 
   /* ---- Loading ---- */
   if (isLoading) {
@@ -387,12 +432,27 @@ export default function FindingDetailPage({
         {/* -------------------------------------------------------- */}
         <GlowCard className="p-6">
           <h3 className="text-sm font-semibold text-foreground mb-4">Actions</h3>
+          {feedback && (
+            <div className={`mb-4 rounded-lg border px-4 py-2.5 text-sm ${
+              feedback.type === "success"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : "border-red-500/30 bg-red-500/10 text-red-400"
+            }`}>
+              {feedback.message}
+            </div>
+          )}
           <div className="flex flex-wrap gap-3">
             <InteractiveButton
               variant="outline"
               size="sm"
               icon={<Eye className="h-4 w-4" />}
-              disabled
+              disabled={finding.status !== "OPEN"}
+              loading={acknowledgeMutation.isPending}
+              loadingText="Acknowledging…"
+              onClick={() => acknowledgeMutation.mutate({
+                idempotencyKey: crypto.randomUUID(),
+                findingId: finding.id,
+              })}
             >
               Acknowledge
             </InteractiveButton>
@@ -400,7 +460,8 @@ export default function FindingDetailPage({
               variant="outline"
               size="sm"
               icon={<ShieldAlert className="h-4 w-4" />}
-              disabled
+              disabled={finding.status !== "OPEN" && finding.status !== "ACKNOWLEDGED"}
+              onClick={() => setAcceptOpen(true)}
             >
               Accept Risk
             </InteractiveButton>
@@ -408,7 +469,8 @@ export default function FindingDetailPage({
               variant="outline"
               size="sm"
               icon={<VolumeX className="h-4 w-4" />}
-              disabled
+              disabled={finding.visibility === "MUTED"}
+              onClick={() => setMuteOpen(true)}
             >
               Mute
             </InteractiveButton>
@@ -416,15 +478,110 @@ export default function FindingDetailPage({
               variant="outline"
               size="sm"
               icon={<CheckCircle2 className="h-4 w-4" />}
-              disabled
+              disabled={finding.status === "RESOLVED" || finding.status === "NOT_APPLICABLE"}
+              loading={resolveMutation.isPending}
+              loadingText="Resolving…"
+              onClick={() => resolveMutation.mutate({
+                idempotencyKey: crypto.randomUUID(),
+                findingId: finding.id,
+              })}
             >
               Resolve
             </InteractiveButton>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            State transition actions will be wired to tRPC mutations in a future iteration.
-          </p>
         </GlowCard>
+
+        {/* Accept Risk Dialog */}
+        <Dialog open={acceptOpen} onOpenChange={setAcceptOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Accept Risk</DialogTitle>
+              <DialogDescription>
+                Provide a reason and expiry date for accepting this risk.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="accept-reason" className="text-sm font-medium">Reason</label>
+                <Input
+                  id="accept-reason"
+                  placeholder="Why is this risk acceptable?"
+                  value={acceptReason}
+                  onChange={(e) => setAcceptReason(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="accept-expiry" className="text-sm font-medium">Expires At</label>
+                <Input
+                  id="accept-expiry"
+                  type="date"
+                  value={acceptExpiry}
+                  onChange={(e) => setAcceptExpiry(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAcceptOpen(false)}>Cancel</Button>
+              <Button
+                disabled={!acceptReason || !acceptExpiry || acceptRiskMutation.isPending}
+                onClick={() => acceptRiskMutation.mutate({
+                  idempotencyKey: crypto.randomUUID(),
+                  findingId: finding.id,
+                  reason: acceptReason,
+                  acceptanceExpiresAt: new Date(acceptExpiry),
+                })}
+              >
+                {acceptRiskMutation.isPending ? "Submitting…" : "Accept Risk"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Mute Dialog */}
+        <Dialog open={muteOpen} onOpenChange={setMuteOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Mute Finding</DialogTitle>
+              <DialogDescription>
+                Optionally provide a reason and expiry for muting this finding.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="mute-reason" className="text-sm font-medium">Reason (optional)</label>
+                <Input
+                  id="mute-reason"
+                  placeholder="Why mute this finding?"
+                  value={muteReason}
+                  onChange={(e) => setMuteReason(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="mute-until" className="text-sm font-medium">Mute Until (optional)</label>
+                <Input
+                  id="mute-until"
+                  type="date"
+                  value={muteUntil}
+                  onChange={(e) => setMuteUntil(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setMuteOpen(false)}>Cancel</Button>
+              <Button
+                disabled={muteMutation.isPending}
+                onClick={() => muteMutation.mutate({
+                  idempotencyKey: crypto.randomUUID(),
+                  findingId: finding.id,
+                  ...(muteReason ? { reason: muteReason } : {}),
+                  ...(muteUntil ? { mutedUntil: new Date(muteUntil) } : {}),
+                })}
+              >
+                {muteMutation.isPending ? "Muting…" : "Mute"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* -------------------------------------------------------- */}
         {/*  Notes                                                     */}
