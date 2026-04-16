@@ -5,8 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { GlowCard } from "@/components/shared/glow-card";
 import { LoadingState } from "@/components/shared/empty-loading";
-import { Badge } from "@watchtower/ui/badge";
-import { Input } from "@watchtower/ui/input";
+import { Badge, Input } from "@watchtower/ui";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 import { Settings, Shield, AlertTriangle, Check, X, Copy } from "lucide-react";
 

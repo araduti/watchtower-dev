@@ -8,7 +8,7 @@ import { PageContainer } from "@/components/shared/layouts";
 import { DashboardGrid } from "@/components/shared/layouts";
 import { GlowCard, MetricCard } from "@/components/shared/glow-card";
 import { LoadingState } from "@/components/shared/empty-loading";
-import { Badge } from "@watchtower/ui/badge";
+import { Badge } from "@watchtower/ui";
 import { ScanStatusIcon } from "@/components/shared/status-icon";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 
