@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Scan, AlertTriangle } from "lucide-react";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import {
   Badge,
   Select,
@@ -243,8 +244,7 @@ export default function ScansPage() {
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
 
   /* ---- Pagination state ---- */
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [cursorStack, setCursorStack] = useState<string[]>([]);
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage, reset } = useCursorPagination();
 
   /* ---- Build query input ---- */
   const queryInput = {
@@ -262,9 +262,8 @@ export default function ScansPage() {
   /* ---- Reset pagination when filters change ---- */
   const handleStatusChange = useCallback((value: string) => {
     setStatusFilter(value);
-    setCursor(undefined);
-    setCursorStack([]);
-  }, []);
+    reset();
+  }, [reset]);
 
   /* ---- Row click handler ---- */
   const handleRowClick = useCallback(
@@ -328,21 +327,9 @@ export default function ScansPage() {
           />
           <CursorPagination
             hasNextPage={nextCursor !== null}
-            hasPrevPage={cursorStack.length > 0}
-            onNextPage={() => {
-              if (nextCursor) {
-                setCursorStack((prev) => [...prev, cursor ?? ""]);
-                setCursor(nextCursor);
-              }
-            }}
-            onPrevPage={() => {
-              setCursorStack((prev) => {
-                const next = [...prev];
-                const prevCursor = next.pop();
-                setCursor(prevCursor === "" ? undefined : prevCursor);
-                return next;
-              });
-            }}
+            hasPrevPage={hasPrevPage}
+            onNextPage={() => { if (nextCursor) goToNextPage(nextCursor); }}
+            onPrevPage={goToPrevPage}
             isLoading={isLoading}
             className="mt-2"
           />

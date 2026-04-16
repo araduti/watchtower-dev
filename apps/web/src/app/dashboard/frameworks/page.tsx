@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ExternalLink, Layers } from "lucide-react";
 import { Badge } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
@@ -115,8 +116,7 @@ export default function FrameworksPage() {
   const router = useRouter();
 
   /* ---- Pagination state ---- */
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [cursorStack, setCursorStack] = useState<string[]>([]);
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
 
   const { data, isLoading, isError, error } =
     trpc.framework.list.useQuery({ limit: DEFAULT_PAGE_SIZE, cursor });
@@ -167,21 +167,9 @@ export default function FrameworksPage() {
           />
           <CursorPagination
             hasNextPage={nextCursor !== null}
-            hasPrevPage={cursorStack.length > 0}
-            onNextPage={() => {
-              if (nextCursor) {
-                setCursorStack((prev) => [...prev, cursor ?? ""]);
-                setCursor(nextCursor);
-              }
-            }}
-            onPrevPage={() => {
-              setCursorStack((prev) => {
-                const next = [...prev];
-                const prevCursor = next.pop();
-                setCursor(prevCursor === "" ? undefined : prevCursor);
-                return next;
-              });
-            }}
+            hasPrevPage={hasPrevPage}
+            onNextPage={() => { if (nextCursor) goToNextPage(nextCursor); }}
+            onPrevPage={goToPrevPage}
             isLoading={isLoading}
             className="mt-2"
           />
