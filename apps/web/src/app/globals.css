@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+/* ───────────────────────────────────────────────────────────────
+   Fluid Functionalism — Responsive type scaling without breakpoints
+   Scales smoothly from 320px to 1440px viewport width.
+   Registry: fluidfunctionalism.com
+   ─────────────────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --fluid-min-vw: 320;
+    --fluid-max-vw: 1440;
+    /* Fluid type sizes — no hardcoded pixel sizes */
+    --text-xs: clamp(0.6875rem, 0.65rem + 0.15vw, 0.75rem);
+    --text-sm: clamp(0.75rem, 0.7rem + 0.2vw, 0.875rem);
+    --text-base: clamp(0.875rem, 0.8rem + 0.3vw, 1rem);
+    --text-lg: clamp(1rem, 0.9rem + 0.4vw, 1.125rem);
+    --text-xl: clamp(1.125rem, 1rem + 0.5vw, 1.25rem);
+    --text-2xl: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+    --text-3xl: clamp(1.5rem, 1.2rem + 1.2vw, 1.875rem);
+    --text-4xl: clamp(1.875rem, 1.4rem + 1.8vw, 2.25rem);
+    --text-5xl: clamp(2.25rem, 1.6rem + 2.5vw, 3rem);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -33,81 +55,133 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Watchtower functional colors */
+  --color-cyber-green: var(--cyber-green);
+  --color-electric-blue: var(--electric-blue);
+  --color-severity-critical: var(--severity-critical);
+  --color-severity-high: var(--severity-high);
+  --color-severity-medium: var(--severity-medium);
+  --color-severity-low: var(--severity-low);
+  --color-severity-info: var(--severity-info);
+  --color-status-compliant: var(--status-compliant);
+  --color-status-non-compliant: var(--status-non-compliant);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-muted: var(--status-muted);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* Fluid type scale */
+  --font-size-fluid-xs: var(--text-xs);
+  --font-size-fluid-sm: var(--text-sm);
+  --font-size-fluid-base: var(--text-base);
+  --font-size-fluid-lg: var(--text-lg);
+  --font-size-fluid-xl: var(--text-xl);
+  --font-size-fluid-2xl: var(--text-2xl);
+  --font-size-fluid-3xl: var(--text-3xl);
+  --font-size-fluid-4xl: var(--text-4xl);
+  --font-size-fluid-5xl: var(--text-5xl);
 }
 
+/* ───────────────────────────────────────────────────────────────
+   Watchtower Dark Theme — Obsidian/Charcoal Security Palette
+   Default is dark. Light theme available via .light class.
+   ─────────────────────────────────────────────────────────────── */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0.004 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.004 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.004 285.823);
-  --primary: oklch(0.205 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.965 0.001 285.823);
-  --secondary-foreground: oklch(0.205 0.006 285.885);
-  --muted: oklch(0.965 0.001 285.823);
-  --muted-foreground: oklch(0.556 0.005 285.973);
-  --accent: oklch(0.965 0.001 285.823);
-  --accent-foreground: oklch(0.205 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0.004 286.032);
-  --input: oklch(0.922 0.004 286.032);
-  --ring: oklch(0.87 0.006 286.277);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.714);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0.004 285.823);
-  --sidebar-primary: oklch(0.205 0.006 285.885);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.965 0.001 285.823);
-  --sidebar-accent-foreground: oklch(0.205 0.006 285.885);
-  --sidebar-border: oklch(0.922 0.004 286.032);
-  --sidebar-ring: oklch(0.87 0.006 286.277);
+  --radius: 1rem;
+  /* Obsidian dark palette — the primary Watchtower experience */
+  --background: #0a0a0f;
+  --foreground: #e4e4e7;
+  --card: #141419;
+  --card-foreground: #e4e4e7;
+  --popover: #141419;
+  --popover-foreground: #e4e4e7;
+  --primary: #00ff88;
+  --primary-foreground: #0a0a0f;
+  --secondary: #1a1a24;
+  --secondary-foreground: #e4e4e7;
+  --muted: #1a1a24;
+  --muted-foreground: #71717a;
+  --accent: #1a1a24;
+  --accent-foreground: #e4e4e7;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #00ff88;
+  /* Chart palette */
+  --chart-1: #00ff88;
+  --chart-2: #3b82f6;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ef4444;
+  /* Sidebar */
+  --sidebar: #0e0e14;
+  --sidebar-foreground: #e4e4e7;
+  --sidebar-primary: #00ff88;
+  --sidebar-primary-foreground: #0a0a0f;
+  --sidebar-accent: #1a1a24;
+  --sidebar-accent-foreground: #e4e4e7;
+  --sidebar-border: #27272a;
+  --sidebar-ring: #00ff88;
+  /* Watchtower severity & status — functional, not decorative */
+  --cyber-green: #00ff88;
+  --electric-blue: #3b82f6;
+  --severity-critical: #ef4444;
+  --severity-high: #f59e0b;
+  --severity-medium: #eab308;
+  --severity-low: #06b6d4;
+  --severity-info: #64748b;
+  --status-compliant: #00ff88;
+  --status-non-compliant: #ef4444;
+  --status-in-progress: #3b82f6;
+  --status-muted: #52525b;
 }
 
-.dark {
-  --background: oklch(0.145 0.004 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0.004 285.823);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0.004 285.823);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0.006 285.885);
-  --secondary: oklch(0.269 0.006 285.885);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0.006 285.885);
-  --muted-foreground: oklch(0.711 0.005 286.286);
-  --accent: oklch(0.269 0.006 285.885);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.269 0.006 285.885);
-  --input: oklch(0.269 0.006 285.885);
-  --ring: oklch(0.439 0.01 286.375);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.175 0.006 285.823);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0.006 285.885);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0.006 285.885);
-  --sidebar-ring: oklch(0.439 0.01 286.375);
+.light {
+  --background: #fafafa;
+  --foreground: #0a0a0f;
+  --card: #ffffff;
+  --card-foreground: #0a0a0f;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0f;
+  --primary: #059669;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #0a0a0f;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #0a0a0f;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #059669;
+  --chart-1: #059669;
+  --chart-2: #3b82f6;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ef4444;
+  --sidebar: #f4f4f5;
+  --sidebar-foreground: #0a0a0f;
+  --sidebar-primary: #059669;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #0a0a0f;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #059669;
+  --cyber-green: #059669;
+  --electric-blue: #3b82f6;
+  --severity-critical: #ef4444;
+  --severity-high: #f59e0b;
+  --severity-medium: #eab308;
+  --severity-low: #06b6d4;
+  --severity-info: #94a3b8;
+  --status-compliant: #059669;
+  --status-non-compliant: #ef4444;
+  --status-in-progress: #3b82f6;
+  --status-muted: #a1a1aa;
 }
 
 @layer base {
@@ -119,4 +193,154 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  /* Monospace class — mandatory for metrics, IDs, codes, hashes */
+  .font-mono {
+    font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   ScrollX UI — Scroll-triggered animation utilities
+   Registry: scrollxui.dev
+   ─────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out both;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out both;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.4s ease-out both;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out both;
+  }
+
+  /* Stagger delay utilities for list items */
+  .stagger-1 { animation-delay: 50ms; }
+  .stagger-2 { animation-delay: 100ms; }
+  .stagger-3 { animation-delay: 150ms; }
+  .stagger-4 { animation-delay: 200ms; }
+  .stagger-5 { animation-delay: 250ms; }
+  .stagger-6 { animation-delay: 300ms; }
+
+  /* Spell UI — Glow effects for premium cards */
+  .glow-green {
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.15),
+      0 0 60px rgba(0, 255, 136, 0.05);
+  }
+
+  .glow-blue {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.15),
+      0 0 60px rgba(59, 130, 246, 0.05);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.15),
+      0 0 60px rgba(239, 68, 68, 0.05);
+  }
+
+  .glow-amber {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.15),
+      0 0 60px rgba(245, 158, 11, 0.05);
+  }
+
+  /* Glassmorphism surface — Spell UI inspired */
+  .glass {
+    background: rgba(20, 20, 25, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-card {
+    background: rgba(20, 20, 25, 0.8);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* Gradient border animation — Spell UI */
+  .gradient-border {
+    position: relative;
+  }
+
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgba(0, 255, 136, 0.3),
+      rgba(59, 130, 246, 0.3),
+      rgba(139, 92, 246, 0.3)
+    );
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Lucide Animated — Status indicator animations */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes spin-ring {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.animate-spin-ring {
+  animation: spin-ring 1.5s linear infinite;
 }

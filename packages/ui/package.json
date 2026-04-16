@@ -33,6 +33,50 @@
     "./dropdown-menu": {
       "types": "./src/dropdown-menu.tsx",
       "default": "./src/dropdown-menu.tsx"
+    },
+    "./tabs": {
+      "types": "./src/tabs.tsx",
+      "default": "./src/tabs.tsx"
+    },
+    "./dialog": {
+      "types": "./src/dialog.tsx",
+      "default": "./src/dialog.tsx"
+    },
+    "./tooltip": {
+      "types": "./src/tooltip.tsx",
+      "default": "./src/tooltip.tsx"
+    },
+    "./avatar": {
+      "types": "./src/avatar.tsx",
+      "default": "./src/avatar.tsx"
+    },
+    "./scroll-area": {
+      "types": "./src/scroll-area.tsx",
+      "default": "./src/scroll-area.tsx"
+    },
+    "./select": {
+      "types": "./src/select.tsx",
+      "default": "./src/select.tsx"
+    },
+    "./skeleton": {
+      "types": "./src/skeleton.tsx",
+      "default": "./src/skeleton.tsx"
+    },
+    "./switch": {
+      "types": "./src/switch.tsx",
+      "default": "./src/switch.tsx"
+    },
+    "./toggle": {
+      "types": "./src/toggle.tsx",
+      "default": "./src/toggle.tsx"
+    },
+    "./command": {
+      "types": "./src/command.tsx",
+      "default": "./src/command.tsx"
+    },
+    "./popover": {
+      "types": "./src/popover.tsx",
+      "default": "./src/popover.tsx"
     }
   }
 }
