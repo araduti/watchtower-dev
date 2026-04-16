@@ -6,6 +6,8 @@
     "apps/*"
   ],
   "scripts": {
+    "dev": "bun --filter '@watchtower/web' dev",
+    "build": "bun --filter '@watchtower/web' build",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:watch": "vitest watch",
