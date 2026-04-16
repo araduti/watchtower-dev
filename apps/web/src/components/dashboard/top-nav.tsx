@@ -9,7 +9,7 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -20,6 +20,7 @@ import {
   Settings,
   Search,
   Layers,
+  LogOut,
 } from "lucide-react";
 import {
   Button,
@@ -34,6 +35,7 @@ import {
   Separator,
 } from "@watchtower/ui";
 import { cn } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -46,6 +48,25 @@ const navItems = [
 
 export function TopNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const session = authClient.useSession();
+
+  const user = session.data?.user;
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : user?.email
+      ? user.email[0].toUpperCase()
+      : "W";
+
+  async function handleSignOut() {
+    await authClient.signOut();
+    router.push("/");
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/40 glass">
@@ -126,14 +147,14 @@ export function TopNav() {
               <Button variant="ghost" size="icon" className="rounded-2xl">
                 <Avatar className="h-7 w-7">
                   <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                    W
+                    {initials}
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel className="text-xs text-muted-foreground">
-                My Account
+                {user?.email ?? "My Account"}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
@@ -149,7 +170,11 @@ export function TopNav() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:text-destructive">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={handleSignOut}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
