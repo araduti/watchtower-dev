@@ -83,10 +83,12 @@ export default function HomePage() {
     setLoading(true);
 
     try {
+      const displayName =
+        name || (email.includes("@") ? email.split("@")[0] : email);
       const result = await authClient.signUp.email({
         email,
         password,
-        name: name || email.split("@")[0],
+        name: displayName,
       });
 
       if (result.error) {

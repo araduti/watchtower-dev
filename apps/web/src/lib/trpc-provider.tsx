@@ -27,10 +27,13 @@ function isUnauthorized(error: unknown): boolean {
 /**
  * Redirect to the login page on unauthorized errors.
  * Uses window.location to perform a full navigation, clearing
- * any stale client-side state.
+ * any stale client-side state. Debounced to prevent multiple
+ * concurrent mutations from triggering duplicate redirects.
  */
+let redirectPending = false;
 function redirectToLogin() {
-  if (typeof window !== "undefined" && window.location.pathname !== "/") {
+  if (typeof window !== "undefined" && window.location.pathname !== "/" && !redirectPending) {
+    redirectPending = true;
     window.location.href = "/";
   }
 }

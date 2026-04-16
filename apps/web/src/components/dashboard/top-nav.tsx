@@ -64,7 +64,13 @@ export function TopNav() {
       : "W";
 
   async function handleSignOut() {
-    await authClient.signOut();
+    try {
+      await authClient.signOut();
+    } catch {
+      // Sign-out failed (e.g. network error). Navigate to login anyway
+      // to clear the client-side state — the server session will expire
+      // naturally.
+    }
     router.push("/");
   }
 
