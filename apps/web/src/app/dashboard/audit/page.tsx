@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { AlertTriangle, ScrollText } from "lucide-react";
 import { Badge } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
+import { CursorPagination } from "@/components/shared/pagination";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -151,11 +153,17 @@ const columns = [
 /* ------------------------------------------------------------------ */
 
 export default function AuditLogPage() {
+  /* ---- Pagination state ---- */
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
+
   const { data, isLoading, isError, error } = trpc.audit.list.useQuery({
     limit: DEFAULT_PAGE_SIZE,
+    cursor,
   });
 
   const entries = (data?.items ?? []) as unknown as AuditEntry[];
+  const nextCursor = data?.nextCursor ?? null;
 
   return (
     <PageContainer
@@ -185,11 +193,33 @@ export default function AuditLogPage() {
 
       {/* Data table — read-only, no row click */}
       {!isLoading && !isError && entries.length > 0 && (
-        <DataTable<AuditEntry>
-          columns={columns}
-          data={entries}
-          getKey={(e) => e.id}
-        />
+        <>
+          <DataTable<AuditEntry>
+            columns={columns}
+            data={entries}
+            getKey={(e) => e.id}
+          />
+          <CursorPagination
+            hasNextPage={nextCursor !== null}
+            hasPrevPage={cursorStack.length > 0}
+            onNextPage={() => {
+              if (nextCursor) {
+                setCursorStack((prev) => [...prev, cursor ?? ""]);
+                setCursor(nextCursor);
+              }
+            }}
+            onPrevPage={() => {
+              setCursorStack((prev) => {
+                const next = [...prev];
+                const prevCursor = next.pop();
+                setCursor(prevCursor === "" ? undefined : prevCursor);
+                return next;
+              });
+            }}
+            isLoading={isLoading}
+            className="mt-2"
+          />
+        </>
       )}
     </PageContainer>
   );

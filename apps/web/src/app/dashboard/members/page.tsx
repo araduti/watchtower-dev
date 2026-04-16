@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Users, UserPlus } from "lucide-react";
 import { Badge } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
+import { CursorPagination } from "@/components/shared/pagination";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 
 /* ------------------------------------------------------------------ */
@@ -115,11 +117,17 @@ const columns = [
 /* ------------------------------------------------------------------ */
 
 export default function MembersPage() {
+  /* ---- Pagination state ---- */
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
+
   const { data, isLoading, isError, error } = trpc.member.list.useQuery({
     limit: DEFAULT_PAGE_SIZE,
+    cursor,
   });
 
   const members = (data?.items ?? []) as unknown as Member[];
+  const nextCursor = data?.nextCursor ?? null;
 
   /* ---- Header action: invite button (disabled placeholder) ---- */
   const headerActions = (
@@ -160,11 +168,33 @@ export default function MembersPage() {
 
       {/* Data table */}
       {!isLoading && !isError && members.length > 0 && (
-        <DataTable<Member>
-          columns={columns}
-          data={members}
-          getKey={(m) => m.id}
-        />
+        <>
+          <DataTable<Member>
+            columns={columns}
+            data={members}
+            getKey={(m) => m.id}
+          />
+          <CursorPagination
+            hasNextPage={nextCursor !== null}
+            hasPrevPage={cursorStack.length > 0}
+            onNextPage={() => {
+              if (nextCursor) {
+                setCursorStack((prev) => [...prev, cursor ?? ""]);
+                setCursor(nextCursor);
+              }
+            }}
+            onPrevPage={() => {
+              setCursorStack((prev) => {
+                const next = [...prev];
+                const prevCursor = next.pop();
+                setCursor(prevCursor === "" ? undefined : prevCursor);
+                return next;
+              });
+            }}
+            isLoading={isLoading}
+            className="mt-2"
+          />
+        </>
       )}
     </PageContainer>
   );

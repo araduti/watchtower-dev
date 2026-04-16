@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Plus } from "lucide-react";
 import { Badge } from "@watchtower/ui";
@@ -7,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
+import { CursorPagination } from "@/components/shared/pagination";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 
 /* ------------------------------------------------------------------ */
@@ -110,11 +112,23 @@ const columns = [
 
 export default function TenantsPage() {
   const router = useRouter();
+
+  /* ---- Pagination state ---- */
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
+
   const { data, isLoading, isError, error } = trpc.tenant.list.useQuery({
     limit: DEFAULT_PAGE_SIZE,
+    cursor,
   });
 
   const tenants = (data?.items ?? []) as unknown as Tenant[];
+  const nextCursor = data?.nextCursor ?? null;
+
+  const handleRowClick = useCallback(
+    (t: Tenant) => router.push(`/dashboard/tenants/${t.id}`),
+    [router],
+  );
 
   return (
     <PageContainer
@@ -161,12 +175,34 @@ export default function TenantsPage() {
 
       {/* Data table */}
       {!isLoading && !isError && tenants.length > 0 && (
-        <DataTable<Tenant>
-          columns={columns}
-          data={tenants}
-          getKey={(t) => t.id}
-          onRowClick={(t) => router.push(`/dashboard/tenants/${t.id}`)}
-        />
+        <>
+          <DataTable<Tenant>
+            columns={columns}
+            data={tenants}
+            getKey={(t) => t.id}
+            onRowClick={handleRowClick}
+          />
+          <CursorPagination
+            hasNextPage={nextCursor !== null}
+            hasPrevPage={cursorStack.length > 0}
+            onNextPage={() => {
+              if (nextCursor) {
+                setCursorStack((prev) => [...prev, cursor ?? ""]);
+                setCursor(nextCursor);
+              }
+            }}
+            onPrevPage={() => {
+              setCursorStack((prev) => {
+                const next = [...prev];
+                const prevCursor = next.pop();
+                setCursor(prevCursor === "" ? undefined : prevCursor);
+                return next;
+              });
+            }}
+            isLoading={isLoading}
+            className="mt-2"
+          />
+        </>
       )}
     </PageContainer>
   );
