@@ -1,5 +1,14 @@
 {
   "name": "@watchtower/web",
   "version": "0.0.1",
-  "private": true
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@watchtower/ui": "workspace:*"
+  }
 }
