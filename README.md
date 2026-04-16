@@ -3,7 +3,7 @@
 
 Watchtower is a multi-tenant compliance platform for Microsoft 365. It runs automated CIS / NIST audits with GitOps-driven custom logic, serving everyone from MSPs managing hundreds of tenants to enterprises managing legally-isolated business units — from the same codebase, with the same data model.
 
-Watchtower treats compliance as structured knowledge, not a product feature. Frameworks, checks, controls, and the mappings between them are rows in a database — a new CIS version is a migration, a customer's internal policy is a pull request against their own GitHub repo, and an auditor's bespoke control is a record, not a release. Built-in checks and customer-authored checks are the same kind of object, executed by the same engine, reviewed through the same approval flow. For the full principles behind the platform, see [`PRINCIPLES.md`](./PRINCIPLES.md).
+Watchtower treats compliance as structured knowledge, not a product feature. Frameworks, checks, controls, and the mappings between them are rows in a database — a new CIS version is a migration, a customer's internal policy is a pull request against their own GitHub repo. Built-in checks and customer-authored checks are the same kind of object, executed by the same engine. For the full design principles, see [`PRINCIPLES.md`](./PRINCIPLES.md).
 
 This document is for contributors. For the system design, see [`docs/Architecture.md`](./docs/Architecture.md). For schema rationale, see [`docs/Schema-Design-Notes.md`](./docs/Schema-Design-Notes.md). For API conventions, see [`docs/API-Conventions.md`](./docs/API-Conventions.md). For broader code conventions (audit logging, soft-delete, testing, vendor adapters), see [`docs/Code-Conventions.md`](./docs/Code-Conventions.md).
 
@@ -83,7 +83,7 @@ watchtower-dev/
 │       ├── 001-monorepo-structure.md
 │       ├── 002-better-auth-integration.md
 │       ├── 003-vendor-adapter-boundary.md
-│       ├── 003-plugin-evaluator-contract.md
+│       ├── 003-plugin-evaluator-contract.md   # (shares 003 prefix — pre-dates ADR renumber)
 │       └── 004-single-engine-firecracker-sandbox.md
 ├── docker-compose.dev.yml         # Local infra (Postgres 18, Garage S3, Inngest)
 ├── docker-compose.prod.yml        # Production stack (planned)
