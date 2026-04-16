@@ -13,6 +13,26 @@
     "./button": {
       "types": "./src/button.tsx",
       "default": "./src/button.tsx"
+    },
+    "./badge": {
+      "types": "./src/badge.tsx",
+      "default": "./src/badge.tsx"
+    },
+    "./card": {
+      "types": "./src/card.tsx",
+      "default": "./src/card.tsx"
+    },
+    "./separator": {
+      "types": "./src/separator.tsx",
+      "default": "./src/separator.tsx"
+    },
+    "./input": {
+      "types": "./src/input.tsx",
+      "default": "./src/input.tsx"
+    },
+    "./dropdown-menu": {
+      "types": "./src/dropdown-menu.tsx",
+      "default": "./src/dropdown-menu.tsx"
     }
   }
 }
