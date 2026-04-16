@@ -53,9 +53,9 @@ describe("@watchtower/auth package", () => {
       expect(src).toContain('better-auth/plugins');
     });
 
-    it("validates DATABASE_URL is set", () => {
-      expect(src).toContain("DATABASE_URL");
-      expect(src).toMatch(/if\s*\(\s*!databaseUrl\s*\)/);
+    it("uses Prisma adapter from @watchtower/db (not raw pg connection)", () => {
+      expect(src).toContain("prismaAdapter");
+      expect(src).toContain("@watchtower/db");
     });
 
     it("validates BETTER_AUTH_SECRET is set", () => {
@@ -72,8 +72,8 @@ describe("@watchtower/auth package", () => {
       expect(src).toContain("disableOrganizationDeletion");
     });
 
-    it("uses Postgres database type", () => {
-      expect(src).toContain('"postgres"');
+    it("uses PostgreSQL provider for the Prisma adapter", () => {
+      expect(src).toContain('"postgresql"');
     });
   });
 

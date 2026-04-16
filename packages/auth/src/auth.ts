@@ -10,18 +10,16 @@
  * Session storage uses the same Postgres database as the application
  * (DATABASE_URL). Better Auth manages its own tables (user, session,
  * account, organization, member, invitation).
+ *
+ * The database adapter uses Prisma (via `better-auth/adapters/prisma`)
+ * to share the same PrismaClient and pg.Pool as the rest of the
+ * application, rather than creating a separate Kysely connection pool.
  */
 
 import { betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
-
-const databaseUrl = process.env["DATABASE_URL"];
-if (!databaseUrl) {
-  throw new Error(
-    "[watchtower/auth] DATABASE_URL is not set. " +
-      "Better Auth requires a database connection for session storage.",
-  );
-}
+import { prisma } from "@watchtower/db";
 
 const secret = process.env["BETTER_AUTH_SECRET"];
 if (!secret) {
@@ -34,10 +32,9 @@ if (!secret) {
 const baseURL = process.env["BETTER_AUTH_URL"];
 
 export const auth = betterAuth({
-  database: {
-    type: "postgres",
-    url: databaseUrl,
-  },
+  database: prismaAdapter(prisma, {
+    provider: "postgresql",
+  }),
   secret,
   baseURL,
   plugins: [
