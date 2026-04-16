@@ -46,6 +46,7 @@ export function CursorPagination({
         size="sm"
         onClick={onPrevPage}
         disabled={!hasPrevPage || isLoading}
+        aria-label="Go to previous page"
         className="gap-1"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -57,6 +58,7 @@ export function CursorPagination({
         size="sm"
         onClick={onNextPage}
         disabled={!hasNextPage || isLoading}
+        aria-label="Go to next page"
         className="gap-1"
       >
         Next
