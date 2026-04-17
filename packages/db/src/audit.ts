@@ -61,17 +61,36 @@ export interface AuditEventInput {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the monorepo root directory.
- *
- * `@watchtower/db` lives at `<root>/packages/db/src/audit.ts`. We walk two
- * levels up from this file's directory to reach `<root>`. This is stable
- * regardless of which sub-package (web, worker, tests) starts the process.
+ * Find the monorepo root by walking up from this file's directory until we
+ * find a `package.json` containing a `"workspaces"` field. This is more
+ * robust than counting `..` hops — it survives structural refactors as long
+ * as the workspace root keeps its `package.json`.
  *
  * Relative paths in `AUDIT_SIGNING_KEY_PATH` are resolved against this root
  * so `./secrets/audit-signing-key.pem` always points to `<root>/secrets/...`
  * even when `process.cwd()` is `apps/web/` or `apps/worker/`.
  */
-const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+function findProjectRoot(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  const { root: fsRoot } = Object.freeze({ root: resolve(dir, "/") });
+
+  while (dir !== fsRoot) {
+    try {
+      const pkg = JSON.parse(readFileSync(resolve(dir, "package.json"), "utf-8"));
+      if (pkg.workspaces) {
+        return dir;
+      }
+    } catch {
+      // No package.json here — keep walking up.
+    }
+    dir = dirname(dir);
+  }
+
+  // Fallback: if no workspace root found, use cwd (original behaviour).
+  return process.cwd();
+}
+
+const PROJECT_ROOT = findProjectRoot();
 
 // ---------------------------------------------------------------------------
 // Genesis constants
