@@ -43,6 +43,9 @@ export const auth = betterAuth({
   }),
   secret,
   baseURL,
+  emailAndPassword: {
+    enabled: true,
+  },
   plugins: [
     organization({
       // Watchtower manages its own RBAC. We disable organization deletion
