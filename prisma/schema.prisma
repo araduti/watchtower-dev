@@ -39,6 +39,129 @@ datasource db {
 }
 
 // =============================================================================
+// BETTER AUTH — identity tables
+// =============================================================================
+//
+// These models map to the tables created by the Better Auth migration
+// (20260415120000_better_auth_tables). They MUST be in the Prisma schema so
+// that the generated client exposes `prisma.user`, `prisma.session`, etc.,
+// which the `prismaAdapter` from `better-auth/adapters/prisma` requires.
+//
+// Better Auth owns the lifecycle of these rows — application code should
+// interact with them only through the Better Auth API.
+// =============================================================================
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  sessions    Session[]
+  accounts    Account[]
+  members     Member[]
+  invitations Invitation[]
+
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now())
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now())
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Organization {
+  id        String   @id
+  name      String
+  slug      String   @unique
+  logo      String?
+  createdAt DateTime @default(now())
+  metadata  String?
+
+  members     Member[]
+  invitations Invitation[]
+
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String                 @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime               @default(now())
+  inviterId      String
+  inviter        User                   @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+// =============================================================================
 // HIERARCHY: Workspace → Scope → Tenant
 // =============================================================================
 
