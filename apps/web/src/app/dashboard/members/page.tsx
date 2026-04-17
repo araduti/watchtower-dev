@@ -253,6 +253,11 @@ export default function MembersPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {(roles as Array<{ id: string; name: string; isAssignable: boolean }>).filter((r) => r.isAssignable).length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No assignable roles available. <a href="/dashboard/roles" className="underline text-primary">Create a role</a> first.
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Scope (optional)</label>

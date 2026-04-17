@@ -1,5 +1,5 @@
 /**
- * Scope router — list and read scopes within the current workspace.
+ * Scope router — manage scopes within the current workspace.
  *
  * Scopes are the isolation boundary in Watchtower's hierarchy:
  * Workspace → Scope → Tenant. A Scope is where RBAC and data
@@ -7,18 +7,27 @@
  *
  * Conventions enforced:
  * - ctx.db for all database access (Non-Negotiable #1)
+ * - idempotencyKey for mutations (Non-Negotiable #2)
  * - ctx.requirePermission before any data access (Non-Negotiable #3)
  * - Zod input/output schemas (Non-Negotiable #4)
  * - Cursor-based pagination (Non-Negotiable #6, API-Conventions §9)
  * - Allowlisted filters (Non-Negotiable #10, API-Conventions §10)
  * - deletedAt: null filter (Non-Negotiable #7)
  * - Scope derived from resource, not from input (API-Conventions §5)
+ * - TRPCError with Layer 1+2 codes (Non-Negotiable #8, #9)
+ * - Audit log in same transaction as mutation (Code-Conventions §1)
  */
 
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
+import { createAuditEvent } from "@watchtower/db";
 import { throwWatchtowerError } from "../errors.ts";
+import {
+  checkIdempotencyKey,
+  saveIdempotencyResult,
+  computeRequestHash,
+} from "../idempotency.ts";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -47,6 +56,32 @@ const listOutput = z.object({
 const getInput = z.object({
   scopeId: z.string(),
 });
+
+// -- create --
+const createInput = z.object({
+  idempotencyKey: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+    message: "Slug must be lowercase alphanumeric with hyphens (e.g. 'my-scope').",
+  }),
+  parentScopeId: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+const createOutput = scopeOutput;
+
+/**
+ * Reusable Prisma select clause for scope queries.
+ */
+const SCOPE_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  parentScopeId: true,
+  metadata: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Router
@@ -81,15 +116,7 @@ export const scopeRouter = router({
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
         skip: input.cursor ? 1 : 0,
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          parentScopeId: true,
-          metadata: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: SCOPE_SELECT,
       });
 
       const hasMore = rows.length > input.limit;
@@ -124,15 +151,7 @@ export const scopeRouter = router({
           workspaceId: ctx.session.workspaceId,
           deletedAt: null,
         },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          parentScopeId: true,
-          metadata: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: SCOPE_SELECT,
       });
 
       if (!scope) {
@@ -147,5 +166,115 @@ export const scopeRouter = router({
         ...scope,
         metadata: scope.metadata as Record<string, unknown>,
       };
+    }),
+
+  /**
+   * Create a new scope in the current workspace.
+   *
+   * Permission: scopes:create (workspace-level, no scope).
+   * Audit: scope.create logged with scope details.
+   * Idempotency: required — enforced via checkIdempotencyKey/saveIdempotencyResult.
+   *
+   * Guard: rejects if the slug is already taken within the workspace.
+   */
+  create: protectedProcedure
+    .input(createInput)
+    .output(createOutput)
+    .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof createOutput>;
+      }
+
+      // Permission check — workspace-level only
+      await ctx.requirePermission("scopes:create");
+
+      // Check for duplicate slug within the workspace
+      const duplicate = await ctx.db.scope.findFirst({
+        where: {
+          workspaceId: ctx.session.workspaceId,
+          slug: input.slug,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (duplicate) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.SCOPE.SLUG_TAKEN);
+      }
+
+      // If parentScopeId is provided, verify it exists in this workspace
+      if (input.parentScopeId) {
+        const parentScope = await ctx.db.scope.findFirst({
+          where: {
+            id: input.parentScopeId,
+            workspaceId: ctx.session.workspaceId,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+
+        if (!parentScope) {
+          throwWatchtowerError(WATCHTOWER_ERRORS.SCOPE.NOT_FOUND, {
+            message: "Parent scope not found.",
+          });
+        }
+      }
+
+      // Create scope and write audit log in the same transaction.
+      // ctx.db is already inside a withRLS() transaction, so both
+      // operations share the same transaction boundary.
+      const created = await ctx.db.scope.create({
+        data: {
+          workspaceId: ctx.session.workspaceId,
+          name: input.name,
+          slug: input.slug,
+          parentScopeId: input.parentScopeId ?? null,
+          metadata: input.metadata ?? {},
+        },
+        select: SCOPE_SELECT,
+      });
+
+      // Audit log entry — same transaction as the mutation
+      // (Code-Conventions §1: "same transaction, not after")
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        scopeId: created.id,
+        eventType: "scope.create",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Scope",
+        targetId: created.id,
+        eventData: {
+          name: input.name,
+          slug: input.slug,
+          parentScopeId: input.parentScopeId ?? null,
+        },
+        traceId: ctx.traceId,
+      });
+
+      // Cache the successful result for idempotency replay (API-Conventions §8)
+      const result = {
+        ...created,
+        metadata: created.metadata as Record<string, unknown>,
+      };
+
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        result,
+        200,
+      );
+
+      return result;
     }),
 });
