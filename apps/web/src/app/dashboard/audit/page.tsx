@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { AlertTriangle, ScrollText } from "lucide-react";
+import { DateRangeFilter } from "@/components/shared/date-range-filter";
 import {
   Badge,
   Select,
@@ -194,6 +195,8 @@ export default function AuditLogPage() {
   /* ---- Filter state ---- */
   const [eventTypeFilter, setEventTypeFilter] = useState<string>(ALL_FILTER);
   const [targetTypeFilter, setTargetTypeFilter] = useState<string>(ALL_FILTER);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
 
   /* ---- Pagination state ---- */
   const { cursor, hasPrevPage, goToNextPage, goToPrevPage, reset } = useCursorPagination();
@@ -204,6 +207,8 @@ export default function AuditLogPage() {
     cursor,
     ...(eventTypeFilter !== ALL_FILTER && { eventType: eventTypeFilter }),
     ...(targetTypeFilter !== ALL_FILTER && { targetType: targetTypeFilter }),
+    ...(dateFrom && !isNaN(new Date(dateFrom).getTime()) && { createdAfter: new Date(dateFrom).toISOString() }),
+    ...(dateTo && !isNaN(new Date(dateTo).getTime()) && { createdBefore: new Date(dateTo).toISOString() }),
   };
 
   const { data, isLoading, isError, error } = trpc.audit.list.useQuery(queryInput);
@@ -219,6 +224,16 @@ export default function AuditLogPage() {
 
   const handleTargetTypeChange = useCallback((value: string) => {
     setTargetTypeFilter(value);
+    reset();
+  }, [reset]);
+
+  const handleDateFromChange = useCallback((value: string) => {
+    setDateFrom(value);
+    reset();
+  }, [reset]);
+
+  const handleDateToChange = useCallback((value: string) => {
+    setDateTo(value);
     reset();
   }, [reset]);
 
@@ -252,6 +267,14 @@ export default function AuditLogPage() {
           ))}
         </SelectContent>
       </Select>
+
+      {/* Date range filter */}
+      <DateRangeFilter
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={handleDateFromChange}
+        onDateToChange={handleDateToChange}
+      />
     </div>
   );
 

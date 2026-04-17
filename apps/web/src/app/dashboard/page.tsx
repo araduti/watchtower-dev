@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Scan } from "lucide-react";
+import { AlertTriangle, Scan, FileText } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
 import { PageContainer, DashboardGrid } from "@/components/shared/layouts";
@@ -12,6 +12,8 @@ import { Badge } from "@watchtower/ui";
 import { FadeIn, StaggerGroup } from "@/components/shared/fade-in";
 import { ScanStatusIcon, FindingStateIcon } from "@/components/shared/status-icon";
 import { DataTable } from "@/components/shared/data-table";
+import { InteractiveButton } from "@/components/shared/interactive-button";
+import { generateCompliancePdf } from "@/lib/generate-pdf-report";
 import type { DataTableColumn } from "@/components/shared/data-table";
 
 /* ------------------------------------------------------------------ */
@@ -144,6 +146,7 @@ export default function DashboardOverviewPage() {
   const findingsQuery = trpc.finding.list.useQuery({ limit: 100 });
   const scansQuery = trpc.scan.list.useQuery({ limit: 5 });
   const tenantsQuery = trpc.tenant.list.useQuery({ limit: 100 });
+  const workspaceQuery = trpc.workspace.get.useQuery();
 
   const isMetricsLoading =
     findingsQuery.isLoading || tenantsQuery.isLoading;
@@ -192,6 +195,41 @@ export default function DashboardOverviewPage() {
     <PageContainer
       title="Dashboard"
       description="Workspace compliance posture overview"
+      actions={
+        <InteractiveButton
+          icon={<FileText className="h-4 w-4" />}
+          onClick={() =>
+            generateCompliancePdf({
+              workspaceName: workspaceQuery.data?.name ?? "Workspace",
+              generatedAt: new Date().toLocaleString(),
+              totalFindings,
+              criticalHighCount: critHighCount,
+              complianceScore,
+              tenantCount,
+              findings: findings.map((f: Finding) => ({
+                checkSlug: f.checkSlug ?? f.checkId ?? "—",
+                severity: (f.severity ?? "INFORMATIONAL") as string,
+                status: (f.state ?? f.status ?? "open") as string,
+                firstSeenAt:
+                  f.firstSeenAt ?? f.createdAt ?? new Date().toISOString(),
+                lastSeenAt:
+                  f.lastSeenAt ?? f.updatedAt ?? new Date().toISOString(),
+              })),
+              recentScans: scans.map((s: ScanRecord) => ({
+                tenantId: s.tenantId ?? "—",
+                status: s.status ?? "PENDING",
+                checksRun: s.checksRun ?? 0,
+                checksFailed: s.checksFailed ?? 0,
+                createdAt: s.createdAt ?? new Date().toISOString(),
+              })),
+            })
+          }
+          disabled={findingsQuery.isLoading || scansQuery.isLoading}
+          size="sm"
+        >
+          Download Report
+        </InteractiveButton>
+      }
     >
       {/* ── KPI Metrics Row ─────────────────────────────────────── */}
       <StaggerGroup direction="up">

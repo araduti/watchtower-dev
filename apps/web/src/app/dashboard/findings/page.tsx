@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Eye, Download } from "lucide-react";
+import { DateRangeFilter } from "@/components/shared/date-range-filter";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import {
   Badge,
@@ -239,6 +240,8 @@ export default function FindingsPage() {
   /* ---- Filter state ---- */
   const [severityFilter, setSeverityFilter] = useState<string>(ALL_FILTER);
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
 
   /* ---- Selection state ---- */
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -252,6 +255,8 @@ export default function FindingsPage() {
     cursor,
     ...(severityFilter !== ALL_FILTER && { severity: severityFilter as FindingSeverity }),
     ...(statusFilter !== ALL_FILTER && { status: statusFilter as FindingStatus }),
+    ...(dateFrom && !isNaN(new Date(dateFrom).getTime()) && { createdAfter: new Date(dateFrom).toISOString() }),
+    ...(dateTo && !isNaN(new Date(dateTo).getTime()) && { createdBefore: new Date(dateTo).toISOString() }),
   };
 
   const { data, isLoading, isError, error } =
@@ -314,6 +319,18 @@ export default function FindingsPage() {
 
   const handleStatusChange = useCallback((value: string) => {
     setStatusFilter(value);
+    setSelectedKeys(new Set());
+    reset();
+  }, [reset]);
+
+  const handleDateFromChange = useCallback((value: string) => {
+    setDateFrom(value);
+    setSelectedKeys(new Set());
+    reset();
+  }, [reset]);
+
+  const handleDateToChange = useCallback((value: string) => {
+    setDateTo(value);
     setSelectedKeys(new Set());
     reset();
   }, [reset]);
@@ -396,6 +413,14 @@ export default function FindingsPage() {
           ))}
         </SelectContent>
       </Select>
+
+      {/* Date range filter */}
+      <DateRangeFilter
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={handleDateFromChange}
+        onDateToChange={handleDateToChange}
+      />
     </div>
   );
 
