@@ -19,6 +19,11 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { hashPassword } from "@better-auth/utils/password";
+import {
+  createCipheriv,
+  randomBytes,
+  type CipherGCMTypes,
+} from "node:crypto";
 
 // =============================================================================
 // DEV DATA CONSTANTS
@@ -42,6 +47,62 @@ const IDS = {
   tenant: "dev-tenant-000000000000001",
   membership: "dev-membership-0000000000001",
 } as const;
+
+// =============================================================================
+// CREDENTIAL ENCRYPTION (matches graph-adapter.ts decryptCredentials layout)
+// =============================================================================
+
+/** AES-256-GCM encryption constants — must match @watchtower/adapters. */
+const AES_ALGORITHM: CipherGCMTypes = "aes-256-gcm";
+const AES_IV_LENGTH = 12;
+
+/**
+ * Encrypt credentials into the AES-256-GCM buffer layout expected by
+ * the adapter's `decryptCredentials`:
+ *
+ *   [12-byte IV][16-byte authTag][ciphertext...]
+ *
+ * Uses `WATCHTOWER_CREDENTIAL_KEY` from the environment.
+ */
+function encryptCredentials(credentials: {
+  clientId: string;
+  clientSecret: string;
+  msTenantId: string;
+}): Uint8Array<ArrayBuffer> {
+  const encryptionKey = process.env["WATCHTOWER_CREDENTIAL_KEY"];
+  if (!encryptionKey) {
+    throw new Error(
+      "WATCHTOWER_CREDENTIAL_KEY environment variable is not set.\n" +
+        "Add it to your .env file (see .env.example):\n" +
+        "  WATCHTOWER_CREDENTIAL_KEY=<64 hex chars>\n" +
+        "Generate one with: openssl rand -hex 32",
+    );
+  }
+
+  const keyBuffer = Buffer.from(encryptionKey, "hex");
+  if (keyBuffer.length !== 32) {
+    throw new Error(
+      `WATCHTOWER_CREDENTIAL_KEY must be exactly 64 hex characters (32 bytes), ` +
+        `got ${encryptionKey.length} hex characters (${keyBuffer.length} bytes).`,
+    );
+  }
+
+  const iv = randomBytes(AES_IV_LENGTH);
+  const plaintext = JSON.stringify(credentials);
+
+  const cipher = createCipheriv(AES_ALGORITHM, keyBuffer, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf-8"),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+
+  // Buffer layout: [IV][authTag][ciphertext]
+  const blob = Buffer.concat([iv, authTag, encrypted]);
+  // Prisma 7 Bytes = Uint8Array<ArrayBuffer>; Buffer inherits ArrayBufferLike.
+  // .slice() returns a Uint8Array backed by a fresh ArrayBuffer.
+  return new Uint8Array(blob).slice();
+}
 
 // =============================================================================
 // SEEDER IMPLEMENTATION
@@ -157,7 +218,11 @@ export async function seedDevData(db: PrismaClient): Promise<number> {
       scopeId: IDS.scope,
       displayName: "Contoso (Demo)",
       msTenantId: "00000000-0000-0000-0000-000000000001",
-      encryptedCredentials: Buffer.from("dev-placeholder-not-real-credentials"),
+      encryptedCredentials: encryptCredentials({
+        clientId: "00000000-0000-0000-0000-000000000000",
+        clientSecret: "dev-client-secret-not-real",
+        msTenantId: "00000000-0000-0000-0000-000000000001",
+      }),
       authMethod: "CLIENT_SECRET",
       status: "ACTIVE",
     },
