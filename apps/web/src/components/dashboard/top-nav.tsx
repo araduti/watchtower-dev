@@ -94,9 +94,11 @@ export function TopNav() {
           <Image
             src="/logo.png"
             alt="Watchtower"
-            width={28}
-            height={28}
+            width={48}
+            height={32}
+            className="object-contain"
             priority
+            unoptimized
           />
         </Link>
 
