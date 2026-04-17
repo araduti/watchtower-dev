@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
 /* ───────────────────────────────────────────────────────────────
+   Source detection — include @watchtower/ui package so Tailwind
+   generates CSS for classes used exclusively in shared components
+   (e.g. Dialog overlay/content positioning, Select primitives).
+   ─────────────────────────────────────────────────────────────── */
+@source "../../../../packages/ui/src";
+
+/* ───────────────────────────────────────────────────────────────
    Fluid Functionalism — Responsive type scaling without breakpoints
    Scales smoothly from 320px to 1440px viewport width.
    Registry: fluidfunctionalism.com
