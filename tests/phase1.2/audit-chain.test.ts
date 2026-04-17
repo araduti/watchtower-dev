@@ -42,10 +42,9 @@ describe("Audit hash chain module (Architecture.md §7)", () => {
     });
 
     it("stores only the public key in the database", () => {
-      // The public key goes to AuditSigningKey via ensure_signing_key function;
-      // private key stays in memory
+      // The public key goes to AuditSigningKey; private key stays in memory
       expect(src).toContain("publicKey");
-      expect(src).toContain("ensure_signing_key");
+      expect(src).toContain("auditSigningKey");
     });
 
     it("validates key file readability before loading", () => {
@@ -55,9 +54,9 @@ describe("Audit hash chain module (Architecture.md §7)", () => {
   });
 
   describe("signing key registration", () => {
-    it("uses SECURITY DEFINER function for atomic find-or-create", () => {
-      expect(src).toContain("app.ensure_signing_key");
-      expect(src).toContain("$queryRawUnsafe");
+    it("uses find-or-create pattern", () => {
+      expect(src).toContain("findFirst");
+      expect(src).toContain("create");
     });
 
     it("caches signing key ID in memory", () => {
@@ -146,11 +145,10 @@ describe("Audit hash chain module (Architecture.md §7)", () => {
 
   describe("security invariants", () => {
     it("never stores private key in database", () => {
-      // The public key PEM is passed to the ensure_signing_key SQL function.
-      // The private key should only appear as a local variable, never sent to DB.
-      expect(src).toContain("publicKeyPem");
-      expect(src).toContain("ensure_signing_key");
-      // No Prisma data block should contain privateKey
+      // The create/findFirst calls should only reference publicKey
+      // The private key should only appear as a local variable, never in a Prisma data: {} block
+      expect(src).toContain("publicKey: publicKeyPem");
+      // No data block should contain privateKey
       const dataBlocks = src.match(/data:\s*\{[^}]*\}/g) || [];
       for (const block of dataBlocks) {
         expect(block).not.toContain("privateKey");

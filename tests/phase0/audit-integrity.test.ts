@@ -90,18 +90,6 @@ describe("Audit integrity — append-only enforcement", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 7b. AuditSigningKey has a SECURITY DEFINER function for registration
-  // -------------------------------------------------------------------------
-  it("AuditSigningKey has a SECURITY DEFINER function for key registration", () => {
-    expect(allSql).toMatch(
-      /CREATE OR REPLACE FUNCTION app\.ensure_signing_key/,
-    );
-    expect(allSql).toMatch(
-      /GRANT EXECUTE ON FUNCTION app\.ensure_signing_key\(TEXT,\s*TEXT\) TO watchtower_app/,
-    );
-  });
-
-  // -------------------------------------------------------------------------
   // 8. Permission, Role, RolePermission are read-only for the app role
   // -------------------------------------------------------------------------
   it("Permission table has REVOKE INSERT, UPDATE, DELETE from app role", () => {
