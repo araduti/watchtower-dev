@@ -27,6 +27,8 @@
 import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 import { readFileSync, accessSync, constants as fsConstants } from "node:fs";
+import { resolve, dirname, isAbsolute } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { prisma } from "./client.ts";
 import type { PrismaTransactionClient, Prisma } from "./types.ts";
@@ -53,6 +55,42 @@ export interface AuditEventInput {
   traceId?: string | null;
   occurredAt?: Date;
 }
+
+// ---------------------------------------------------------------------------
+// Project root resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Find the monorepo root by walking up from this file's directory until we
+ * find a `package.json` containing a `"workspaces"` field. This is more
+ * robust than counting `..` hops — it survives structural refactors as long
+ * as the workspace root keeps its `package.json`.
+ *
+ * Relative paths in `AUDIT_SIGNING_KEY_PATH` are resolved against this root
+ * so `./secrets/audit-signing-key.pem` always points to `<root>/secrets/...`
+ * even when `process.cwd()` is `apps/web/` or `apps/worker/`.
+ */
+function findProjectRoot(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  const { root: fsRoot } = Object.freeze({ root: resolve(dir, "/") });
+
+  while (dir !== fsRoot) {
+    try {
+      const pkg = JSON.parse(readFileSync(resolve(dir, "package.json"), "utf-8"));
+      if (pkg.workspaces) {
+        return dir;
+      }
+    } catch {
+      // No package.json here — keep walking up.
+    }
+    dir = dirname(dir);
+  }
+
+  // Fallback: if no workspace root found, use cwd (original behaviour).
+  return process.cwd();
+}
+
+const PROJECT_ROOT = findProjectRoot();
 
 // ---------------------------------------------------------------------------
 // Genesis constants
@@ -86,8 +124,8 @@ function loadPrivateKey(): KeyObject {
     return cachedPrivateKey;
   }
 
-  const keyPath = process.env["AUDIT_SIGNING_KEY_PATH"];
-  if (!keyPath) {
+  const rawKeyPath = process.env["AUDIT_SIGNING_KEY_PATH"];
+  if (!rawKeyPath) {
     throw new Error(
       "[watchtower/db] AUDIT_SIGNING_KEY_PATH is not set. " +
         "The audit subsystem requires an Ed25519 private key (PKCS#8 PEM) " +
@@ -95,13 +133,21 @@ function loadPrivateKey(): KeyObject {
     );
   }
 
+  // Resolve relative paths against the project root, not process.cwd().
+  // This ensures `./secrets/audit-signing-key.pem` works regardless of
+  // which sub-package (web, worker, tests) starts the process.
+  const keyPath = isAbsolute(rawKeyPath)
+    ? rawKeyPath
+    : resolve(PROJECT_ROOT, rawKeyPath);
+
   // Validate the file is readable before attempting to load it.
   try {
     accessSync(keyPath, fsConstants.R_OK);
   } catch (cause) {
     throw new Error(
       `[watchtower/db] Signing key file is not readable at path specified ` +
-        `by AUDIT_SIGNING_KEY_PATH. Verify the file exists and has correct permissions.`,
+        `by AUDIT_SIGNING_KEY_PATH. Verify the file exists and has correct permissions. ` +
+        `(resolved to: ${keyPath})`,
       { cause },
     );
   }
