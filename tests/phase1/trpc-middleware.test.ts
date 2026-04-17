@@ -79,28 +79,29 @@ describe("tRPC middleware chain (API-Conventions §4)", () => {
   describe("permissions.ts — permission loading", () => {
     const src = readServer("permissions.ts");
 
-    it("loads memberships with role → permission chain", () => {
-      expect(src).toContain("membership.findMany");
-      expect(src).toContain("roles");
+    it("loads memberships with permissions via SECURITY DEFINER function", () => {
+      // Uses app.load_user_memberships to bypass RLS for permission bootstrap
+      expect(src).toContain("load_user_memberships");
       expect(src).toContain("permissions");
-      expect(src).toContain("permissionKey");
+      expect(src).toContain("permission_key");
     });
 
     it("respects scopeIsolationMode", () => {
-      expect(src).toContain("scopeIsolationMode");
+      expect(src).toContain("isolation_mode");
       expect(src).toContain('"SOFT"');
       // STRICT is handled by the else branch — "SOFT" check is the gate
       expect(src).toContain("STRICT");
     });
 
     it("handles workspace-wide memberships (scopeId = null)", () => {
-      expect(src).toContain("scopeId");
+      expect(src).toContain("scope_id");
       expect(src).toContain("null");
       expect(src).toContain("hasWorkspaceWideMembership");
     });
 
-    it("filters soft-deleted scopes when loading all scopes", () => {
-      expect(src).toContain("deletedAt: null");
+    it("filters soft-deleted scopes via SECURITY DEFINER function", () => {
+      // The SQL function app.get_workspace_scope_ids handles deletedAt filtering
+      expect(src).toContain("get_workspace_scope_ids");
     });
 
     it("exports PermissionContext interface", () => {
