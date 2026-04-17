@@ -69,7 +69,7 @@ export async function resolveSession(
 
     const rows = await prisma.$queryRaw<
       Array<{ workspace_id: string; deleted_at: Date | null }>
-    >`SELECT * FROM app.resolve_workspace_from_org(${activeOrgId})`;
+    >`SELECT workspace_id, deleted_at FROM app.resolve_workspace_from_org(${activeOrgId})`;
 
     const workspace = rows[0];
 

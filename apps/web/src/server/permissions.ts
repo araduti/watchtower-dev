@@ -37,7 +37,7 @@ export async function loadPermissionContext(
   //    SECURITY DEFINER function that bypasses RLS.
   const membershipRows = await prisma.$queryRaw<
     Array<{ scope_id: string | null; permission_key: string }>
-  >`SELECT * FROM app.load_user_memberships(${userId}, ${workspaceId})`;
+  >`SELECT scope_id, permission_key FROM app.load_user_memberships(${userId}, ${workspaceId})`;
 
   // 2. Collect all permission keys across all memberships.
   const permissions = new Set<string>();
