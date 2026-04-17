@@ -118,6 +118,15 @@ export interface ProtectedContext {
   db: PrismaTransactionClient;
   /** Rate limit headers to attach to the response. */
   rateLimitHeaders: Record<string, string>;
+  /**
+   * Register a callback to run after the database transaction commits.
+   *
+   * Use this for side-effects that must only execute once the data is
+   * durable — e.g. sending Inngest events, webhooks, or notifications.
+   * Callbacks run sequentially; errors are logged but do not fail the
+   * request (the mutation has already committed).
+   */
+  afterCommit: (fn: () => Promise<void>) => void;
 }
 
 const protectedMiddleware = t.middleware(async ({ ctx, next, type }) => {
@@ -162,7 +171,9 @@ const protectedMiddleware = t.middleware(async ({ ctx, next, type }) => {
       ? permCtx.accessibleScopeIds
       : ["__no_scope_access__"];
 
-  return withRLS(session.workspaceId, scopeIds, async (tx) => {
+  const deferredActions: Array<() => Promise<void>> = [];
+
+  const result = await withRLS(session.workspaceId, scopeIds, async (tx) => {
     return next({
       ctx: {
         session,
@@ -171,9 +182,25 @@ const protectedMiddleware = t.middleware(async ({ ctx, next, type }) => {
         traceId,
         db: tx,
         rateLimitHeaders: rlHeaders,
+        afterCommit: (fn: () => Promise<void>) => {
+          deferredActions.push(fn);
+        },
       },
     });
   });
+
+  // Transaction is now committed — run deferred side-effects.
+  // Errors are logged but do not fail the request; the mutation
+  // has already committed and the response is being returned.
+  for (const action of deferredActions) {
+    try {
+      await action();
+    } catch (error) {
+      console.error("[watchtower] Post-commit action failed:", error);
+    }
+  }
+
+  return result;
 });
 
 export const publicProcedure = t.procedure;
