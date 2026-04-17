@@ -71,10 +71,12 @@ export async function withRLS<T>(
     // They are automatically cleared on commit/rollback — never leak
     // across pooled connections even when pg.Pool reuses a connection.
     //
-    // Scope IDs are wrapped in PostgreSQL array literal format {id1,id2}
-    // and each ID is validated by assertSafeIdentifier() to prevent
+    // Scope IDs are joined as comma-separated values (id1,id2) matching
+    // the format expected by the app.current_user_scope_ids() SQL function,
+    // which parses them with string_to_array(..., ',').
+    // Each ID is validated by assertSafeIdentifier() to prevent
     // comma injection into the scope list.
-    const scopeIdList = `{${scopeIds.join(",")}}`;
+    const scopeIdList = scopeIds.join(",");
 
     // $executeRawUnsafe is required here because PostgreSQL's SET command
     // does not support parameterized queries ($1). Tagged-template $executeRaw
