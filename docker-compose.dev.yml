@@ -93,7 +93,11 @@ services:
   # across restarts, which is exactly what you want in dev. Production uses
   # the cloud or self-hosted Inngest (separate compose file).
   inngest:
-    image: inngest/inngest:latest
+    # Pin to a specific version — never use `latest`.  The Inngest dev
+    # server API can change between minor releases and break the SDK's
+    # function registration or event delivery.  The SDK v4.2.2 works with
+    # v1.17.x; bump deliberately and test after upgrading.
+    image: inngest/inngest:v1.17.5
     container_name: watchtower-inngest
     restart: unless-stopped
     command: ["inngest", "dev", "-u", "http://host.docker.internal:3000/api/inngest"]
