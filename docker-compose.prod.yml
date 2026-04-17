@@ -1,14 +1,201 @@
+# =============================================================================
 # Watchtower — Production Stack
+# =============================================================================
 #
-# Production Docker Compose configuration.
+# Full production Docker Compose configuration for single-NUC deployment.
 # See docker-compose.dev.yml for the local development stack.
 #
-# The worker service requires /dev/kvm access for Firecracker microVM
-# sandboxing of customer-authored plugin evaluators. See ADR-004.
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d         start
+#   docker compose -f docker-compose.prod.yml down          stop
+#   docker compose -f docker-compose.prod.yml logs -f web   tail web logs
+#
+# Prerequisites:
+#   1. Create a production .env file with secrets-vault-sourced values
+#      (see .env.example — replace ALL "CHANGE-FOR-PROD" values)
+#   2. Generate audit signing key and mount it at /run/secrets/
+#   3. /dev/kvm must be available on the host for Firecracker sandboxing
+#   4. Set NODE_ENV=production — this controls Inngest SDK mode, logging,
+#      sandbox enforcement, and Next.js optimizations
+#
+# Architecture (see docs/Architecture.md):
+#
+#   Public internet → Traefik → Web (Next.js + tRPC + Inngest serve)
+#                                 ↓
+#                     Inngest (self-hosted) → Web /api/inngest (callback)
+#                                 ↓
+#                     PostgreSQL 18 / Garage S3
+#
+# Differences from dev:
+#   - Inngest runs self-hosted (not the stateless dev server)
+#   - Traefik handles TLS termination and reverse proxy
+#   - NODE_ENV=production activates Inngest Cloud/self-hosted mode
+#   - Sandbox mode uses Firecracker microVMs (not in-process execution)
+#   - Passwords and secrets come from a vault, not .env defaults
+#
+# =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
-  # Bun worker (single engine)
+  # Traefik (reverse proxy / TLS termination)
+  # ---------------------------------------------------------------------------
+  # Handles TLS, routing, and rate limiting at the edge. In dev, the app
+  # runs on the host with no proxy. In production, Traefik is the single
+  # entry point for all external traffic.
+  traefik:
+    image: traefik:v3.4
+    container_name: watchtower-traefik
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Uncomment for Let's Encrypt (see Traefik docs for DNS challenge config):
+      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      # - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/letsencrypt
+    networks:
+      - watchtower
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 18
+  # ---------------------------------------------------------------------------
+  # Same image as dev, but with production-strength passwords and no
+  # host-accessible port. Only accessible within the Docker network.
+  pg:
+    image: postgres:18-alpine
+    container_name: watchtower-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: watchtower
+      WATCHTOWER_APP_PASSWORD: ${WATCHTOWER_APP_PASSWORD}
+      WATCHTOWER_MIGRATE_PASSWORD: ${WATCHTOWER_MIGRATE_PASSWORD}
+    # No host port binding in production — only reachable within the network.
+    # Use `docker exec` for emergency access.
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d watchtower"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - watchtower
+
+  # ---------------------------------------------------------------------------
+  # Garage S3 (evidence vault)
+  # ---------------------------------------------------------------------------
+  # Single-node for NUC deployment. Production minimum for replication is
+  # three nodes — add them when the deployment scales beyond one NUC.
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: watchtower-garage
+    restart: unless-stopped
+    # No host port binding — only reachable within the network.
+    volumes:
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+      - ./docker/garage/garage.toml:/etc/garage.toml:ro
+    networks:
+      - watchtower
+
+  # ---------------------------------------------------------------------------
+  # Inngest (self-hosted, production mode)
+  # ---------------------------------------------------------------------------
+  # Production Inngest is stateful and persists events. The dev server is
+  # in-memory and stateless — it is NOT used in production.
+  #
+  # The self-hosted Inngest server requires INNGEST_EVENT_KEY and
+  # INNGEST_SIGNING_KEY to authenticate events and function registrations.
+  # These MUST be strong random values (not the dev placeholders).
+  #
+  # If using Inngest Cloud instead of self-hosted, remove this service and
+  # set INNGEST_EVENT_KEY / INNGEST_SIGNING_KEY from the Inngest dashboard.
+  # The Inngest SDK auto-detects Cloud mode when NODE_ENV=production.
+  inngest:
+    image: inngest/inngest:latest
+    container_name: watchtower-inngest
+    restart: unless-stopped
+    environment:
+      INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY}
+      INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY}
+    # No host port binding — only reachable within the Docker network.
+    # The web service calls Inngest via the internal network hostname.
+    networks:
+      - watchtower
+
+  # ---------------------------------------------------------------------------
+  # Web (Next.js 16 + tRPC v11 + Inngest serve)
+  # ---------------------------------------------------------------------------
+  # The main application. Serves the dashboard, API, and Inngest function
+  # registration endpoint (/api/inngest).
+  #
+  # In production:
+  #   - NODE_ENV=production activates Inngest Cloud/self-hosted SDK mode
+  #   - The Inngest serve route registers functions with the self-hosted
+  #     Inngest server (or Inngest Cloud) using INNGEST_SIGNING_KEY
+  #   - Firecracker sandbox mode is enforced (WATCHTOWER_SANDBOX_MODE=production)
+  #
+  # web:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/web/Dockerfile
+  #   container_name: watchtower-web
+  #   restart: unless-stopped
+  #   environment:
+  #     NODE_ENV: production
+  #     PORT: "3000"
+  #     DATABASE_URL: postgresql://watchtower_app:${WATCHTOWER_APP_PASSWORD}@pg:5432/watchtower?schema=public
+  #     DATABASE_MIGRATE_URL: postgresql://watchtower_migrate:${WATCHTOWER_MIGRATE_PASSWORD}@pg:5432/watchtower?schema=public
+  #     BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+  #     BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+  #     GARAGE_S3_ENDPOINT: http://garage:3900
+  #     GARAGE_S3_REGION: garage
+  #     GARAGE_S3_BUCKET: ${GARAGE_S3_BUCKET}
+  #     GARAGE_S3_ACCESS_KEY: ${GARAGE_S3_ACCESS_KEY}
+  #     GARAGE_S3_SECRET_KEY: ${GARAGE_S3_SECRET_KEY}
+  #     INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY}
+  #     INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY}
+  #     WATCHTOWER_CREDENTIAL_KEY: ${WATCHTOWER_CREDENTIAL_KEY}
+  #     AUDIT_SIGNING_KEY_PATH: /run/secrets/audit-signing-key.pem
+  #     STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+  #     STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+  #     GITHUB_APP_ID: ${GITHUB_APP_ID}
+  #     GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github-app-key.pem
+  #     WATCHTOWER_SANDBOX_MODE: production
+  #     LOG_LEVEL: info
+  #   volumes:
+  #     - ./secrets:/run/secrets:ro
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.web.rule=Host(`${WATCHTOWER_DOMAIN}`)"
+  #     - "traefik.http.routers.web.entrypoints=websecure"
+  #     - "traefik.http.services.web.loadbalancer.server.port=3000"
+  #     # Uncomment when using Let's Encrypt:
+  #     # - "traefik.http.routers.web.tls.certresolver=letsencrypt"
+  #   depends_on:
+  #     pg:
+  #       condition: service_healthy
+  #     garage:
+  #       condition: service_started
+  #     inngest:
+  #       condition: service_started
+  #   networks:
+  #     - watchtower
+
+  # ---------------------------------------------------------------------------
+  # Worker (scan pipeline + plugin sandbox)
   # ---------------------------------------------------------------------------
   # The scan execution worker. Runs built-in evaluators in-process and
   # dispatches customer plugin evaluators to Firecracker microVMs.
@@ -28,13 +215,12 @@ services:
   #   restart: unless-stopped
   #   devices:
   #     - "/dev/kvm:/dev/kvm"    # Required for Firecracker microVM sandboxing
-  #   volumes:
-  #     - ./secrets:/run/secrets:ro
-  #     - firecracker_artifacts:/opt/watchtower:ro
   #   environment:
-  #     DATABASE_URL: ${DATABASE_URL}
+  #     NODE_ENV: production
+  #     DATABASE_URL: postgresql://watchtower_app:${WATCHTOWER_APP_PASSWORD}@pg:5432/watchtower?schema=public
   #     INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY}
   #     INNGEST_SIGNING_KEY: ${INNGEST_SIGNING_KEY}
+  #     WATCHTOWER_CREDENTIAL_KEY: ${WATCHTOWER_CREDENTIAL_KEY}
   #     AUDIT_SIGNING_KEY_PATH: /run/secrets/audit-signing-key.pem
   #     WATCHTOWER_SANDBOX_MODE: production  # Never 'dev' in production
   #     FIRECRACKER_BIN_PATH: /usr/local/bin/firecracker
@@ -43,14 +229,40 @@ services:
   #     PLUGIN_TIMEOUT_SECONDS: "30"
   #     PLUGIN_MEMORY_MIB: "128"
   #     PLUGIN_VCPU_COUNT: "1"
+  #   volumes:
+  #     - ./secrets:/run/secrets:ro
+  #     - firecracker_artifacts:/opt/watchtower:ro
+  #   depends_on:
+  #     pg:
+  #       condition: service_healthy
+  #     inngest:
+  #       condition: service_started
   #   networks:
   #     - watchtower
 
-# volumes:
-#   firecracker_artifacts:
-#     name: watchtower_firecracker_artifacts
+# =============================================================================
+# VOLUMES
+# =============================================================================
+# Named volumes survive `docker compose down`. They're wiped only by
+# `docker compose down -v`.
 
-# networks:
-#   watchtower:
-#     name: watchtower-prod
-#     driver: bridge
+volumes:
+  pg_data:
+    name: watchtower_prod_pg_data
+  garage_meta:
+    name: watchtower_prod_garage_meta
+  garage_data:
+    name: watchtower_prod_garage_data
+  traefik_certs:
+    name: watchtower_prod_traefik_certs
+  # firecracker_artifacts:
+  #   name: watchtower_prod_firecracker_artifacts
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+
+networks:
+  watchtower:
+    name: watchtower-prod
+    driver: bridge
