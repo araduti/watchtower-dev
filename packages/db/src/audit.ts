@@ -27,6 +27,8 @@
 import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 import { readFileSync, accessSync, constants as fsConstants } from "node:fs";
+import { resolve, dirname, isAbsolute } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { prisma } from "./client.ts";
 import type { PrismaTransactionClient, Prisma } from "./types.ts";
@@ -53,6 +55,23 @@ export interface AuditEventInput {
   traceId?: string | null;
   occurredAt?: Date;
 }
+
+// ---------------------------------------------------------------------------
+// Project root resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the monorepo root directory.
+ *
+ * `@watchtower/db` lives at `<root>/packages/db/src/audit.ts`. We walk two
+ * levels up from this file's directory to reach `<root>`. This is stable
+ * regardless of which sub-package (web, worker, tests) starts the process.
+ *
+ * Relative paths in `AUDIT_SIGNING_KEY_PATH` are resolved against this root
+ * so `./secrets/audit-signing-key.pem` always points to `<root>/secrets/...`
+ * even when `process.cwd()` is `apps/web/` or `apps/worker/`.
+ */
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 // ---------------------------------------------------------------------------
 // Genesis constants
@@ -86,8 +105,8 @@ function loadPrivateKey(): KeyObject {
     return cachedPrivateKey;
   }
 
-  const keyPath = process.env["AUDIT_SIGNING_KEY_PATH"];
-  if (!keyPath) {
+  const rawKeyPath = process.env["AUDIT_SIGNING_KEY_PATH"];
+  if (!rawKeyPath) {
     throw new Error(
       "[watchtower/db] AUDIT_SIGNING_KEY_PATH is not set. " +
         "The audit subsystem requires an Ed25519 private key (PKCS#8 PEM) " +
@@ -95,13 +114,21 @@ function loadPrivateKey(): KeyObject {
     );
   }
 
+  // Resolve relative paths against the project root, not process.cwd().
+  // This ensures `./secrets/audit-signing-key.pem` works regardless of
+  // which sub-package (web, worker, tests) starts the process.
+  const keyPath = isAbsolute(rawKeyPath)
+    ? rawKeyPath
+    : resolve(PROJECT_ROOT, rawKeyPath);
+
   // Validate the file is readable before attempting to load it.
   try {
     accessSync(keyPath, fsConstants.R_OK);
   } catch (cause) {
     throw new Error(
       `[watchtower/db] Signing key file is not readable at path specified ` +
-        `by AUDIT_SIGNING_KEY_PATH. Verify the file exists and has correct permissions.`,
+        `by AUDIT_SIGNING_KEY_PATH. Verify the file exists and has correct permissions. ` +
+        `(resolved to: ${keyPath})`,
       { cause },
     );
   }
