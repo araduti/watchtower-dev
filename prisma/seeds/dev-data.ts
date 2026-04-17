@@ -68,7 +68,7 @@ function encryptCredentials(credentials: {
   clientId: string;
   clientSecret: string;
   msTenantId: string;
-}): Buffer {
+}): Uint8Array<ArrayBuffer> {
   const encryptionKey = process.env["WATCHTOWER_CREDENTIAL_KEY"];
   if (!encryptionKey) {
     throw new Error(
@@ -98,7 +98,10 @@ function encryptCredentials(credentials: {
   const authTag = cipher.getAuthTag();
 
   // Buffer layout: [IV][authTag][ciphertext]
-  return Buffer.concat([iv, authTag, encrypted]);
+  const blob = Buffer.concat([iv, authTag, encrypted]);
+  // Prisma 7 Bytes = Uint8Array<ArrayBuffer>; Buffer inherits ArrayBufferLike.
+  // .slice() returns a Uint8Array backed by a fresh ArrayBuffer.
+  return new Uint8Array(blob).slice();
 }
 
 // =============================================================================
