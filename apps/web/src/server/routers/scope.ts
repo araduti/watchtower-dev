@@ -229,8 +229,8 @@ export const scopeRouter = router({
       }
 
       // Create scope and write audit log in the same transaction.
-      // ctx.db is already inside a withRLS() transaction, so both
-      // operations share the same transaction boundary.
+      // ctx.db is the transaction client from withRLS() which wraps
+      // the entire procedure in a $transaction(), ensuring atomicity.
       const created = await ctx.db.scope.create({
         data: {
           workspaceId: ctx.session.workspaceId,
