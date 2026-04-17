@@ -56,6 +56,7 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
         ? input.href
         : input.url;
   const method = init?.method ?? "GET";
+  const isDev = process.env.NODE_ENV !== "production";
 
   let response: Response;
   try {
@@ -68,9 +69,11 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
     throw fetchError;
   }
 
-  console.debug(
-    `[inngest:devSafeFetch] intercepted: ${method} ${url} → ${response.status}`,
-  );
+  if (isDev) {
+    console.debug(
+      `[inngest:devSafeFetch] intercepted: ${method} ${url} → ${response.status}`,
+    );
+  }
 
   // Only patch event-ingest responses that returned 2xx.
   if (!response.ok || !isEventIngestUrl(url)) {
@@ -89,9 +92,11 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
       ) {
         // Already valid — return a fresh Response with the same body so
         // the SDK can call .json() on it.
-        console.debug(
-          `[inngest:devSafeFetch] body valid, passing through: ${method} ${url}`,
-        );
+        if (isDev) {
+          console.debug(
+            `[inngest:devSafeFetch] body valid, passing through: ${method} ${url}`,
+          );
+        }
         return new Response(text, {
           status: response.status,
           statusText: response.statusText,
