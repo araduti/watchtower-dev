@@ -34,7 +34,7 @@ export default function HomePage() {
   async function activateFirstOrganization(): Promise<boolean> {
     try {
       const orgsResult =
-        await authClient.organization.listOrganizations();
+        await authClient.organization.list();
 
       const orgs = orgsResult.data;
       if (orgs && orgs.length > 0) {
