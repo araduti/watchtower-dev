@@ -86,10 +86,7 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
       return new Response(JSON.stringify(patched), {
         status: response.status,
         statusText: response.statusText,
-        headers: new Headers([
-          ...Array.from(response.headers as unknown as Iterable<[string, string]>),
-          ["content-type", "application/json"],
-        ]),
+        headers: { "content-type": "application/json" },
       });
     } catch {
       // Not JSON — fall through to synthesise below.
