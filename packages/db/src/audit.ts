@@ -219,6 +219,10 @@ async function ensureSigningKeyRegistered(): Promise<string> {
   // Call the SECURITY DEFINER function that performs an atomic
   // find-or-create in the AuditSigningKey table. The function runs as
   // watchtower_migrate so it can INSERT; the app role only has EXECUTE.
+  //
+  // $queryRawUnsafe is used instead of the tagged-template $queryRaw
+  // because the function name is a trusted constant from our migration,
+  // and the two parameters are safely bound via $1/$2 placeholders.
   const result = await prisma.$queryRawUnsafe<{ ensure_signing_key: string }[]>(
     `SELECT app.ensure_signing_key($1, $2) AS ensure_signing_key`,
     publicKeyPem,

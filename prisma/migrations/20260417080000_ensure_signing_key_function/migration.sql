@@ -55,8 +55,11 @@ BEGIN
   END IF;
 
   -- Insert a new key. Use gen_random_uuid() for the ID since this function
-  -- runs outside Prisma's CUID generation. Both CUID and UUID are opaque
-  -- string identifiers — the column type is TEXT, not a native UUID type.
+  -- runs outside Prisma's CUID generation. AuditSigningKey rows will have
+  -- UUID-format IDs rather than CUIDs like other entities — this is
+  -- acceptable because IDs are opaque TEXT strings and the column type is
+  -- TEXT, not a native UUID type. The trade-off is necessary to keep INSERT
+  -- privilege restricted to this SECURITY DEFINER function.
   INSERT INTO public."AuditSigningKey" (id, "publicKey", algorithm, "createdAt")
   VALUES (gen_random_uuid()::TEXT, p_public_key, p_algorithm, NOW())
   RETURNING id INTO v_id;
