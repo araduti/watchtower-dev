@@ -119,6 +119,14 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "CANCELLED", label: "Cancelled" },
 ];
 
+const TRIGGER_OPTIONS: { value: string; label: string }[] = [
+  { value: ALL_FILTER, label: "All Triggers" },
+  { value: "MANUAL", label: "Manual" },
+  { value: "SCHEDULED", label: "Scheduled" },
+  { value: "WEBHOOK", label: "Webhook" },
+  { value: "API", label: "API" },
+];
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -250,6 +258,7 @@ export default function ScansPage() {
 
   /* ---- Filter state ---- */
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
+  const [triggerFilter, setTriggerFilter] = useState<string>(ALL_FILTER);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
 
@@ -260,7 +269,8 @@ export default function ScansPage() {
   const queryInput = {
     limit: DEFAULT_PAGE_SIZE,
     cursor,
-    ...(statusFilter !== ALL_FILTER && { status: statusFilter }),
+    ...(statusFilter !== ALL_FILTER && { status: statusFilter as ScanStatus }),
+    ...(triggerFilter !== ALL_FILTER && { triggeredBy: triggerFilter as ScanTrigger }),
   };
 
   const { data, isLoading, isError, error } =
@@ -290,6 +300,11 @@ export default function ScansPage() {
     reset();
   }, [reset]);
 
+  const handleTriggerChange = useCallback((value: string) => {
+    setTriggerFilter(value);
+    reset();
+  }, [reset]);
+
   /* ---- Row click handler ---- */
   const handleRowClick = useCallback(
     (s: ScanItem) => router.push(`/dashboard/scans/${s.id}`),
@@ -312,6 +327,18 @@ export default function ScansPage() {
         </SelectTrigger>
         <SelectContent className="rounded-2xl border-border/40 bg-card backdrop-blur-md">
           {STATUS_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={triggerFilter} onValueChange={handleTriggerChange}>
+        <SelectTrigger className="w-[160px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
+          <SelectValue placeholder="All Triggers" />
+        </SelectTrigger>
+        <SelectContent className="rounded-2xl border-border/40 bg-card backdrop-blur-md">
+          {TRIGGER_OPTIONS.map((opt) => (
             <SelectItem key={opt.value} value={opt.value} className="text-xs">
               {opt.label}
             </SelectItem>

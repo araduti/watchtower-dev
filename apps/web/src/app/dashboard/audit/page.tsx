@@ -1,7 +1,15 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { AlertTriangle, ScrollText } from "lucide-react";
-import { Badge } from "@watchtower/ui";
+import {
+  Badge,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { PageContainer } from "@/components/shared/layouts";
@@ -14,6 +22,8 @@ import { CursorPagination } from "@/components/shared/pagination";
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_PAGE_SIZE = 25;
+
+const ALL_FILTER = "__all__" as const;
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -79,6 +89,34 @@ function formatDateTime(dateStr: string): string {
     second: "2-digit",
   });
 }
+
+/* ------------------------------------------------------------------ */
+/*  Filter options                                                     */
+/* ------------------------------------------------------------------ */
+
+const EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: ALL_FILTER, label: "All Event Types" },
+  { value: "scan.trigger", label: "scan.trigger" },
+  { value: "scan.cancel", label: "scan.cancel" },
+  { value: "finding.acknowledge", label: "finding.acknowledge" },
+  { value: "finding.resolve", label: "finding.resolve" },
+  { value: "finding.acceptRisk", label: "finding.acceptRisk" },
+  { value: "finding.mute", label: "finding.mute" },
+  { value: "tenant.create", label: "tenant.create" },
+  { value: "member.invite", label: "member.invite" },
+  { value: "role.create", label: "role.create" },
+  { value: "workspace.updateSettings", label: "workspace.updateSettings" },
+];
+
+const TARGET_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: ALL_FILTER, label: "All Target Types" },
+  { value: "Scan", label: "Scan" },
+  { value: "Finding", label: "Finding" },
+  { value: "Tenant", label: "Tenant" },
+  { value: "Member", label: "Member" },
+  { value: "Role", label: "Role" },
+  { value: "Workspace", label: "Workspace" },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Column definitions                                                 */
@@ -153,21 +191,75 @@ const columns = [
 /* ------------------------------------------------------------------ */
 
 export default function AuditLogPage() {
-  /* ---- Pagination state ---- */
-  const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
+  /* ---- Filter state ---- */
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>(ALL_FILTER);
+  const [targetTypeFilter, setTargetTypeFilter] = useState<string>(ALL_FILTER);
 
-  const { data, isLoading, isError, error } = trpc.audit.list.useQuery({
+  /* ---- Pagination state ---- */
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage, reset } = useCursorPagination();
+
+  /* ---- Build query input ---- */
+  const queryInput = {
     limit: DEFAULT_PAGE_SIZE,
     cursor,
-  });
+    ...(eventTypeFilter !== ALL_FILTER && { eventType: eventTypeFilter }),
+    ...(targetTypeFilter !== ALL_FILTER && { targetType: targetTypeFilter }),
+  };
+
+  const { data, isLoading, isError, error } = trpc.audit.list.useQuery(queryInput);
 
   const entries = (data?.items ?? []) as unknown as AuditEntry[];
   const nextCursor = data?.nextCursor ?? null;
+
+  /* ---- Reset pagination when filters change ---- */
+  const handleEventTypeChange = useCallback((value: string) => {
+    setEventTypeFilter(value);
+    reset();
+  }, [reset]);
+
+  const handleTargetTypeChange = useCallback((value: string) => {
+    setTargetTypeFilter(value);
+    reset();
+  }, [reset]);
+
+  /* ---- Filter controls rendered in the header actions slot ---- */
+  const filterControls = (
+    <div className="flex items-center gap-3">
+      {/* Event Type filter */}
+      <Select value={eventTypeFilter} onValueChange={handleEventTypeChange}>
+        <SelectTrigger className="w-[200px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
+          <SelectValue placeholder="All Event Types" />
+        </SelectTrigger>
+        <SelectContent className="rounded-2xl border-border/40 bg-card backdrop-blur-md">
+          {EVENT_TYPE_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Target Type filter */}
+      <Select value={targetTypeFilter} onValueChange={handleTargetTypeChange}>
+        <SelectTrigger className="w-[170px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
+          <SelectValue placeholder="All Target Types" />
+        </SelectTrigger>
+        <SelectContent className="rounded-2xl border-border/40 bg-card backdrop-blur-md">
+          {TARGET_TYPE_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   return (
     <PageContainer
       title="Audit Log"
       description="Tamper-evident, chain-ordered activity log"
+      actions={filterControls}
     >
       {/* Loading skeleton */}
       {isLoading && <LoadingState rows={8} />}

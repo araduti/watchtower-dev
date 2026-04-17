@@ -2,10 +2,11 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, Download } from "lucide-react";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import {
   Badge,
+  Button,
   Select,
   SelectContent,
   SelectItem,
@@ -131,6 +132,37 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 ];
 
 /* ------------------------------------------------------------------ */
+/*  CSV Export helper                                                   */
+/* ------------------------------------------------------------------ */
+
+function exportFindingsCsv(findings: Finding[]) {
+  const headers = ["ID", "Check Slug", "Severity", "Status", "Visibility", "Tenant ID", "Scope ID", "First Seen", "Last Seen"];
+  const rows = findings.map((f) => [
+    f.id,
+    f.checkSlug,
+    f.severity,
+    f.status,
+    f.visibility,
+    f.tenantId,
+    f.scopeId,
+    new Date(f.firstSeenAt).toISOString(),
+    new Date(f.lastSeenAt).toISOString(),
+  ]);
+
+  const csv = [headers, ...rows].map((row) =>
+    row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+  ).join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `findings-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Column definitions                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -208,6 +240,9 @@ export default function FindingsPage() {
   const [severityFilter, setSeverityFilter] = useState<string>(ALL_FILTER);
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
 
+  /* ---- Selection state ---- */
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+
   /* ---- Pagination state ---- */
   const { cursor, hasPrevPage, goToNextPage, goToPrevPage, reset } = useCursorPagination();
 
@@ -215,8 +250,8 @@ export default function FindingsPage() {
   const queryInput = {
     limit: DEFAULT_PAGE_SIZE,
     cursor,
-    ...(severityFilter !== ALL_FILTER && { severity: severityFilter }),
-    ...(statusFilter !== ALL_FILTER && { status: statusFilter }),
+    ...(severityFilter !== ALL_FILTER && { severity: severityFilter as FindingSeverity }),
+    ...(statusFilter !== ALL_FILTER && { status: statusFilter as FindingStatus }),
   };
 
   const { data, isLoading, isError, error } =
@@ -225,14 +260,61 @@ export default function FindingsPage() {
   const findings = (data?.items ?? []) as unknown as Finding[];
   const nextCursor = data?.nextCursor ?? null;
 
-  /* ---- Reset pagination when filters change ---- */
+  /* ---- Bulk mutations ---- */
+  const utils = trpc.useUtils();
+  const acknowledgeMutation = trpc.finding.acknowledge.useMutation({
+    onSuccess: () => utils.finding.list.invalidate(),
+  });
+  const resolveMutation = trpc.finding.resolve.useMutation({
+    onSuccess: () => utils.finding.list.invalidate(),
+  });
+
+  const [bulkPending, setBulkPending] = useState(false);
+
+  const handleBulkAcknowledge = useCallback(async () => {
+    if (selectedKeys.size === 0) return;
+    setBulkPending(true);
+    try {
+      const promises = Array.from(selectedKeys).map((findingId) =>
+        acknowledgeMutation.mutateAsync({
+          idempotencyKey: crypto.randomUUID(),
+          findingId,
+        }),
+      );
+      await Promise.allSettled(promises);
+      setSelectedKeys(new Set());
+    } finally {
+      setBulkPending(false);
+    }
+  }, [selectedKeys, acknowledgeMutation]);
+
+  const handleBulkResolve = useCallback(async () => {
+    if (selectedKeys.size === 0) return;
+    setBulkPending(true);
+    try {
+      const promises = Array.from(selectedKeys).map((findingId) =>
+        resolveMutation.mutateAsync({
+          idempotencyKey: crypto.randomUUID(),
+          findingId,
+        }),
+      );
+      await Promise.allSettled(promises);
+      setSelectedKeys(new Set());
+    } finally {
+      setBulkPending(false);
+    }
+  }, [selectedKeys, resolveMutation]);
+
+  /* ---- Reset pagination and selection when filters change ---- */
   const handleSeverityChange = useCallback((value: string) => {
     setSeverityFilter(value);
+    setSelectedKeys(new Set());
     reset();
   }, [reset]);
 
   const handleStatusChange = useCallback((value: string) => {
     setStatusFilter(value);
+    setSelectedKeys(new Set());
     reset();
   }, [reset]);
 
@@ -242,9 +324,51 @@ export default function FindingsPage() {
     [router],
   );
 
-  /* ---- Filter controls rendered in the header actions slot ---- */
-  const filterControls = (
-    <div className="flex items-center gap-3">
+  /* ---- Filter controls + bulk actions rendered in the header ---- */
+  const headerActions = (
+    <div className="flex items-center gap-3 flex-wrap">
+      {/* Bulk action bar — only visible when items are selected */}
+      {selectedKeys.size > 0 && (
+        <div className="flex items-center gap-2 rounded-2xl border border-border/40 bg-card/80 backdrop-blur-md px-3 py-1.5">
+          <span className="text-xs text-muted-foreground">
+            {selectedKeys.size} selected
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={bulkPending}
+            onClick={handleBulkAcknowledge}
+          >
+            <Eye className="mr-1 h-3 w-3" />
+            Acknowledge
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={bulkPending}
+            onClick={handleBulkResolve}
+          >
+            <CheckCircle2 className="mr-1 h-3 w-3" />
+            Resolve
+          </Button>
+        </div>
+      )}
+
+      {/* CSV export */}
+      {findings.length > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => exportFindingsCsv(findings)}
+        >
+          <Download className="mr-1 h-3 w-3" />
+          Export CSV
+        </Button>
+      )}
+
       {/* Severity filter */}
       <Select value={severityFilter} onValueChange={handleSeverityChange}>
         <SelectTrigger className="w-[160px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
@@ -279,7 +403,7 @@ export default function FindingsPage() {
     <PageContainer
       title="Findings"
       description="Compliance findings across all tenants"
-      actions={filterControls}
+      actions={headerActions}
     >
       {/* Loading skeleton */}
       {isLoading && <LoadingState rows={8} />}
@@ -310,6 +434,9 @@ export default function FindingsPage() {
             data={findings}
             getKey={(f) => f.id}
             onRowClick={handleRowClick}
+            selectable
+            selectedKeys={selectedKeys}
+            onSelectionChange={setSelectedKeys}
           />
           <CursorPagination
             hasNextPage={nextCursor !== null}
