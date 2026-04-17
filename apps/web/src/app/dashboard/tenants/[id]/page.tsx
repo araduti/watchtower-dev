@@ -2,11 +2,12 @@
 
 import { use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
   AlertTriangle,
-  Scan,
+  Scan as ScanIcon,
   KeyRound,
   Globe,
   CalendarDays,
@@ -19,6 +20,9 @@ import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { GlowCard } from "@/components/shared/glow-card";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
+import { DataTable } from "@/components/shared/data-table";
+import { ScanStatusIcon } from "@/components/shared/status-icon";
+import type { DataTableColumn } from "@/components/shared/data-table";
 
 /* ------------------------------------------------------------------ */
 /*  Status badge configuration                                         */
@@ -81,6 +85,7 @@ export default function TenantDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
 
   const { data: tenant, isLoading, isError, error } = trpc.tenant.get.useQuery({
     tenantId: id,
@@ -213,32 +218,119 @@ export default function TenantDetailPage({
         </div>
       </GlowCard>
 
-      {/* Placeholder sections — Recent Findings & Recent Scans */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <GlowCard className="p-6">
-          <h2 className="text-sm font-medium text-muted-foreground mb-4">
-            Recent Findings
-          </h2>
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <AlertTriangle className="h-8 w-8 text-muted-foreground/40 mb-2" />
-            <p className="text-sm text-muted-foreground">
-              No findings yet. Trigger a scan to begin compliance monitoring.
-            </p>
-          </div>
-        </GlowCard>
+      {/* Recent Findings & Scans — wired to tRPC */}
+      <TenantRecentData tenantId={id} router={router} />
+    </PageContainer>
+  );
+}
 
-        <GlowCard className="p-6">
-          <h2 className="text-sm font-medium text-muted-foreground mb-4">
-            Recent Scans
-          </h2>
+/* ------------------------------------------------------------------ */
+/*  Scan columns for the tenant detail table                           */
+/* ------------------------------------------------------------------ */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ScanRecord = Record<string, any>;
+
+const scanColumns: DataTableColumn<ScanRecord>[] = [
+  {
+    key: "status",
+    header: "Status",
+    render: (item) => (
+      <span className="flex items-center gap-1.5">
+        <ScanStatusIcon status={item.status ?? "PENDING"} size={14} />
+        <span className="text-xs capitalize">{(item.status ?? "PENDING").toLowerCase()}</span>
+      </span>
+    ),
+  },
+  {
+    key: "triggeredBy",
+    header: "Triggered By",
+    render: (item) => (
+      <Badge variant="outline" className="text-xs">
+        {item.triggeredBy ?? "system"}
+      </Badge>
+    ),
+  },
+  {
+    key: "checksRun",
+    header: "Checks",
+    render: (item) => (
+      <span className="text-xs text-muted-foreground">
+        {item.checksRun ?? 0} run / {item.checksFailed ?? 0} failed
+      </span>
+    ),
+  },
+  {
+    key: "createdAt",
+    header: "Created",
+    render: (item) => (
+      <span className="text-xs text-muted-foreground font-mono">
+        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}
+      </span>
+    ),
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/*  Tenant recent data sub-component — queries scans for this tenant   */
+/* ------------------------------------------------------------------ */
+
+function TenantRecentData({
+  tenantId,
+  router,
+}: {
+  tenantId: string;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const scansQuery = trpc.scan.list.useQuery({
+    tenantId,
+    limit: 5,
+  });
+
+  const scans = scansQuery.data?.items ?? [];
+
+  return (
+    <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <GlowCard className="p-6">
+        <h2 className="text-sm font-medium text-muted-foreground mb-4">
+          Recent Findings
+        </h2>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <AlertTriangle className="h-8 w-8 text-muted-foreground/40 mb-2" />
+          <p className="text-sm text-muted-foreground">
+            Findings for this tenant will appear here after a scan completes.
+          </p>
+        </div>
+      </GlowCard>
+
+      <GlowCard className="p-6">
+        <h2 className="text-sm font-medium text-muted-foreground mb-4">
+          Recent Scans
+        </h2>
+        {scansQuery.isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <span className="text-sm text-muted-foreground animate-pulse">
+              Loading scans…
+            </span>
+          </div>
+        ) : scans.length > 0 ? (
+          <DataTable
+            columns={scanColumns}
+            data={scans}
+            getKey={(item: ScanRecord) => item.id}
+            onRowClick={(item: ScanRecord) =>
+              router.push(`/dashboard/scans/${item.id}`)
+            }
+          />
+        ) : (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Scan className="h-8 w-8 text-muted-foreground/40 mb-2" />
+            <ScanIcon className="h-8 w-8 text-muted-foreground/40 mb-2" />
             <p className="text-sm text-muted-foreground">
               No scans have been run for this tenant yet.
             </p>
           </div>
-        </GlowCard>
-      </div>
-    </PageContainer>
+        )}
+      </GlowCard>
+    </div>
   );
 }

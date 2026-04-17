@@ -141,9 +141,9 @@ const scanColumns: DataTableColumn<ScanRecord>[] = [
 export default function DashboardOverviewPage() {
   const router = useRouter();
 
-  const findingsQuery = trpc.finding.list.useQuery({ limit: 5 });
+  const findingsQuery = trpc.finding.list.useQuery({ limit: 100 });
   const scansQuery = trpc.scan.list.useQuery({ limit: 5 });
-  const tenantsQuery = trpc.tenant.list.useQuery({ limit: 1 });
+  const tenantsQuery = trpc.tenant.list.useQuery({ limit: 100 });
 
   const isMetricsLoading =
     findingsQuery.isLoading || tenantsQuery.isLoading;
@@ -157,6 +157,36 @@ export default function DashboardOverviewPage() {
   const critHighCount = findings.filter(
     (f: Finding) => f.severity === "CRITICAL" || f.severity === "HIGH",
   ).length;
+
+  /*
+   * Compliance score — weighted average based on finding severity and state.
+   * Resolved/accepted findings contribute positively; open/acknowledged
+   * findings reduce the score, weighted by severity.
+   *
+   * Weights: CRITICAL=5, HIGH=4, MEDIUM=3, LOW=2, INFO=1
+   * Resolved/ACCEPTED_RISK/NOT_APPLICABLE = passing, everything else = failing.
+   * Score = (passing weight sum / total weight sum) × 100
+   */
+  const SEVERITY_WEIGHT: Record<string, number> = {
+    CRITICAL: 5, HIGH: 4, MEDIUM: 3, LOW: 2, INFO: 1,
+  };
+  const PASSING_STATES = new Set(["RESOLVED", "ACCEPTED_RISK", "NOT_APPLICABLE"]);
+
+  let totalWeight = 0;
+  let passingWeight = 0;
+  for (const f of findings) {
+    const w = SEVERITY_WEIGHT[f.severity as string] ?? 1;
+    totalWeight += w;
+    if (PASSING_STATES.has(f.status as string)) {
+      passingWeight += w;
+    }
+  }
+  const complianceScore = totalWeight > 0
+    ? `${Math.round((passingWeight / totalWeight) * 100)}%`
+    : "—";
+
+  // Only show 5 most recent findings in the table
+  const recentFindings = findings.slice(0, 5);
 
   return (
     <PageContainer
@@ -196,7 +226,7 @@ export default function DashboardOverviewPage() {
                 />
                 <MetricCard
                   label="Compliance Score"
-                  value="—"
+                  value={complianceScore}
                   sublabel="Weighted average"
                   glow="green"
                 />
@@ -219,10 +249,10 @@ export default function DashboardOverviewPage() {
                   Loading findings…
                 </span>
               </div>
-            ) : findings.length > 0 ? (
+            ) : recentFindings.length > 0 ? (
               <DataTable
                 columns={findingColumns}
-                data={findings}
+                data={recentFindings}
                 getKey={(item: Finding) => item.id}
                 onRowClick={(item: Finding) =>
                   router.push(`/dashboard/findings/${item.id}`)

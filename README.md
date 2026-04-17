@@ -260,10 +260,10 @@ Idempotency middleware, audit hash chain (Ed25519), rate limiter (3 tiers), star
 **Phase 2.2** (scan pipeline & Inngest integration) — ✅ complete
 `@watchtower/scan-pipeline` (Inngest orchestration), Graph adapter (AES-256-GCM, OAuth, backoff), `@watchtower/sandbox` (Firecracker microVMs), 1,226 passing tests.
 
-**Phase 3.0** (UI foundation) — 🔨 in progress
-Next.js 16 dashboard, `@watchtower/ui` component library (shadcn/ui), dashboard pages for findings, scans, tenants, members, roles, frameworks, audit, and settings.
+**Phase 3.0** (UI foundation) — ✅ complete
+Next.js 16 dashboard, `@watchtower/ui` component library (shadcn/ui), dashboard pages for findings, scans, tenants, members, roles, checks, frameworks, audit, and settings. Dark/light theme toggle via `next-themes`. Compliance score calculation. Mutation dialogs for scan triggers, tenant connections, member invites, and role creation. Error boundaries. Cursor-based pagination across all list pages.
 
-**Next:** Completing Phase 3.0, then Phase 3.1+ (real-time updates, evidence uploads, compliance reporting).
+**Next:** Phase 3.1+ (real-time updates, evidence uploads, compliance reporting, advanced filtering, bulk actions).
 
 For the full roadmap, see [`docs/Architecture.md`](./docs/Architecture.md).
 
