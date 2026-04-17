@@ -30,10 +30,10 @@ const DEFAULT_PAGE_SIZE = 25;
  */
 interface Scope extends Record<string, unknown> {
   id: string;
-  workspaceId: string;
   name: string;
   slug: string;
   parentScopeId: string | null;
+  metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
