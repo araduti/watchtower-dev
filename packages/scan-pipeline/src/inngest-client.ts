@@ -49,16 +49,30 @@ function isEventIngestUrl(url: string): boolean {
  * Inngest dev server always conform to the SDK's expected schema.
  */
 async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
-  const response = await globalThis.fetch(input, init);
-
-  // Only patch event-ingest responses that returned 2xx.
   const url =
     typeof input === "string"
       ? input
       : input instanceof URL
         ? input.href
         : input.url;
+  const method = init?.method ?? "GET";
 
+  let response: Response;
+  try {
+    response = await globalThis.fetch(input, init);
+  } catch (fetchError) {
+    console.error(
+      `[inngest:devSafeFetch] fetch threw: ${method} ${url}`,
+      fetchError,
+    );
+    throw fetchError;
+  }
+
+  console.debug(
+    `[inngest:devSafeFetch] intercepted: ${method} ${url} → ${response.status}`,
+  );
+
+  // Only patch event-ingest responses that returned 2xx.
   if (!response.ok || !isEventIngestUrl(url)) {
     return response;
   }
@@ -75,6 +89,9 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
       ) {
         // Already valid — return a fresh Response with the same body so
         // the SDK can call .json() on it.
+        console.debug(
+          `[inngest:devSafeFetch] body valid, passing through: ${method} ${url}`,
+        );
         return new Response(text, {
           status: response.status,
           statusText: response.statusText,
@@ -82,6 +99,9 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
         });
       }
       // JSON is parseable but missing/wrong `status` — patch it.
+      console.warn(
+        `[inngest:devSafeFetch] body missing status:200, patching: ${method} ${url}`,
+      );
       const patched = { ids: [], ...json, status: 200 };
       return new Response(JSON.stringify(patched), {
         status: response.status,
@@ -94,6 +114,9 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
   }
 
   // Empty body or unparseable — synthesise a valid response.
+  console.warn(
+    `[inngest:devSafeFetch] empty/unparseable body, synthesising response: ${method} ${url}`,
+  );
   return new Response(JSON.stringify({ ids: [], status: 200 }), {
     status: 200,
     statusText: "OK",
