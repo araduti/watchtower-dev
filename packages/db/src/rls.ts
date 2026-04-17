@@ -76,8 +76,13 @@ export async function withRLS<T>(
     // comma injection into the scope list.
     const scopeIdList = `{${scopeIds.join(",")}}`;
 
-    await tx.$executeRaw`SET LOCAL app.current_workspace_id = ${workspaceId}`;
-    await tx.$executeRaw`SET LOCAL app.current_user_scope_ids = ${scopeIdList}`;
+    // $executeRawUnsafe is required here because PostgreSQL's SET command
+    // does not support parameterized queries ($1). Tagged-template $executeRaw
+    // would send "SET LOCAL ... = $1" which causes: syntax error at or near "$1".
+    // Safety: workspaceId and each scopeId are validated by assertSafeIdentifier()
+    // above (only [\w-]+ allowed), so direct interpolation is safe.
+    await tx.$executeRawUnsafe(`SET LOCAL app.current_workspace_id = '${workspaceId}'`);
+    await tx.$executeRawUnsafe(`SET LOCAL app.current_user_scope_ids = '${scopeIdList}'`);
 
     return fn(tx);
   });
