@@ -94,7 +94,7 @@ export function TopNav() {
           className="flex items-center shrink-0 hover:opacity-80 transition-opacity"
         >
           <Image
-              src={resolvedTheme === "dark" ? "/logo_dark.png" : "/logo_light.png"}
+              src={resolvedTheme === "light" ? "/logo_light.png" : "/logo_dark.png"}
               alt="Watchtower"
               width={48}
               height={32}
