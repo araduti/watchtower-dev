@@ -9,7 +9,7 @@
  * - `authClient.signOut()` — sign out and clear session
  * - `authClient.useSession()` — React hook for current session
  * - `authClient.organization.setActive()` — set active workspace
- * - `authClient.organization.listOrganizations()` — list user's workspaces
+ * - `authClient.organization.list()` — list user's workspaces
  *
  * The client communicates with the Better Auth server via the
  * `/api/auth/*` catch-all route handler.
