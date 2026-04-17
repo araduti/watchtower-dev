@@ -10,6 +10,7 @@ import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -58,6 +59,7 @@ const navItems = [
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
   const session = authClient.useSession();
 
   const user = session.data?.user;
@@ -92,14 +94,14 @@ export function TopNav() {
           className="flex items-center shrink-0 hover:opacity-80 transition-opacity"
         >
           <Image
-            src="/logo.png"
-            alt="Watchtower"
-            width={48}
-            height={32}
-            className="object-contain"
-            priority
-            unoptimized
-          />
+              src={resolvedTheme === "light" ? "/logo_light.png" : "/logo_dark.png"}
+              alt="Watchtower"
+              width={48}
+              height={32}
+              className="object-contain"
+              priority
+              unoptimized
+            />
         </Link>
 
         <Separator orientation="vertical" className="h-6" />
