@@ -111,7 +111,18 @@ export default function ScanDetailPage({
 }) {
   const { id } = React.use(params);
 
-  const { data: scan, isLoading, error } = trpc.scan.get.useQuery({ scanId: id });
+  const { data: scan, isLoading, error } = trpc.scan.get.useQuery(
+    { scanId: id },
+    {
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        if (status === "PENDING" || status === "RUNNING") return 3000;
+        return false;
+      },
+    },
+  );
+
+  const isLive = scan?.status === "PENDING" || scan?.status === "RUNNING";
 
   const utils = trpc.useUtils();
   const cancelMutation = trpc.scan.cancel.useMutation({
@@ -151,6 +162,15 @@ export default function ScanDetailPage({
       description="Scan results, evidence, and timeline"
       actions={
         <div className="flex items-center gap-3">
+          {isLive && (
+            <span className="inline-flex items-center gap-1.5 rounded-2xl border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-[11px] font-medium text-green-400">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+              </span>
+              Live
+            </span>
+          )}
           <ScanStatusIcon status={toIconStatus(scan.status)} size={20} />
           <Badge variant="outline" className="font-mono text-xs">
             {scan.status}

@@ -266,7 +266,10 @@ Next.js 16 dashboard, `@watchtower/ui` component library (shadcn/ui), dashboard 
 **Phase 3.1** (advanced interactions) — ✅ complete
 Evidence list + detail pages with raw evidence viewer. Bulk actions on findings (checkbox selection, bulk Acknowledge/Resolve). CSV export for findings. Advanced filtering on audit log (event type, target type), scans (triggered by), and findings (severity, status). Evidence navigation item in top-nav.
 
-**Next:** Phase 3.2+ (real-time scan progress, compliance PDF reports, date-range filters, scope management UI, API token management).
+**Phase 3.2** (real-time progress & operational polish) — ✅ complete
+Real-time scan progress (auto-polling scan detail with live indicator). Date-range filters on findings, scans, and audit log pages. Scope management UI (list + detail pages, top-nav integration). Compliance PDF report (browser print-based generation from dashboard overview data).
+
+**Next:** Phase 3.3+ (API token management, webhook/SIEM integrations, Stripe billing UI, scheduled scan configuration).
 
 For the full roadmap, see [`docs/Architecture.md`](./docs/Architecture.md).
 

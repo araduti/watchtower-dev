@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Scan, AlertTriangle, Play } from "lucide-react";
+import { DateRangeFilter } from "@/components/shared/date-range-filter";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import {
   Badge,
@@ -259,6 +260,8 @@ export default function ScansPage() {
   /* ---- Filter state ---- */
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
   const [triggerFilter, setTriggerFilter] = useState<string>(ALL_FILTER);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
 
@@ -271,6 +274,8 @@ export default function ScansPage() {
     cursor,
     ...(statusFilter !== ALL_FILTER && { status: statusFilter as ScanStatus }),
     ...(triggerFilter !== ALL_FILTER && { triggeredBy: triggerFilter as ScanTrigger }),
+    ...(dateFrom && !isNaN(new Date(dateFrom).getTime()) && { createdAfter: new Date(dateFrom).toISOString() }),
+    ...(dateTo && !isNaN(new Date(dateTo).getTime()) && { createdBefore: new Date(dateTo).toISOString() }),
   };
 
   const { data, isLoading, isError, error } =
@@ -302,6 +307,16 @@ export default function ScansPage() {
 
   const handleTriggerChange = useCallback((value: string) => {
     setTriggerFilter(value);
+    reset();
+  }, [reset]);
+
+  const handleDateFromChange = useCallback((value: string) => {
+    setDateFrom(value);
+    reset();
+  }, [reset]);
+
+  const handleDateToChange = useCallback((value: string) => {
+    setDateTo(value);
     reset();
   }, [reset]);
 
@@ -345,6 +360,12 @@ export default function ScansPage() {
           ))}
         </SelectContent>
       </Select>
+      <DateRangeFilter
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={handleDateFromChange}
+        onDateToChange={handleDateToChange}
+      />
     </div>
   );
 
