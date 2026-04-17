@@ -30,6 +30,9 @@
 // -- Inngest client --
 export { inngest } from "./inngest-client.ts";
 
+// -- Dev server probe (diagnostic) --
+export { probeDevServer } from "./inngest-client.ts";
+
 // -- Event types --
 export type {
   ScanPipelineEvents,

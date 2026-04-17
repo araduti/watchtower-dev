@@ -24,7 +24,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 import { createAuditEvent } from "@watchtower/db";
-import { inngest } from "@watchtower/scan-pipeline";
+import { inngest, probeDevServer } from "@watchtower/scan-pipeline";
 import { throwWatchtowerError } from "../errors.ts";
 import {
   checkIdempotencyKey,
@@ -329,6 +329,10 @@ export const scanRouter = router({
           console.info(
             `[watchtower:scan] scan/execute event sent: scanId=${created.id}`,
           );
+          // Diagnostic: query the dev server to see if it has the event/functions
+          if (process.env.NODE_ENV !== "production") {
+            await probeDevServer();
+          }
         } catch (error) {
           console.error(
             `[watchtower] Failed to send scan/execute event for scan ${created.id} ` +

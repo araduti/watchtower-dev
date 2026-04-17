@@ -44,6 +44,42 @@ function isEventIngestUrl(url: string): boolean {
   }
 }
 
+/** Return true when `url` targets the Inngest registration endpoint. */
+function isRegistrationUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname === "/fn/register";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Query the Inngest dev server API and log its state.
+ * This helps diagnose "nothing shows in the Inngest UI" issues by
+ * showing what the dev server actually knows about from its side.
+ */
+async function probeDevServer(): Promise<void> {
+  const devServerUrl =
+    process.env.INNGEST_DEV || "http://localhost:8288";
+  try {
+    const [appsRes, eventsRes] = await Promise.all([
+      globalThis
+        .fetch(`${devServerUrl}/v1/apps`, { signal: AbortSignal.timeout(2000) })
+        .catch(() => null),
+      globalThis
+        .fetch(`${devServerUrl}/v1/events`, { signal: AbortSignal.timeout(2000) })
+        .catch(() => null),
+    ]);
+    const apps = appsRes?.ok ? await appsRes.json() : null;
+    const events = eventsRes?.ok ? await eventsRes.json() : null;
+    console.info(
+      `[inngest:probe] dev server state: apps=${JSON.stringify(apps)} events=${JSON.stringify(events)}`,
+    );
+  } catch (err) {
+    console.warn(`[inngest:probe] could not reach dev server: ${err}`);
+  }
+}
+
 /**
  * Wraps `globalThis.fetch` so that event-ingest responses from the
  * Inngest dev server always conform to the SDK's expected schema.
@@ -57,6 +93,22 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
         : input.url;
   const method = init?.method ?? "GET";
   const isDev = process.env.NODE_ENV !== "production";
+
+  // In dev, log the request body for registration calls so we can see
+  // what callback URL the SDK is telling the dev server to use.
+  if (isDev && isRegistrationUrl(url) && init?.body) {
+    try {
+      const reqBody = JSON.parse(String(init.body));
+      console.info(
+        `[inngest:devSafeFetch] registration request: url=${reqBody.url} appName=${reqBody.appName} functions=${reqBody.functions?.length ?? 0}`,
+      );
+    } catch {
+      // non-JSON body — unusual for registration, log raw length
+      console.info(
+        `[inngest:devSafeFetch] registration request (non-JSON body, length=${String(init.body).length}): ${method} ${url}`,
+      );
+    }
+  }
 
   let response: Response;
   try {
@@ -72,6 +124,16 @@ async function devSafeFetch(input: RequestInfo | URL, init?: RequestInit) {
   if (isDev) {
     console.debug(
       `[inngest:devSafeFetch] intercepted: ${method} ${url} → ${response.status}`,
+    );
+  }
+
+  // For registration responses, log the full body so we can see what the
+  // dev server actually returned (errors, mismatches, etc.).
+  if (isDev && isRegistrationUrl(url)) {
+    const clone = response.clone();
+    const regBody = await clone.text();
+    console.info(
+      `[inngest:devSafeFetch] registration response: status=${response.status} body=${regBody || "(empty)"}`,
     );
   }
 
