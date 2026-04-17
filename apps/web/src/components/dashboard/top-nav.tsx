@@ -22,6 +22,7 @@ import {
   Layers,
   ShieldCheck,
   Shield,
+  FileSearch,
   LogOut,
 } from "lucide-react";
 import {
@@ -46,6 +47,7 @@ const navItems = [
   { href: "/dashboard/scans", label: "Scans", icon: Scan },
   { href: "/dashboard/tenants", label: "Tenants", icon: Building2 },
   { href: "/dashboard/checks", label: "Checks", icon: ShieldCheck },
+  { href: "/dashboard/evidence", label: "Evidence", icon: FileSearch },
   { href: "/dashboard/frameworks", label: "Frameworks", icon: Layers },
   { href: "/dashboard/roles", label: "Roles", icon: Shield },
   { href: "/dashboard/audit", label: "Audit Log", icon: ScrollText },

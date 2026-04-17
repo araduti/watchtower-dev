@@ -1,17 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, FileSearch } from "lucide-react";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
-import {
-  Badge,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@watchtower/ui";
+import { Badge } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
@@ -23,8 +16,6 @@ import { CursorPagination } from "@/components/shared/pagination";
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_PAGE_SIZE = 25;
-
-const ALL_FILTER = "__all__" as const;
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -98,26 +89,6 @@ const TYPE_BADGE: Record<
   MANUAL: { variant: "secondary", label: "Manual" },
   HYBRID: { variant: "secondary", label: "Hybrid" },
 } as const;
-
-/* ------------------------------------------------------------------ */
-/*  Filter options                                                     */
-/* ------------------------------------------------------------------ */
-
-const RESULT_OPTIONS: { value: string; label: string }[] = [
-  { value: ALL_FILTER, label: "All Results" },
-  { value: "PASS", label: "Pass" },
-  { value: "FAIL", label: "Fail" },
-  { value: "ERROR", label: "Error" },
-  { value: "NOT_APPLICABLE", label: "N/A" },
-];
-
-const REVIEW_STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: ALL_FILTER, label: "All Review Statuses" },
-  { value: "NOT_REQUIRED", label: "Not Required" },
-  { value: "PENDING_REVIEW", label: "Pending Review" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "REJECTED", label: "Rejected" },
-];
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -207,19 +178,13 @@ const columns = [
 export default function EvidencePage() {
   const router = useRouter();
 
-  /* ---- Filter state ---- */
-  const [resultFilter, setResultFilter] = useState<string>(ALL_FILTER);
-  const [reviewStatusFilter, setReviewStatusFilter] = useState<string>(ALL_FILTER);
-
   /* ---- Pagination state ---- */
-  const { cursor, hasPrevPage, goToNextPage, goToPrevPage, reset } = useCursorPagination();
+  const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
 
   /* ---- Build query input ---- */
   const queryInput = {
     limit: DEFAULT_PAGE_SIZE,
     cursor,
-    ...(resultFilter !== ALL_FILTER && { result: resultFilter }),
-    ...(reviewStatusFilter !== ALL_FILTER && { reviewStatus: reviewStatusFilter }),
   };
 
   const { data, isLoading, isError, error } =
@@ -228,61 +193,16 @@ export default function EvidencePage() {
   const evidence = (data?.items ?? []) as unknown as EvidenceItem[];
   const nextCursor = data?.nextCursor ?? null;
 
-  /* ---- Reset pagination when filters change ---- */
-  const handleResultChange = useCallback((value: string) => {
-    setResultFilter(value);
-    reset();
-  }, [reset]);
-
-  const handleReviewStatusChange = useCallback((value: string) => {
-    setReviewStatusFilter(value);
-    reset();
-  }, [reset]);
-
   /* ---- Row click handler ---- */
   const handleRowClick = useCallback(
     (e: EvidenceItem) => router.push(`/dashboard/evidence/${e.id}`),
     [router],
   );
 
-  /* ---- Filter controls rendered in the header actions slot ---- */
-  const filterControls = (
-    <div className="flex items-center gap-3">
-      {/* Result filter */}
-      <Select value={resultFilter} onValueChange={handleResultChange}>
-        <SelectTrigger className="w-[160px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
-          <SelectValue placeholder="All Results" />
-        </SelectTrigger>
-        <SelectContent className="rounded-2xl border-border/40 bg-card backdrop-blur-md">
-          {RESULT_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {/* Review status filter */}
-      <Select value={reviewStatusFilter} onValueChange={handleReviewStatusChange}>
-        <SelectTrigger className="w-[180px] rounded-2xl border-border/40 bg-card/80 backdrop-blur-md text-xs">
-          <SelectValue placeholder="All Review Statuses" />
-        </SelectTrigger>
-        <SelectContent className="rounded-2xl border-border/40 bg-card backdrop-blur-md">
-          {REVIEW_STATUS_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-
   return (
     <PageContainer
       title="Evidence"
       description="Compliance evidence collected during scans"
-      actions={filterControls}
     >
       {/* Loading skeleton */}
       {isLoading && <LoadingState rows={8} />}

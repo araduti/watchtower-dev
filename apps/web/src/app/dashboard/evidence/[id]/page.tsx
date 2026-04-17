@@ -27,10 +27,10 @@ interface EvidenceDetail {
   result: EvidenceResult;
   type: EvidenceType;
   observedAt: string;
-  validFrom: string | null;
+  validFrom: string;
   validUntil: string | null;
-  collectedByType: string | null;
-  collectedById: string | null;
+  collectedBy: string;
+  collectedById: string;
   reviewStatus: ReviewStatus;
   reviewNotes: string | null;
   reviewedBy: string | null;
@@ -41,8 +41,6 @@ interface EvidenceDetail {
   url: string | null;
   storageKey: string | null;
   rawEvidence: unknown;
-  createdAt: string;
-  updatedAt: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -230,11 +228,7 @@ export default function EvidenceDetailPage({
             <DetailRow label="Valid Until" value={formatDate(evidence.validUntil)} />
             <DetailRow
               label="Collected By"
-              value={
-                evidence.collectedByType
-                  ? `${evidence.collectedByType}${evidence.collectedById ? ` · ${truncateId(evidence.collectedById)}` : ""}`
-                  : "—"
-              }
+              value={`${evidence.collectedBy}${evidence.collectedById ? ` · ${truncateId(evidence.collectedById)}` : ""}`}
             />
           </div>
         </GlowCard>

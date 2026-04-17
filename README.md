@@ -263,7 +263,10 @@ Idempotency middleware, audit hash chain (Ed25519), rate limiter (3 tiers), star
 **Phase 3.0** (UI foundation) — ✅ complete
 Next.js 16 dashboard, `@watchtower/ui` component library (shadcn/ui), dashboard pages for findings, scans, tenants, members, roles, checks, frameworks, audit, and settings. Dark/light theme toggle via `next-themes`. Compliance score calculation. Mutation dialogs for scan triggers, tenant connections, member invites, and role creation. Error boundaries. Cursor-based pagination across all list pages.
 
-**Next:** Phase 3.1+ (real-time updates, evidence uploads, compliance reporting, advanced filtering, bulk actions).
+**Phase 3.1** (advanced interactions) — ✅ complete
+Evidence list + detail pages with raw evidence viewer. Bulk actions on findings (checkbox selection, bulk Acknowledge/Resolve). CSV export for findings. Advanced filtering on audit log (event type, target type), scans (triggered by), and findings (severity, status). Evidence navigation item in top-nav.
+
+**Next:** Phase 3.2+ (real-time scan progress, compliance PDF reports, date-range filters, scope management UI, API token management).
 
 For the full roadmap, see [`docs/Architecture.md`](./docs/Architecture.md).
 
