@@ -132,6 +132,7 @@ Copy `.env.example` to `.env` and fill in any blanks. The defaults in `.env.exam
 | `GARAGE_S3_BUCKET` | Evidence vault bucket name |
 | `INNGEST_EVENT_KEY` | Inngest routing key |
 | `INNGEST_SIGNING_KEY` | Inngest signing key |
+| `WATCHTOWER_CREDENTIAL_KEY` | AES-256-GCM key for tenant credential encryption (64 hex chars) |
 | `AUDIT_SIGNING_KEY_PATH` | Path to Ed25519 private key (file, not value) |
 | `STRIPE_SECRET_KEY` | Stripe API key for metered billing |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
