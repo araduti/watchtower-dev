@@ -15,7 +15,6 @@ import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { GlowCard } from "@/components/shared/glow-card";
 import { LoadingState } from "@/components/shared/empty-loading";
-import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Detail row                                                        */
@@ -51,6 +50,18 @@ function DetailRow({
       </div>
     </div>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -161,12 +172,12 @@ export default function ScopeDetailPage({
           <DetailRow
             icon={<Calendar className="h-4 w-4" />}
             label="Created At"
-            value={<ClientDate value={scope.createdAt} variant="datetime" />}
+            value={fmtDate(scope.createdAt)}
           />
           <DetailRow
             icon={<RefreshCw className="h-4 w-4" />}
             label="Updated At"
-            value={<ClientDate value={scope.updatedAt} variant="datetime" />}
+            value={fmtDate(scope.updatedAt)}
           />
         </div>
       </GlowCard>

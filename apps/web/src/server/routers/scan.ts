@@ -24,7 +24,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 import { createAuditEvent } from "@watchtower/db";
-import { inngest, probeDevServer } from "@watchtower/scan-pipeline";
+import { inngest } from "@watchtower/scan-pipeline";
 import { throwWatchtowerError } from "../errors.ts";
 import {
   checkIdempotencyKey,
@@ -309,38 +309,23 @@ export const scanRouter = router({
       );
 
       // Emit scan/execute event to Inngest to start the scan pipeline.
-      // Deferred to afterCommit so the scan record is visible to the
-      // Inngest function when it starts. If Inngest is down, the scan
-      // stays in PENDING and can be retried by a sweeper.
-      console.info(
-        `[watchtower:scan] scan created, queuing scan/execute event: scanId=${created.id} workspaceId=${ctx.session.workspaceId} tenantId=${tenant.id}`,
-      );
-      ctx.afterCommit(async () => {
-        try {
-          await inngest.send({
-            name: "scan/execute",
-            data: {
-              scanId: created.id,
-              workspaceId: ctx.session.workspaceId,
-              tenantId: tenant.id,
-              scopeId: tenant.scopeId,
-            },
-          });
-          console.info(
-            `[watchtower:scan] scan/execute event sent: scanId=${created.id}`,
-          );
-          // Diagnostic: query the dev server to see if it has the event/functions
-          if (process.env.NODE_ENV !== "production") {
-            await probeDevServer();
-          }
-        } catch (error) {
-          console.error(
-            `[watchtower] Failed to send scan/execute event for scan ${created.id} ` +
-              `(workspace=${ctx.session.workspaceId}, tenant=${tenant.id}):`,
-            error,
-          );
-        }
-      });
+      // This is fire-and-forget — if Inngest is down, the scan stays in
+      // PENDING and can be retried. The pipeline will guard against
+      // duplicate execution via the PENDING status check in step 1.
+      try {
+        await inngest.send({
+          name: "scan/execute",
+          data: {
+            scanId: created.id,
+            workspaceId: ctx.session.workspaceId,
+            tenantId: tenant.id,
+            scopeId: tenant.scopeId,
+          },
+        });
+      } catch {
+        // Swallow — the scan record is already persisted in PENDING state.
+        // A retry mechanism or sweeper will pick it up later.
+      }
 
       return created;
     }),
@@ -437,30 +422,20 @@ export const scanRouter = router({
       );
 
       // Emit scan/cancel event to Inngest.
-      // Deferred to afterCommit so the CANCELLED status is visible when
-      // the cancelOn mechanism fires on the execute-scan function.
-      console.info(
-        `[watchtower:scan] scan cancelled, queuing scan/cancel event: scanId=${existing.id} workspaceId=${ctx.session.workspaceId}`,
-      );
-      ctx.afterCommit(async () => {
-        try {
-          await inngest.send({
-            name: "scan/cancel",
-            data: {
-              scanId: existing.id,
-            },
-          });
-          console.info(
-            `[watchtower:scan] scan/cancel event sent: scanId=${existing.id}`,
-          );
-        } catch (error) {
-          console.error(
-            `[watchtower] Failed to send scan/cancel event for scan ${existing.id} ` +
-              `(workspace=${ctx.session.workspaceId}):`,
-            error,
-          );
-        }
-      });
+      // This triggers the cancelOn mechanism on the execute-scan function,
+      // aborting the in-progress scan pipeline if it hasn't completed yet.
+      try {
+        await inngest.send({
+          name: "scan/cancel",
+          data: {
+            scanId: existing.id,
+          },
+        });
+      } catch {
+        // Swallow — the cancellation is already recorded in the database.
+        // The execute-scan function will see the CANCELLED status on its
+        // next step and abort naturally.
+      }
 
       return cancelled;
     }),

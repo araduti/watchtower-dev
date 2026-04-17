@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, type ReactNode } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -28,7 +28,6 @@ import { GlowCard } from "@/components/shared/glow-card";
 import { LoadingState, EmptyState } from "@/components/shared/empty-loading";
 import { FindingStateIcon } from "@/components/shared/status-icon";
 import { InteractiveButton } from "@/components/shared/interactive-button";
-import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -129,10 +128,26 @@ const SEVERITY_GLOW: Record<FindingSeverity, "red" | "amber" | "blue" | "green" 
 } as const;
 
 /* ------------------------------------------------------------------ */
+/*  Date formatting                                                    */
+/* ------------------------------------------------------------------ */
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /*  Detail row                                                         */
 /* ------------------------------------------------------------------ */
 
-function DetailRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-muted-foreground">{label}</span>
@@ -154,11 +169,11 @@ function TimelineEntry({
   timestamp,
   detail,
 }: {
-  icon: ReactNode;
+  icon: React.ReactNode;
   label: string;
   actor: string | null;
   timestamp: string;
-  detail?: ReactNode;
+  detail?: string | null;
 }) {
   return (
     <div className="flex items-start gap-3 py-2">
@@ -166,7 +181,7 @@ function TimelineEntry({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-foreground">{label}</span>
-          <ClientDate value={timestamp} variant="datetime" className="text-xs text-muted-foreground font-mono" />
+          <span className="text-xs text-muted-foreground font-mono">{formatDate(timestamp)}</span>
         </div>
         {actor && (
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -260,7 +275,7 @@ export default function FindingDetailPage({
   const glowColor = SEVERITY_GLOW[finding.severity];
 
   /* ---- Build lifecycle timeline entries ---- */
-  const timelineEntries: ReactNode[] = [];
+  const timelineEntries: React.ReactNode[] = [];
 
   if (finding.acknowledgedAt) {
     timelineEntries.push(
@@ -295,7 +310,7 @@ export default function FindingDetailPage({
         label="Muted"
         actor={finding.mutedBy}
         timestamp={finding.mutedAt}
-        detail={finding.mutedUntil ? <>Until <ClientDate value={finding.mutedUntil} variant="datetime" /></> : null}
+        detail={finding.mutedUntil ? `Until ${formatDate(finding.mutedUntil)}` : null}
       />,
     );
   }
@@ -376,10 +391,10 @@ export default function FindingDetailPage({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
             <DetailRow label="Tenant ID" value={finding.tenantId} mono />
             <DetailRow label="Scope ID" value={finding.scopeId} mono />
-            <DetailRow label="First Seen" value={<ClientDate value={finding.firstSeenAt} variant="datetime" />} />
-            <DetailRow label="Last Seen" value={<ClientDate value={finding.lastSeenAt} variant="datetime" />} />
-            <DetailRow label="Created" value={<ClientDate value={finding.createdAt} variant="datetime" />} />
-            <DetailRow label="Updated" value={<ClientDate value={finding.updatedAt} variant="datetime" />} />
+            <DetailRow label="First Seen" value={formatDate(finding.firstSeenAt)} />
+            <DetailRow label="Last Seen" value={formatDate(finding.lastSeenAt)} />
+            <DetailRow label="Created" value={formatDate(finding.createdAt)} />
+            <DetailRow label="Updated" value={formatDate(finding.updatedAt)} />
             {finding.assignedTo && (
               <DetailRow label="Assigned To" value={finding.assignedTo} mono />
             )}
@@ -387,12 +402,12 @@ export default function FindingDetailPage({
               <DetailRow label="Latest Evidence ID" value={finding.latestEvidenceId} mono />
             )}
             {finding.evidenceDueAt && (
-              <DetailRow label="Evidence Due" value={<ClientDate value={finding.evidenceDueAt} variant="datetime" />} />
+              <DetailRow label="Evidence Due" value={formatDate(finding.evidenceDueAt)} />
             )}
             {finding.acceptanceExpiresAt && (
               <DetailRow
                 label="Acceptance Expires"
-                value={<ClientDate value={finding.acceptanceExpiresAt} variant="datetime" />}
+                value={formatDate(finding.acceptanceExpiresAt)}
               />
             )}
           </div>

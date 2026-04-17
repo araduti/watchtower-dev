@@ -20,7 +20,6 @@ import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
 import { FindingStateIcon } from "@/components/shared/status-icon";
-import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -215,14 +214,18 @@ const columns = [
     key: "firstSeenAt",
     header: "First Seen",
     render: (f: Finding) => (
-      <ClientDate value={f.firstSeenAt} variant="date" className="text-muted-foreground" />
+      <span className="text-muted-foreground">
+        {new Date(f.firstSeenAt).toLocaleDateString()}
+      </span>
     ),
   },
   {
     key: "lastSeenAt",
     header: "Last Seen",
     render: (f: Finding) => (
-      <ClientDate value={f.lastSeenAt} variant="date" className="text-muted-foreground" />
+      <span className="text-muted-foreground">
+        {new Date(f.lastSeenAt).toLocaleDateString()}
+      </span>
     ),
   },
 ];

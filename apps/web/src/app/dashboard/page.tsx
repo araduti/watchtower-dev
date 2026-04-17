@@ -13,7 +13,6 @@ import { FadeIn, StaggerGroup } from "@/components/shared/fade-in";
 import { ScanStatusIcon, FindingStateIcon } from "@/components/shared/status-icon";
 import { DataTable } from "@/components/shared/data-table";
 import { InteractiveButton } from "@/components/shared/interactive-button";
-import { ClientDate } from "@/components/shared/client-date";
 import { generateCompliancePdf } from "@/lib/generate-pdf-report";
 import type { DataTableColumn } from "@/components/shared/data-table";
 
@@ -85,11 +84,13 @@ const findingColumns: DataTableColumn<Finding>[] = [
     key: "lastSeen",
     header: "Last Seen",
     render: (item) => (
-      <ClientDate
-        value={item.lastSeenAt ?? item.updatedAt}
-        variant="date"
-        className="text-xs text-muted-foreground font-mono"
-      />
+      <span className="text-xs text-muted-foreground font-mono">
+        {item.lastSeenAt
+          ? new Date(item.lastSeenAt).toLocaleDateString()
+          : item.updatedAt
+            ? new Date(item.updatedAt).toLocaleDateString()
+            : "—"}
+      </span>
     ),
   },
 ];
@@ -128,11 +129,9 @@ const scanColumns: DataTableColumn<ScanRecord>[] = [
     key: "createdAt",
     header: "Created",
     render: (item) => (
-      <ClientDate
-        value={item.createdAt}
-        variant="date"
-        className="text-xs text-muted-foreground font-mono"
-      />
+      <span className="text-xs text-muted-foreground font-mono">
+        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}
+      </span>
     ),
   },
 ];
