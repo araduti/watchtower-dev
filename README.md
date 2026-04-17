@@ -281,6 +281,8 @@ Watchtower uses two separate Docker Compose files to clearly separate developmen
 cp .env.example .env.production
 # Edit .env.production — replace ALL CHANGE-FOR-PROD values with
 # secrets-vault-sourced credentials. Set NODE_ENV=production.
+# Tip: grep 'CHANGE-FOR-PROD' .env.production to find all values that
+# need replacement (database passwords, credential key, Inngest keys).
 
 # 2. Generate production audit signing key
 mkdir -p secrets
