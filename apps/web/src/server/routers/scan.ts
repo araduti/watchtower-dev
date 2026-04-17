@@ -325,7 +325,8 @@ export const scanRouter = router({
           });
         } catch (error) {
           console.error(
-            `[watchtower] Failed to send scan/execute event for scan ${created.id}:`,
+            `[watchtower] Failed to send scan/execute event for scan ${created.id} ` +
+              `(workspace=${ctx.session.workspaceId}, tenant=${tenant.id}):`,
             error,
           );
         }
@@ -438,7 +439,8 @@ export const scanRouter = router({
           });
         } catch (error) {
           console.error(
-            `[watchtower] Failed to send scan/cancel event for scan ${existing.id}:`,
+            `[watchtower] Failed to send scan/cancel event for scan ${existing.id} ` +
+              `(workspace=${ctx.session.workspaceId}):`,
             error,
           );
         }
