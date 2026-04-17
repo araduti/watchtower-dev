@@ -137,6 +137,11 @@ export const WATCHTOWER_ERRORS = {
       transport: "NOT_FOUND",
       message: "Scope not found.",
     },
+    SLUG_TAKEN: {
+      code: "WATCHTOWER:SCOPE:SLUG_TAKEN",
+      transport: "CONFLICT",
+      message: "A scope with this slug already exists in the workspace.",
+    },
     HAS_TENANTS: {
       code: "WATCHTOWER:SCOPE:HAS_TENANTS",
       transport: "PRECONDITION_FAILED",

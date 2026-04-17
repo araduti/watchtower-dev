@@ -435,6 +435,11 @@ export default function ScansPage() {
                 ))}
               </SelectContent>
             </Select>
+            {tenants.length === 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No tenants connected. <a href="/dashboard/tenants" className="underline text-primary">Connect a tenant</a> first.
+              </p>
+            )}
             {triggerMutation.error && (
               <p className="mt-3 text-sm text-red-400">{triggerMutation.error.message}</p>
             )}

@@ -27,6 +27,12 @@ import {
   upsertSystemRoles,
 } from "./permissions";
 import { DEV_USER, seedDevData, dryRunDevData } from "./dev-data";
+import {
+  CHECKS,
+  FRAMEWORKS,
+  seedComplianceData,
+  dryRunComplianceData,
+} from "./compliance-data";
 
 // =============================================================================
 // CLI ARGUMENT PARSING
@@ -68,6 +74,7 @@ Usage:
 Available seeders:
   permissions    Permission catalog and locked list
   roles          System role presets (Owner, Admin, Compliance Officer, Auditor)
+  compliance-data Checks, frameworks, and control mappings
   dev-data       Dev user, workspace, scope, and tenant (dev only)
 
 Examples:
@@ -170,6 +177,19 @@ const SEEDERS: readonly Seeder[] = [
         log.info(`  • ${role.name} (${role.slug}): ${role.permissions.length} permissions`);
       }
       return SYSTEM_ROLES.length;
+    },
+  },
+  {
+    name: "compliance-data",
+    description: "Checks, frameworks, and control mappings",
+    run: async (db) => {
+      const count = await seedComplianceData(db);
+      log.info(`${CHECKS.length} checks seeded`);
+      log.info(`${FRAMEWORKS.length} frameworks seeded`);
+      return count;
+    },
+    dryRun: async () => {
+      return dryRunComplianceData();
     },
   },
   {

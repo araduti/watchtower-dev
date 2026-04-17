@@ -282,6 +282,11 @@ export default function TenantsPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {scopes.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No scopes available. <a href="/dashboard/scopes" className="underline text-primary">Create a scope</a> first.
+                </p>
+              )}
             </div>
             {createMutation.error && (
               <p className="text-sm text-red-400">{createMutation.error.message}</p>

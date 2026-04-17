@@ -152,6 +152,7 @@ export default function MembersPage() {
   /* ---- Roles and scopes for invite dialog ---- */
   const { data: roleData } = trpc.role.list.useQuery({ limit: 100 });
   const roles = roleData?.items ?? [];
+  const assignableRoles = (roles as Array<{ id: string; name: string; isAssignable: boolean }>).filter((r) => r.isAssignable);
   const { data: scopeData } = trpc.scope.list.useQuery({ limit: 100 });
   const scopes = scopeData?.items ?? [];
 
@@ -248,11 +249,16 @@ export default function MembersPage() {
                   <SelectValue placeholder="Select a role…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(roles as Array<{ id: string; name: string; isAssignable: boolean }>).filter((r) => r.isAssignable).map((r) => (
+                  {assignableRoles.map((r) => (
                     <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {assignableRoles.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No assignable roles available. <a href="/dashboard/roles" className="underline text-primary">Create a role</a> first.
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Scope (optional)</label>

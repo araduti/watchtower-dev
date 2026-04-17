@@ -261,6 +261,11 @@ export default function RolesPage() {
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Permissions ({selectedPermissions.length} selected)</label>
               <div className="max-h-48 overflow-y-auto rounded-lg border border-border/40 p-2">
+                {permissions.length === 0 && (
+                  <p className="text-xs text-muted-foreground py-2 text-center">
+                    No permissions available. Run the seed to load the permission catalog.
+                  </p>
+                )}
                 {permissions.map((p) => (
                   <label key={p.key} className="flex items-center gap-2 py-1 px-1 hover:bg-muted/30 rounded cursor-pointer text-sm">
                     <input

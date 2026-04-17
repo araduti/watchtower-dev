@@ -1,14 +1,25 @@
 "use client";
 
-import { useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, FolderTree } from "lucide-react";
+import { AlertTriangle, FolderTree, Plus } from "lucide-react";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Input,
+} from "@watchtower/ui";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
+import { InteractiveButton } from "@/components/shared/interactive-button";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -98,6 +109,9 @@ const columns = [
 
 export default function ScopesPage() {
   const router = useRouter();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
 
   /* ---- Pagination state ---- */
   const { cursor, hasPrevPage, goToNextPage, goToPrevPage } =
@@ -112,6 +126,31 @@ export default function ScopesPage() {
   const scopes = (data?.items ?? []) as unknown as Scope[];
   const nextCursor = data?.nextCursor ?? null;
 
+  /* ---- Create scope mutation ---- */
+  const utils = trpc.useUtils();
+  const createMutation = trpc.scope.create.useMutation({
+    onSuccess: (scope) => {
+      utils.scope.list.invalidate();
+      setCreateOpen(false);
+      setName("");
+      setSlug("");
+      router.push(`/dashboard/scopes/${scope.id}`);
+    },
+  });
+
+  /* ---- Auto-generate slug from name ---- */
+  const handleNameChange = useCallback((value: string) => {
+    setName(value);
+    setSlug(
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+    );
+  }, []);
+
+  const openCreateDialog = useCallback(() => setCreateOpen(true), []);
+
   /* ---- Row click handler ---- */
   const handleRowClick = useCallback(
     (s: Scope) => router.push(`/dashboard/scopes/${s.id}`),
@@ -122,6 +161,15 @@ export default function ScopesPage() {
     <PageContainer
       title="Scopes"
       description="Isolation boundaries for tenants and compliance data"
+      actions={
+        <InteractiveButton
+          icon={<Plus className="h-4 w-4" />}
+          onClick={openCreateDialog}
+          aria-label="Create a new scope"
+        >
+          Create Scope
+        </InteractiveButton>
+      }
     >
       {/* Loading skeleton */}
       {isLoading && <LoadingState rows={6} />}
@@ -140,7 +188,15 @@ export default function ScopesPage() {
         <EmptyState
           icon={<FolderTree className="h-10 w-10" />}
           title="No scopes yet"
-          description="Scopes define isolation boundaries for tenants. They are created as part of workspace setup."
+          description="Scopes define isolation boundaries for tenants. Create your first scope to get started."
+          action={
+            <InteractiveButton
+              icon={<Plus className="h-4 w-4" />}
+              onClick={openCreateDialog}
+            >
+              Create Scope
+            </InteractiveButton>
+          }
         />
       )}
 
@@ -165,6 +221,57 @@ export default function ScopesPage() {
           />
         </>
       )}
+
+      {/* Create Scope Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Scope</DialogTitle>
+            <DialogDescription>
+              Create a new isolation boundary for tenants and compliance data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="scope-name" className="text-sm font-medium">Name</label>
+              <Input
+                id="scope-name"
+                placeholder="e.g. Healthcare Division"
+                value={name}
+                onChange={(e) => handleNameChange(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="scope-slug" className="text-sm font-medium">Slug</label>
+              <Input
+                id="scope-slug"
+                placeholder="e.g. healthcare-division"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Lowercase alphanumeric with hyphens. Used in URLs and API references.
+              </p>
+            </div>
+            {createMutation.error && (
+              <p className="text-sm text-red-400">{createMutation.error.message}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!name || !slug || createMutation.isPending}
+              onClick={() => createMutation.mutate({
+                idempotencyKey: crypto.randomUUID(),
+                name,
+                slug,
+              })}
+            >
+              {createMutation.isPending ? "Creating…" : "Create Scope"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

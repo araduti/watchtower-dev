@@ -102,7 +102,7 @@ export function CommandMenu() {
             <Shield className="mr-2 h-4 w-4" />
             Trigger Scan
           </CommandItem>
-          <CommandItem>
+          <CommandItem onSelect={() => navigate("/dashboard/findings")}>
             <SearchIcon className="mr-2 h-4 w-4" />
             Search Findings...
           </CommandItem>
