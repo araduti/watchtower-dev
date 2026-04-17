@@ -20,6 +20,7 @@ import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { GlowCard } from "@/components/shared/glow-card";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -233,7 +234,7 @@ export default function CheckDetailPage({
             <DetailRow
               icon={<CalendarDays className="h-4 w-4" />}
               label="Created"
-              value={new Date(check.createdAt).toLocaleString()}
+              value={<ClientDate value={check.createdAt} variant="datetime" />}
             />
           </div>
         </GlowCard>

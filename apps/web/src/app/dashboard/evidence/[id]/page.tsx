@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { Badge } from "@watchtower/ui";
@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { PageContainer } from "@/components/shared/layouts";
 import { GlowCard } from "@/components/shared/glow-card";
 import { LoadingState, EmptyState } from "@/components/shared/empty-loading";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -96,22 +97,6 @@ const RESULT_GLOW: Record<EvidenceResult, "green" | "red" | "amber" | "none"> = 
 } as const;
 
 /* ------------------------------------------------------------------ */
-/*  Date formatting                                                    */
-/* ------------------------------------------------------------------ */
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-/* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -134,7 +119,7 @@ function formatFileSize(bytes: number | null): string {
 /*  Detail row                                                         */
 /* ------------------------------------------------------------------ */
 
-function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function DetailRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-muted-foreground">{label}</span>
@@ -223,9 +208,9 @@ export default function EvidenceDetailPage({
               <span className="text-xs text-muted-foreground">Review Status</span>
               <div><Badge variant={reviewCfg.variant}>{reviewCfg.label}</Badge></div>
             </div>
-            <DetailRow label="Observed At" value={formatDate(evidence.observedAt)} />
-            <DetailRow label="Valid From" value={formatDate(evidence.validFrom)} />
-            <DetailRow label="Valid Until" value={formatDate(evidence.validUntil)} />
+            <DetailRow label="Observed At" value={<ClientDate value={evidence.observedAt} variant="datetime" />} />
+            <DetailRow label="Valid From" value={<ClientDate value={evidence.validFrom} variant="datetime" />} />
+            <DetailRow label="Valid Until" value={<ClientDate value={evidence.validUntil} variant="datetime" />} />
             <DetailRow
               label="Collected By"
               value={`${evidence.collectedBy}${evidence.collectedById ? ` · ${truncateId(evidence.collectedById)}` : ""}`}
@@ -312,7 +297,7 @@ export default function EvidenceDetailPage({
               {evidence.reviewedAt && (
                 <div>
                   <span className="text-xs text-muted-foreground">Reviewed At</span>
-                  <p className="text-sm text-foreground">{formatDate(evidence.reviewedAt)}</p>
+                  <p className="text-sm text-foreground"><ClientDate value={evidence.reviewedAt} variant="datetime" /></p>
                 </div>
               )}
             </div>

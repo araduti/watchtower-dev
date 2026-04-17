@@ -17,6 +17,7 @@ import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -76,19 +77,6 @@ const ACTOR_BADGE: Record<
 /** Truncate an ID to 8 characters for display. */
 function truncateId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
-}
-
-/** Format a date string to a readable date and time. */
-function formatDateTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -180,9 +168,7 @@ const columns = [
     header: "Occurred At",
     minWidth: "200px",
     render: (e: AuditEntry) => (
-      <span className="text-xs text-muted-foreground">
-        {formatDateTime(e.occurredAt)}
-      </span>
+      <ClientDate value={e.occurredAt} variant="datetime-seconds" className="text-xs text-muted-foreground" />
     ),
   },
 ];

@@ -10,6 +10,7 @@ import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -154,9 +155,7 @@ const columns = [
     key: "observedAt",
     header: "Observed At",
     render: (e: EvidenceItem) => (
-      <span className="text-muted-foreground">
-        {new Date(e.observedAt).toLocaleDateString()}
-      </span>
+      <ClientDate value={e.observedAt} variant="date" className="text-muted-foreground" />
     ),
     minWidth: "120px",
   },

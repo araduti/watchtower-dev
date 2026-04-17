@@ -27,6 +27,7 @@ import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
 import { ScanStatusIcon } from "@/components/shared/status-icon";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -132,17 +133,6 @@ const TRIGGER_OPTIONS: { value: string; label: string }[] = [
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function formatDuration(startedAt: string | null, finishedAt: string | null, status: ScanStatus): string {
   if (!startedAt) return "—";
   if (!finishedAt) {
@@ -229,9 +219,7 @@ const columns = [
     key: "startedAt",
     header: "Started At",
     render: (s: ScanItem) => (
-      <span className="text-muted-foreground">
-        {s.startedAt ? formatDateTime(s.startedAt) : "—"}
-      </span>
+      <ClientDate value={s.startedAt} variant="datetime" className="text-muted-foreground" />
     ),
     minWidth: "160px",
   },

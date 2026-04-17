@@ -20,6 +20,7 @@ import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
 import { InteractiveButton } from "@/components/shared/interactive-button";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -96,9 +97,7 @@ const columns = [
     key: "createdAt",
     header: "Created At",
     render: (s: Scope) => (
-      <span className="text-muted-foreground">
-        {new Date(s.createdAt).toLocaleDateString()}
-      </span>
+      <ClientDate value={s.createdAt} variant="date" className="text-muted-foreground" />
     ),
   },
 ];

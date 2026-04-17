@@ -312,6 +312,9 @@ export const scanRouter = router({
       // Deferred to afterCommit so the scan record is visible to the
       // Inngest function when it starts. If Inngest is down, the scan
       // stays in PENDING and can be retried by a sweeper.
+      console.info(
+        `[watchtower:scan] scan created, queuing scan/execute event: scanId=${created.id} workspaceId=${ctx.session.workspaceId} tenantId=${tenant.id}`,
+      );
       ctx.afterCommit(async () => {
         try {
           await inngest.send({
@@ -323,6 +326,9 @@ export const scanRouter = router({
               scopeId: tenant.scopeId,
             },
           });
+          console.info(
+            `[watchtower:scan] scan/execute event sent: scanId=${created.id}`,
+          );
         } catch (error) {
           console.error(
             `[watchtower] Failed to send scan/execute event for scan ${created.id} ` +
@@ -429,6 +435,9 @@ export const scanRouter = router({
       // Emit scan/cancel event to Inngest.
       // Deferred to afterCommit so the CANCELLED status is visible when
       // the cancelOn mechanism fires on the execute-scan function.
+      console.info(
+        `[watchtower:scan] scan cancelled, queuing scan/cancel event: scanId=${existing.id} workspaceId=${ctx.session.workspaceId}`,
+      );
       ctx.afterCommit(async () => {
         try {
           await inngest.send({
@@ -437,6 +446,9 @@ export const scanRouter = router({
               scanId: existing.id,
             },
           });
+          console.info(
+            `[watchtower:scan] scan/cancel event sent: scanId=${existing.id}`,
+          );
         } catch (error) {
           console.error(
             `[watchtower] Failed to send scan/cancel event for scan ${existing.id} ` +

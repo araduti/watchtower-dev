@@ -55,6 +55,7 @@ export const handleCancellation = inngest.createFunction(
     // - Trigger `cancelOn` on the execute-scan function (by receiving the event)
     // - Provide a hook for future side effects (e.g., webhook notifications)
     await step.run("acknowledge-cancellation", async () => {
+      console.info(`[scan-pipeline:cancel] cancellation acknowledged: scanId=${scanId}`);
       return {
         scanId,
         acknowledged: true,

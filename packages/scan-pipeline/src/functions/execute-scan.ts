@@ -82,11 +82,16 @@ export const executeScan = inngest.createFunction(
   async ({ event, step }) => {
     const { scanId, workspaceId, tenantId, scopeId } = event.data;
 
+    console.info(
+      `[scan-pipeline:execute] starting: scanId=${scanId} workspaceId=${workspaceId} tenantId=${tenantId} scopeId=${scopeId}`,
+    );
+
     // ------------------------------------------------------------------
     // Step 1: Transition PENDING → RUNNING
     // ------------------------------------------------------------------
     const tenant = await step.run("transition-to-running", async () => {
-      return await withRLS(workspaceId, [scopeId], async (tx) => {
+      console.info(`[scan-pipeline:execute] step=transition-to-running start: scanId=${scanId}`);
+      const result = await withRLS(workspaceId, [scopeId], async (tx) => {
         // Guard: verify scan exists and is still PENDING.
         // A race condition (duplicate event, manual cancel) could
         // put the scan in a non-PENDING state by the time we run.
@@ -168,12 +173,16 @@ export const executeScan = inngest.createFunction(
             | "WORKLOAD_IDENTITY",
         };
       });
+
+      console.info(`[scan-pipeline:execute] step=transition-to-running done: scanId=${scanId}`);
+      return result;
     });
 
     // ------------------------------------------------------------------
     // Step 2: Collect data from all adapter sources
     // ------------------------------------------------------------------
     const collectedSources = await step.run("collect-data", async () => {
+      console.info(`[scan-pipeline:execute] step=collect-data start: scanId=${scanId}`);
       const adapter = createGraphAdapter({
         msTenantId: tenant.msTenantId,
       });
@@ -209,6 +218,9 @@ export const executeScan = inngest.createFunction(
         });
       }
 
+      console.info(
+        `[scan-pipeline:execute] step=collect-data done: scanId=${scanId} sourcesCollected=${results.length}`,
+      );
       return results;
     });
 
@@ -225,17 +237,21 @@ export const executeScan = inngest.createFunction(
     // For now, the collected data is held in the step result from
     // "collect-data" and the scan completes with checksRun: 0.
     const evidenceSummary = await step.run("store-evidence", async () => {
-      return {
+      console.info(`[scan-pipeline:execute] step=store-evidence start: scanId=${scanId}`);
+      const summary = {
         sourcesCollected: collectedSources.length,
         sources: collectedSources.map((s) => s.source),
         note: "Engine not yet integrated — evidence storage deferred to Phase 3",
       };
+      console.info(`[scan-pipeline:execute] step=store-evidence done: scanId=${scanId}`);
+      return summary;
     });
 
     // ------------------------------------------------------------------
     // Step 4: Finalize scan — mark SUCCEEDED
     // ------------------------------------------------------------------
     await step.run("finalize-scan", async () => {
+      console.info(`[scan-pipeline:execute] step=finalize-scan start: scanId=${scanId}`);
       await withRLS(workspaceId, [scopeId], async (tx) => {
         await tx.scan.update({
           where: { id: scanId },
@@ -264,9 +280,11 @@ export const executeScan = inngest.createFunction(
           },
         });
       });
+      console.info(`[scan-pipeline:execute] step=finalize-scan done: scanId=${scanId}`);
     });
 
     // Emit completion event for downstream consumers
+    console.info(`[scan-pipeline:execute] emitting scan/completed: scanId=${scanId} status=SUCCEEDED`);
     await step.sendEvent("emit-scan-completed", {
       name: "scan/completed",
       data: {
@@ -308,6 +326,10 @@ async function handleScanFailure({
 }): Promise<void> {
   const { scanId, workspaceId, scopeId } =
     event.data.event.data;
+
+  console.info(
+    `[scan-pipeline:execute] handleScanFailure entering: scanId=${scanId} error=${error.message}`,
+  );
 
   // Sanitize error message — never expose stack traces or internal details
   const safeErrorMessage =
