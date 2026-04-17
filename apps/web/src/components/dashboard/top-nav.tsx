@@ -71,7 +71,7 @@ export function TopNav() {
         .toUpperCase()
         .slice(0, 2)
     : user?.email
-      ? user.email[0].toUpperCase()
+      ? user.email.charAt(0).toUpperCase()
       : "W";
 
   async function handleSignOut() {

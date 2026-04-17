@@ -38,10 +38,13 @@ export default function HomePage() {
 
       const orgs = orgsResult.data;
       if (orgs && orgs.length > 0) {
-        await authClient.organization.setActive({
-          organizationId: orgs[0].id,
-        });
-        return true;
+        const firstOrg = orgs[0];
+        if (firstOrg) {
+          await authClient.organization.setActive({
+            organizationId: firstOrg.id,
+          });
+          return true;
+        }
       }
       return false;
     } catch {
@@ -84,7 +87,7 @@ export default function HomePage() {
 
     try {
       const displayName =
-        name || (email.includes("@") ? email.split("@")[0] : email);
+        name || (email.includes("@") ? email.split("@")[0] : email) || email;
       const result = await authClient.signUp.email({
         email,
         password,

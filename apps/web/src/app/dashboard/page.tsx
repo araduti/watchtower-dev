@@ -276,7 +276,7 @@ export default function DashboardOverviewPage() {
 
       {/* ── Recent Findings & Scans ─────────────────────────────── */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <FadeIn direction="up" delay={0.1}>
+        <FadeIn direction="up" stagger={1}>
           <GlowCard className="p-6">
             <h2 className="text-sm font-medium text-muted-foreground mb-4">
               Recent Findings
@@ -308,7 +308,7 @@ export default function DashboardOverviewPage() {
           </GlowCard>
         </FadeIn>
 
-        <FadeIn direction="up" delay={0.2}>
+        <FadeIn direction="up" stagger={2}>
           <GlowCard className="p-6">
             <h2 className="text-sm font-medium text-muted-foreground mb-4">
               Recent Scans
