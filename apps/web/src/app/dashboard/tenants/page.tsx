@@ -26,6 +26,7 @@ import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
 import { InteractiveButton } from "@/components/shared/interactive-button";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -115,9 +116,7 @@ const columns = [
     key: "createdAt",
     header: "Created",
     render: (t: Tenant) => (
-      <span className="text-muted-foreground">
-        {new Date(t.createdAt).toLocaleDateString()}
-      </span>
+      <ClientDate value={t.createdAt} variant="date" className="text-muted-foreground" />
     ),
   },
 ];

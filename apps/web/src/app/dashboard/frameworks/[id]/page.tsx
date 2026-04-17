@@ -8,6 +8,7 @@ import { PageContainer } from "@/components/shared/layouts";
 import { GlowCard } from "@/components/shared/glow-card";
 import { LoadingState, EmptyState } from "@/components/shared/empty-loading";
 import { Badge } from "@watchtower/ui";
+import { ClientDate } from "@/components/shared/client-date";
 
 export default function FrameworkDetailPage({
   params,
@@ -118,11 +119,7 @@ export default function FrameworkDetailPage({
                 Added
               </dt>
               <dd className="mt-1 font-mono text-sm">
-                {new Date(framework.createdAt).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
+                <ClientDate value={framework.createdAt} variant="date" />
               </dd>
             </div>
           </dl>

@@ -23,6 +23,7 @@ import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { ScanStatusIcon } from "@/components/shared/status-icon";
 import type { DataTableColumn } from "@/components/shared/data-table";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Status badge configuration                                         */
@@ -208,12 +209,12 @@ export default function TenantDetailPage({
           <DetailRow
             icon={<CalendarDays className="h-4 w-4" />}
             label="Created"
-            value={new Date(tenant.createdAt).toLocaleString()}
+            value={<ClientDate value={tenant.createdAt} variant="datetime" />}
           />
           <DetailRow
             icon={<RefreshCw className="h-4 w-4" />}
             label="Last Updated"
-            value={new Date(tenant.updatedAt).toLocaleString()}
+            value={<ClientDate value={tenant.updatedAt} variant="datetime" />}
           />
         </div>
       </GlowCard>
@@ -264,9 +265,11 @@ const scanColumns: DataTableColumn<ScanRecord>[] = [
     key: "createdAt",
     header: "Created",
     render: (item) => (
-      <span className="text-xs text-muted-foreground font-mono">
-        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}
-      </span>
+      <ClientDate
+        value={item.createdAt}
+        variant="date"
+        className="text-xs text-muted-foreground font-mono"
+      />
     ),
   },
 ];

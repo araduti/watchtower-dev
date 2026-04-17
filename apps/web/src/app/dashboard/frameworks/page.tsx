@@ -10,6 +10,7 @@ import { PageContainer } from "@/components/shared/layouts";
 import { EmptyState, LoadingState } from "@/components/shared/empty-loading";
 import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -101,9 +102,7 @@ const columns = [
     key: "createdAt",
     header: "Added",
     render: (fw: Framework) => (
-      <span className="text-muted-foreground">
-        {new Date(fw.createdAt).toLocaleDateString()}
-      </span>
+      <ClientDate value={fw.createdAt} variant="date" className="text-muted-foreground" />
     ),
   },
 ];

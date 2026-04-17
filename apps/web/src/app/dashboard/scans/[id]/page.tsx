@@ -11,6 +11,7 @@ import { LoadingState } from "@/components/shared/empty-loading";
 import { Badge } from "@watchtower/ui";
 import { ScanStatusIcon } from "@/components/shared/status-icon";
 import { InteractiveButton } from "@/components/shared/interactive-button";
+import { ClientDate } from "@/components/shared/client-date";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -35,15 +36,6 @@ function formatDuration(start: string | null, end: string | null): string {
   const mins = Math.floor(secs / 60);
   const remSecs = secs % 60;
   return `${mins}m ${remSecs}s`;
-}
-
-/** Format an ISO timestamp for display */
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "medium",
-  });
 }
 
 /** Truncate a UUID for display */
@@ -261,7 +253,7 @@ export default function ScanDetailPage({
             value={
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                {fmtDate(scan.startedAt)}
+                <ClientDate value={scan.startedAt} variant="datetime" />
               </span>
             }
           />
@@ -270,7 +262,7 @@ export default function ScanDetailPage({
             value={
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                {fmtDate(scan.finishedAt)}
+                <ClientDate value={scan.finishedAt} variant="datetime" />
               </span>
             }
           />
@@ -279,7 +271,7 @@ export default function ScanDetailPage({
             value={
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                {fmtDate(scan.createdAt)}
+                <ClientDate value={scan.createdAt} variant="datetime" />
               </span>
             }
           />

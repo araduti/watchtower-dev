@@ -8,6 +8,7 @@ import { LoadingState } from "@/components/shared/empty-loading";
 import { Badge, Input } from "@watchtower/ui";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 import { Settings, Shield, AlertTriangle, Check, X, Copy } from "lucide-react";
+import { ClientDate } from "@/components/shared/client-date";
 
 type IsolationMode = "SOFT" | "STRICT";
 
@@ -85,16 +86,6 @@ export default function SettingsPage() {
     navigator.clipboard.writeText(workspace.data.id);
     setCopiedId(true);
     setTimeout(() => setCopiedId(false), 2000);
-  }
-
-  function formatDate(date: string | Date) {
-    return new Date(date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   }
 
   if (workspace.isLoading) {
@@ -225,13 +216,13 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-muted-foreground">
                   Created
                 </p>
-                <p className="font-mono text-sm">{formatDate(data.createdAt)}</p>
+                <p className="font-mono text-sm"><ClientDate value={data.createdAt} variant="datetime" /></p>
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">
                   Last Updated
                 </p>
-                <p className="font-mono text-sm">{formatDate(data.updatedAt)}</p>
+                <p className="font-mono text-sm"><ClientDate value={data.updatedAt} variant="datetime" /></p>
               </div>
             </div>
           </div>
