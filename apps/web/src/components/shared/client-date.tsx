@@ -42,11 +42,9 @@ export function ClientDate({
 }: ClientDateProps) {
   const [formatted, setFormatted] = useState<string>(() => {
     if (!value) return fallback
-    try {
-      return new Date(value).toISOString()
-    } catch {
-      return fallback
-    }
+    const d = new Date(value)
+    if (isNaN(d.getTime())) return fallback
+    return d.toISOString()
   })
 
   useEffect(() => {
@@ -54,13 +52,13 @@ export function ClientDate({
       setFormatted(fallback)
       return
     }
-    try {
-      const d = new Date(value)
-      const fmt = options ?? VARIANT_OPTIONS[variant]
-      setFormatted(d.toLocaleString(undefined, fmt))
-    } catch {
+    const d = new Date(value)
+    if (isNaN(d.getTime())) {
       setFormatted(fallback)
+      return
     }
+    const fmt = options ?? VARIANT_OPTIONS[variant]
+    setFormatted(d.toLocaleString(undefined, fmt))
   }, [value, variant, options, fallback])
 
   return (
