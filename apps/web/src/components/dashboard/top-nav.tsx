@@ -20,6 +20,8 @@ import {
   Settings,
   Search,
   Layers,
+  ShieldCheck,
+  Shield,
   LogOut,
 } from "lucide-react";
 import {
@@ -36,13 +38,16 @@ import {
 } from "@watchtower/ui";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/findings", label: "Findings", icon: AlertTriangle },
   { href: "/dashboard/scans", label: "Scans", icon: Scan },
   { href: "/dashboard/tenants", label: "Tenants", icon: Building2 },
+  { href: "/dashboard/checks", label: "Checks", icon: ShieldCheck },
   { href: "/dashboard/frameworks", label: "Frameworks", icon: Layers },
+  { href: "/dashboard/roles", label: "Roles", icon: Shield },
   { href: "/dashboard/audit", label: "Audit Log", icon: ScrollText },
 ];
 
@@ -139,6 +144,9 @@ export function TopNav() {
               ⌘K
             </kbd>
           </Button>
+
+          {/* Theme toggle */}
+          <ThemeToggle />
 
           {/* Settings */}
           <Link href="/dashboard/settings">

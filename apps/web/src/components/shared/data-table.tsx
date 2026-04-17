@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-interface DataTableColumn<T> {
+export interface DataTableColumn<T> {
   key: string;
   header: string;
   /** Custom cell renderer */
