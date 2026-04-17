@@ -1,0 +1,9 @@
+-- Schema-only migration: add Better Auth models to Prisma schema
+--
+-- The underlying database tables (user, session, account, verification,
+-- organization, member, invitation) already exist from migration
+-- 20260415120000_better_auth_tables.
+--
+-- This migration is intentionally empty — its purpose is to register the
+-- new Prisma models in the migration history so that `prisma migrate deploy`
+-- does not attempt to re-create the tables.
