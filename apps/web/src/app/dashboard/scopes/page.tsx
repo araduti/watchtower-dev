@@ -44,7 +44,8 @@ interface Scope extends Record<string, unknown> {
 
 function truncateId(id: string, length = 12): string {
   if (id.length <= length) return id;
-  return `${id.slice(0, 8)}…${id.slice(-4)}`;
+  const prefix = Math.max(4, length - 4);
+  return `${id.slice(0, prefix)}…${id.slice(-4)}`;
 }
 
 /* ------------------------------------------------------------------ */

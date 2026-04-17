@@ -141,7 +141,7 @@ export function generateCompliancePdf(data: ComplianceReportData): void {
 
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
-    alert("Popup blocked. Please allow popups for this site to download the report.");
+    alert("Your browser blocked the report window. Please enable popups in your browser settings for this site and try again.");
     return;
   }
   printWindow.document.write(htmlContent);
