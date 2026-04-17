@@ -250,8 +250,8 @@ export default function FindingsPage() {
   const queryInput = {
     limit: DEFAULT_PAGE_SIZE,
     cursor,
-    ...(severityFilter !== ALL_FILTER && { severity: severityFilter }),
-    ...(statusFilter !== ALL_FILTER && { status: statusFilter }),
+    ...(severityFilter !== ALL_FILTER && { severity: severityFilter as FindingSeverity }),
+    ...(statusFilter !== ALL_FILTER && { status: statusFilter as FindingStatus }),
   };
 
   const { data, isLoading, isError, error } =

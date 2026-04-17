@@ -269,8 +269,8 @@ export default function ScansPage() {
   const queryInput = {
     limit: DEFAULT_PAGE_SIZE,
     cursor,
-    ...(statusFilter !== ALL_FILTER && { status: statusFilter }),
-    ...(triggerFilter !== ALL_FILTER && { triggeredBy: triggerFilter }),
+    ...(statusFilter !== ALL_FILTER && { status: statusFilter as ScanStatus }),
+    ...(triggerFilter !== ALL_FILTER && { triggeredBy: triggerFilter as ScanTrigger }),
   };
 
   const { data, isLoading, isError, error } =
