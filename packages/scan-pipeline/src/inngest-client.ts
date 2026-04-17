@@ -58,7 +58,7 @@ function isRegistrationUrl(url: string): boolean {
  * This helps diagnose "nothing shows in the Inngest UI" issues by
  * showing what the dev server actually knows about from its side.
  */
-async function probeDevServer(): Promise<void> {
+export async function probeDevServer(): Promise<void> {
   const devServerUrl =
     process.env.INNGEST_DEV || "http://localhost:8288";
   try {
