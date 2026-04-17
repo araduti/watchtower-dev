@@ -7,10 +7,12 @@
  * step that computes which scopes the user can access and which permissions
  * they hold. The results feed into withRLS() and ctx.requirePermission().
  *
- * Uses the singleton prisma client directly (not ctx.db) because ctx.db
- * doesn't exist yet at this point in the middleware chain. The queries
- * here touch Membership, Role, and Permission — global tables that don't
- * have workspace-scoped RLS. The workspace filter is explicit in every query.
+ * Uses SECURITY DEFINER functions via $queryRaw to bypass RLS for these
+ * bootstrap queries. The Membership, Workspace, and Scope tables all have
+ * RLS policies that require session variables to be set, but this code is
+ * computing what those session variables should be — a chicken-and-egg
+ * problem solved by the bootstrap functions created in the
+ * 20260417070000_rls_bootstrap_functions migration.
  */
 
 import { prisma } from "@watchtower/db";
@@ -31,48 +33,25 @@ export async function loadPermissionContext(
   userId: string,
   workspaceId: string,
 ): Promise<PermissionContext> {
-  // 1. Load all memberships for this user in this workspace,
-  //    including their roles and each role's permissions.
-  const memberships = await prisma.membership.findMany({
-    where: {
-      userId,
-      workspaceId,
-    },
-    select: {
-      scopeId: true,
-      roles: {
-        select: {
-          role: {
-            select: {
-              permissions: {
-                select: {
-                  permissionKey: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
+  // 1. Load all memberships with their permission keys using the
+  //    SECURITY DEFINER function that bypasses RLS.
+  const membershipRows = await prisma.$queryRaw<
+    Array<{ scope_id: string | null; permission_key: string }>
+  >`SELECT * FROM app.load_user_memberships(${userId}, ${workspaceId})`;
 
   // 2. Collect all permission keys across all memberships.
   const permissions = new Set<string>();
   const explicitScopeIds = new Set<string>();
   let hasWorkspaceWideMembership = false;
 
-  for (const membership of memberships) {
-    if (membership.scopeId === null) {
+  for (const row of membershipRows) {
+    if (row.scope_id === null) {
       hasWorkspaceWideMembership = true;
     } else {
-      explicitScopeIds.add(membership.scopeId);
+      explicitScopeIds.add(row.scope_id);
     }
 
-    for (const membershipRole of membership.roles) {
-      for (const rolePermission of membershipRole.role.permissions) {
-        permissions.add(rolePermission.permissionKey);
-      }
-    }
+    permissions.add(row.permission_key);
   }
 
   // 3. Determine accessible scope IDs based on isolation mode.
@@ -81,22 +60,20 @@ export async function loadPermissionContext(
   if (hasWorkspaceWideMembership) {
     // User has a workspace-wide membership. Whether this grants
     // access to all scopes depends on the isolation mode.
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { scopeIsolationMode: true },
-    });
+    const isolationMode = await prisma.$queryRaw<
+      Array<{ get_workspace_isolation_mode: string | null }>
+    >`SELECT app.get_workspace_isolation_mode(${workspaceId})`;
 
-    if (workspace?.scopeIsolationMode === "SOFT") {
+    const mode = isolationMode[0]?.get_workspace_isolation_mode;
+
+    if (mode === "SOFT") {
       // SOFT mode: workspace-wide membership = access to all scopes.
       // This is the MSP pattern — admins see everything.
-      const allScopes = await prisma.scope.findMany({
-        where: {
-          workspaceId,
-          deletedAt: null,
-        },
-        select: { id: true },
-      });
-      accessibleScopeIds = allScopes.map((s) => s.id);
+      const scopeResult = await prisma.$queryRaw<
+        Array<{ get_workspace_scope_ids: string[] }>
+      >`SELECT app.get_workspace_scope_ids(${workspaceId})`;
+
+      accessibleScopeIds = scopeResult[0]?.get_workspace_scope_ids ?? [];
     } else {
       // STRICT mode: workspace-wide membership does NOT grant
       // cross-scope access. Only explicitly scoped memberships

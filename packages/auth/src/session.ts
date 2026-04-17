@@ -13,6 +13,13 @@
  * This mapping is necessary because Better Auth's Organization IDs are
  * not the same as Watchtower's Workspace CUIDs. The session carries
  * the Better Auth org ID; we translate it to Watchtower's workspace ID.
+ *
+ * RLS bootstrap note:
+ * The Workspace table has RLS enabled with FORCE ROW LEVEL SECURITY.
+ * At this point in the request lifecycle, no session variables have been
+ * set yet (that's what we're computing here). To avoid the chicken-and-egg
+ * problem, we use the SECURITY DEFINER function `app.resolve_workspace_from_org`
+ * which runs as watchtower_migrate (BYPASSRLS) to look up the workspace.
  */
 
 import { auth } from "./auth.ts";
@@ -51,24 +58,29 @@ export async function resolveSession(
       return null;
     }
 
-    // Resolve workspace ID from Better Auth org ID.
+    // Resolve workspace ID from Better Auth org ID using a SECURITY DEFINER
+    // function that bypasses RLS. This is necessary because the Workspace
+    // table's RLS policy requires app.current_workspace_id() to be set,
+    // but we're still computing what that value should be.
+    //
     // This import is deferred to avoid circular dependencies
     // between @watchtower/auth and @watchtower/db at module load time.
     const { prisma } = await import("@watchtower/db");
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { betterAuthOrgId: activeOrgId },
-      select: { id: true, deletedAt: true },
-    });
+    const rows = await prisma.$queryRaw<
+      Array<{ workspace_id: string; deleted_at: Date | null }>
+    >`SELECT * FROM app.resolve_workspace_from_org(${activeOrgId})`;
+
+    const workspace = rows[0];
 
     // Soft-deleted or nonexistent workspace → treat as no workspace
-    if (!workspace || workspace.deletedAt !== null) {
+    if (!workspace || workspace.deleted_at !== null) {
       return null;
     }
 
     return {
       userId: session.session.userId,
-      workspaceId: workspace.id,
+      workspaceId: workspace.workspace_id,
     };
   } catch {
     // Auth resolution failures are not exceptional — cookie expired,

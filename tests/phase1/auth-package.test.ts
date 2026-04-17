@@ -94,11 +94,12 @@ describe("@watchtower/auth package", () => {
 
     it("resolves workspace via betterAuthOrgId (not by org ID directly)", () => {
       // The mapping is: Better Auth org ID → Workspace.betterAuthOrgId → Workspace.id
-      expect(src).toContain("betterAuthOrgId");
+      // Uses the SECURITY DEFINER function resolve_workspace_from_org to bypass RLS
+      expect(src).toContain("resolve_workspace_from_org");
     });
 
     it("filters soft-deleted workspaces", () => {
-      expect(src).toContain("deletedAt");
+      expect(src).toContain("deleted_at");
     });
 
     it("returns null on auth failure (does not throw)", () => {
