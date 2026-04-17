@@ -18,8 +18,9 @@
  *
  * Security invariants:
  * - Private key is lazy-loaded once, then cached in memory.
- * - Public key is upserted into `AuditSigningKey` via the raw prisma
- *   singleton (not RLS-scoped) because it is a global bootstrap table.
+ * - Public key is registered in `AuditSigningKey` via a SECURITY DEFINER
+ *   function (`app.ensure_signing_key`) that runs as the migrate role.
+ *   The app role has only SELECT on this table; INSERT is privileged.
  * - All chain writes go through the caller-provided `tx` (RLS-scoped
  *   transaction client) so RLS policies continue to apply.
  */
@@ -195,12 +196,16 @@ function getPublicKeyPem(): string {
 }
 
 /**
- * Upsert the `AuditSigningKey` row using the raw `prisma` singleton.
+ * Register (or retrieve) the `AuditSigningKey` row via a SECURITY DEFINER
+ * function (`app.ensure_signing_key`).
  *
- * This is a global bootstrap query — the signing key table is not
- * workspace-scoped so it does not go through RLS. The upsert is
- * idempotent: if a row with the same public key already exists, the
- * existing ID is returned.
+ * The `watchtower_app` role has only SELECT on `AuditSigningKey` — INSERT
+ * is revoked because key management is a privileged operation. The
+ * SECURITY DEFINER function runs as `watchtower_migrate` to perform an
+ * atomic find-or-create, while the app role only needs EXECUTE.
+ *
+ * This is the same pattern used for the RLS bootstrap functions in
+ * `20260417070000_rls_bootstrap_functions`.
  *
  * @returns The `id` of the `AuditSigningKey` row.
  */
@@ -211,29 +216,25 @@ async function ensureSigningKeyRegistered(): Promise<string> {
 
   const publicKeyPem = getPublicKeyPem();
 
-  // Upsert by publicKey — if the key is already registered, reuse it.
-  // Prisma upsert requires a unique field for the `where` clause.
-  // AuditSigningKey has only `id` as unique, so we do a find-or-create.
-  const existing = await prisma.auditSigningKey.findFirst({
-    where: { publicKey: publicKeyPem, retiredAt: null },
-    select: { id: true },
-  });
+  // Call the SECURITY DEFINER function that performs an atomic
+  // find-or-create in the AuditSigningKey table. The function runs as
+  // watchtower_migrate so it can INSERT; the app role only has EXECUTE.
+  const result = await prisma.$queryRawUnsafe<{ ensure_signing_key: string }[]>(
+    `SELECT app.ensure_signing_key($1, $2) AS ensure_signing_key`,
+    publicKeyPem,
+    "ed25519",
+  );
 
-  if (existing) {
-    cachedSigningKeyId = existing.id;
-    return existing.id;
+  const id = result[0]?.ensure_signing_key;
+  if (!id) {
+    throw new Error(
+      "[watchtower/db] app.ensure_signing_key() returned no result. " +
+        "The SECURITY DEFINER function should always return a signing key ID.",
+    );
   }
 
-  const created = await prisma.auditSigningKey.create({
-    data: {
-      publicKey: publicKeyPem,
-      algorithm: "ed25519",
-    },
-    select: { id: true },
-  });
-
-  cachedSigningKeyId = created.id;
-  return created.id;
+  cachedSigningKeyId = id;
+  return id;
 }
 
 // ---------------------------------------------------------------------------
