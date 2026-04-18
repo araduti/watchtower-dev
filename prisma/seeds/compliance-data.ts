@@ -516,6 +516,8 @@ const CONTROLS: readonly ControlSeed[] = [
   },
 ] as const;
 
+const MIN_EXPECTED_ASSERTIONS = 100;
+
 // =============================================================================
 // SEEDER IMPLEMENTATION
 // =============================================================================
@@ -644,6 +646,17 @@ export async function seedComplianceData(db: PrismaClient): Promise<number> {
     count++;
   }
 
+  // Guardrail: assertions are curated data and should not be synthesized in
+  // this seeder. Validate presence so missing imports are caught early.
+  const assertionCount = await db.controlAssertion.count();
+  if (assertionCount < MIN_EXPECTED_ASSERTIONS) {
+    throw new Error(
+      `ControlAssertion count too low (${assertionCount}). ` +
+        `Expected at least ${MIN_EXPECTED_ASSERTIONS}. ` +
+        "Import curated CIS_Microsoft_365_Foundations_Benchmark_v6.0.1 assertions before running scans.",
+    );
+  }
+
   return count;
 }
 
@@ -655,5 +668,6 @@ export async function dryRunComplianceData(): Promise<number> {
   console.log(`    • ${CHECKS.length} compliance checks`);
   console.log(`    • ${FRAMEWORKS.length} compliance frameworks`);
   console.log(`    • ${CONTROLS.length} control mappings`);
+  console.log(`    • (validate) >= ${MIN_EXPECTED_ASSERTIONS} preloaded control assertions`);
   return CHECKS.length + FRAMEWORKS.length + CONTROLS.length;
 }

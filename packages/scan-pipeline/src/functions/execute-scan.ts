@@ -444,8 +444,15 @@ export const executeScan = inngest.createFunction(
         });
 
         if (dbAssertions.length === 0) {
-          console.info(`[scan-pipeline:execute] step=store-evidence: no assertions found, skipping engine`);
-          return { checksRun: 0, checksFailed: 0 };
+          const checkCount = await tx.check.count();
+          const message =
+            checkCount > 0
+              ? `No ControlAssertion rows found (checks=${checkCount}). ` +
+                "Compliance metadata is incomplete; seed ControlAssertion data before scanning."
+              : "No compliance checks are configured. Seed checks/framework data before scanning.";
+
+          console.error(`[scan-pipeline:execute] step=store-evidence: ${message}`);
+          throw new NonRetriableError(message);
         }
 
         const engineAssertions: EngineAssertion[] = dbAssertions.map((dba) => ({
