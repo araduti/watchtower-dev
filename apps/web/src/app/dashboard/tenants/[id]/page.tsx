@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -102,6 +102,30 @@ export default function TenantDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [consentBanner, setConsentBanner] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  // Handle consent callback query parameters
+  useEffect(() => {
+    const consentGranted = searchParams.get("consent_granted");
+    const consentError = searchParams.get("consent_error");
+
+    if (consentGranted === "true") {
+      setConsentBanner({
+        type: "success",
+        message:
+          "Admin consent granted successfully! Now enter your Client ID and Client Secret to complete the connection.",
+      });
+    } else if (consentError) {
+      setConsentBanner({
+        type: "error",
+        message: consentError,
+      });
+    }
+  }, [searchParams]);
 
   const { data: tenant, isLoading, isError, error } = trpc.tenant.get.useQuery({
     tenantId: id,
@@ -171,6 +195,34 @@ export default function TenantDetailPage({
         </Link>
       }
     >
+      {/* Azure consent callback banner */}
+      {consentBanner && (
+        <div
+          className={cn(
+            "mb-4 flex items-center justify-between rounded-2xl px-4 py-3 text-sm",
+            consentBanner.type === "success"
+              ? "bg-emerald-500/10 text-emerald-300"
+              : "bg-red-500/10 text-red-300",
+          )}
+        >
+          <div className="flex items-center gap-2">
+            {consentBanner.type === "success" ? (
+              <Check className="h-4 w-4 shrink-0" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+            )}
+            <span>{consentBanner.message}</span>
+          </div>
+          <button
+            onClick={() => setConsentBanner(null)}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Tenant details card */}
       <GlowCard glow={statusConfig.glow} className="p-6">
         {/* Card header */}

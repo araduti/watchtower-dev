@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Plus } from "lucide-react";
+import { Building2, Plus, ShieldCheck, AlertTriangle } from "lucide-react";
 import {
   Badge,
   Button,
@@ -54,6 +54,7 @@ interface Tenant extends Record<string, unknown> {
   msTenantId: string;
   authMethod: "CLIENT_SECRET" | "WORKLOAD_IDENTITY";
   status: "ACTIVE" | "DISCONNECTED" | "ERROR";
+  hasCredentials: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -111,6 +112,22 @@ const columns = [
       const cfg = STATUS_BADGE[t.status];
       return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
     },
+  },
+  {
+    key: "hasCredentials",
+    header: "Connection",
+    render: (t: Tenant) =>
+      t.hasCredentials ? (
+        <span className="flex items-center gap-1 text-xs text-emerald-400">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Configured
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-xs text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Setup needed
+        </span>
+      ),
   },
   {
     key: "createdAt",
