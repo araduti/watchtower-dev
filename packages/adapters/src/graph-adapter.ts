@@ -824,7 +824,7 @@ async function collectTransportRules(
 ): Promise<{ data: TransportRule[]; apiCalls: number }> {
   // Exchange transport rules are accessed via the beta endpoint.
   // Tenants without Exchange Online will return 404 ("Resource not found
-  // for the segment 'transport'"). This is expected — return an empty list.
+  // for the segment 'transport'"). This is expected — return an empty result.
   let result: { data: unknown[]; apiCalls: number };
   try {
     result = await fetchBetaPaginatedList(
@@ -834,7 +834,7 @@ async function collectTransportRules(
     );
   } catch (err: unknown) {
     if (err instanceof AdapterError && err.kind === "resource_not_found") {
-      return { data: [], apiCalls: 0 };
+      return { data: [], apiCalls: 1 };
     }
     throw err;
   }
@@ -914,7 +914,7 @@ async function collectTeamsMessagingPolicies(
   client: Client,
 ): Promise<{ data: TeamsMessagingPolicy[]; apiCalls: number }> {
   // Teams app settings may not exist for tenants without Teams.
-  // Return an empty list on 404.
+  // Return an empty result on 404.
   let result: { data: unknown[]; apiCalls: number };
   try {
     result = await fetchBetaPaginatedList(
@@ -924,7 +924,7 @@ async function collectTeamsMessagingPolicies(
     );
   } catch (err: unknown) {
     if (err instanceof AdapterError && err.kind === "resource_not_found") {
-      return { data: [], apiCalls: 0 };
+      return { data: [], apiCalls: 1 };
     }
     throw err;
   }
