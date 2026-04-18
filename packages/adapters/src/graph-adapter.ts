@@ -53,6 +53,16 @@ const MAX_DELAY_MS = 30_000;
 /** Default concurrent requests per tenant. */
 const DEFAULT_MAX_CONCURRENCY = 4;
 
+/**
+ * Default Accept-Language header for Graph API requests.
+ *
+ * Bun and other server runtimes may omit Accept-Language or default to "*",
+ * which Graph API rejects with CultureNotFoundException.  The header value
+ * only needs to be a valid BCP-47 tag — it does not affect the data returned
+ * by management/admin APIs, which always use canonical English property names.
+ */
+const GRAPH_ACCEPT_LANGUAGE = "en-US";
+
 /** AES-256-GCM encryption constants. */
 const AES_ALGORITHM: CipherGCMTypes = "aes-256-gcm";
 const AES_IV_LENGTH = 12;
@@ -344,6 +354,12 @@ function createGraphClient(accessToken: string): Client {
   return Client.initWithMiddleware({
     authProvider: {
       getAccessToken: async () => accessToken,
+    },
+    // Bun (and other server runtimes) may omit Accept-Language or default to
+    // "*", which Microsoft Graph rejects with CultureNotFoundException.
+    // Pin to "en-US" so every request carries a valid culture identifier.
+    fetchOptions: {
+      headers: { "Accept-Language": GRAPH_ACCEPT_LANGUAGE },
     },
   });
 }
