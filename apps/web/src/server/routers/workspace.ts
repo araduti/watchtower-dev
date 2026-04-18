@@ -359,9 +359,6 @@ export const workspaceRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "System roles are not configured correctly.",
-          cause: {
-            errorCode: "WATCHTOWER:WORKSPACE:NOT_FOUND" as const,
-          },
         });
       }
 
@@ -407,13 +404,23 @@ export const workspaceRouter = router({
         },
       });
 
-      // Assign "admin" role to the previous owner
-      await ctx.db.membershipRole.create({
-        data: {
+      // Assign "admin" role to the previous owner (skip if already assigned)
+      const existingAdminRole = await ctx.db.membershipRole.findFirst({
+        where: {
           membershipId: currentOwnerMembership.id,
           roleId: adminRole.id,
         },
+        select: { id: true },
       });
+
+      if (!existingAdminRole) {
+        await ctx.db.membershipRole.create({
+          data: {
+            membershipId: currentOwnerMembership.id,
+            roleId: adminRole.id,
+          },
+        });
+      }
 
       // Add "owner" role to target user's membership
       await ctx.db.membershipRole.create({
