@@ -30,8 +30,13 @@ import { NonRetriableError } from "inngest";
 
 import { withRLS, createAuditEvent } from "@watchtower/db";
 import type { PrismaTransactionClient } from "@watchtower/db";
-import { createGraphAdapter } from "@watchtower/adapters";
-import type { AdapterConfig, AdapterResult } from "@watchtower/adapters";
+import {
+  AdapterError,
+  createDnsAdapter,
+  createExchangeAdapter,
+  createGraphAdapter,
+} from "@watchtower/adapters";
+import type { AdapterConfig, AdapterResult, VendorAdapter } from "@watchtower/adapters";
 import {
   evaluateAssertions,
 } from "@watchtower/engine";
@@ -53,17 +58,14 @@ import { inngest } from "../inngest-client.ts";
  * Stored in memory between the collect and store steps.
  */
 interface CollectedSource {
-  /** Data source key (e.g., "conditionalAccessPolicies"). */
+  readonly adapter: string;
   readonly source: string;
-
-  /** Raw data returned by the adapter. */
   readonly rawData: unknown;
-
-  /** ISO 8601 timestamp when the data was collected. */
   readonly collectedAt: string;
-
-  /** Number of API calls consumed for this source. */
   readonly apiCallCount: number;
+  readonly status: "ok" | "failed";
+  readonly error: string | null;
+  readonly kind?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -201,39 +203,92 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     const collectedSources = await step.run("collect-data", async () => {
       console.info(`[scan-pipeline:execute] step=collect-data start: scanId=${scanId}`);
-      const adapter = createGraphAdapter({
-        msTenantId: tenant.msTenantId,
-      });
 
       const adapterConfig: AdapterConfig = {
         workspaceId,
         tenantId,
-        encryptedCredentials: Buffer.from(
-          tenant.encryptedCredentials,
-          "base64",
-        ),
+        encryptedCredentials: Buffer.from(tenant.encryptedCredentials, "base64"),
         authMethod: tenant.authMethod,
         traceId: `scan:${scanId}`,
       };
 
-      const sources = adapter.listSources();
-      const results: CollectedSource[] = [];
+      const adapters: VendorAdapter<Record<string, unknown>>[] = [
+        createGraphAdapter({ msTenantId: tenant.msTenantId }) as unknown as VendorAdapter<Record<string, unknown>>,
+        createExchangeAdapter() as unknown as VendorAdapter<Record<string, unknown>>,
+      ];
 
-      // Collect each data source sequentially.
-      // The adapter handles internal concurrency and rate limiting
-      // per (workspaceId, tenantId) tuple.
-      for (const source of sources) {
-        const result: AdapterResult<unknown> = await adapter.collect(
-          source,
-          adapterConfig,
-        );
+      const graphResult = await step.run("collect:microsoft-graph:domains", async () => {
+        const graphAdapter = createGraphAdapter({ msTenantId: tenant.msTenantId });
+        return await graphAdapter.collect("domainDnsRecords", adapterConfig);
+      });
+      const verifiedDomains = (graphResult.data as Array<Record<string, unknown>>)
+        .map((record) => record["domain"])
+        .filter((domain): domain is string => typeof domain === "string");
 
-        results.push({
-          source,
-          rawData: result.data,
-          collectedAt: result.collectedAt,
-          apiCallCount: result.apiCallCount,
-        });
+      adapters.push(
+        createDnsAdapter({ verifiedDomains }) as unknown as VendorAdapter<Record<string, unknown>>,
+      );
+
+      const results: CollectedSource[] = [
+        {
+          adapter: "microsoft-graph",
+          source: "domainDnsRecords",
+          rawData: graphResult.data,
+          collectedAt: graphResult.collectedAt,
+          apiCallCount: graphResult.apiCallCount,
+          status: "ok",
+          error: null,
+        },
+      ];
+
+      for (const adapter of adapters) {
+        for (const source of adapter.listSources()) {
+          if (adapter.name === "microsoft-graph" && source === "domainDnsRecords") {
+            continue;
+          }
+
+          const runId = `collect:${adapter.name}:${source}`;
+          const collected = await step.run(runId, async () => {
+            try {
+              const result: AdapterResult<unknown> = await adapter.collect(source, adapterConfig);
+              return {
+                adapter: adapter.name,
+                source,
+                rawData: result.data,
+                collectedAt: result.collectedAt,
+                apiCallCount: result.apiCallCount,
+                status: "ok" as const,
+                error: null,
+              };
+            } catch (cause) {
+              if (cause instanceof AdapterError) {
+                return {
+                  adapter: adapter.name,
+                  source,
+                  rawData: [],
+                  collectedAt: new Date().toISOString(),
+                  apiCallCount: 0,
+                  status: "failed" as const,
+                  error: cause.message,
+                  kind: cause.kind,
+                };
+              }
+
+              return {
+                adapter: adapter.name,
+                source,
+                rawData: [],
+                collectedAt: new Date().toISOString(),
+                apiCallCount: 0,
+                status: "failed" as const,
+                error: cause instanceof Error ? cause.message : String(cause),
+                kind: "permanent",
+              };
+            }
+          });
+
+          results.push(collected);
+        }
       }
 
       console.info(
@@ -252,7 +307,9 @@ export const executeScan = inngest.createFunction(
         // 1. Build evidence snapshot from collected data
         const snapshot: EvidenceSnapshot = {
           data: Object.fromEntries(
-            collectedSources.map((s) => [s.source, s.rawData]),
+            collectedSources
+              .filter((item) => item.status === "ok")
+              .map((item) => [item.source, item.rawData]),
           ),
         };
 
@@ -392,6 +449,15 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     await step.run("finalize-scan", async () => {
       console.info(`[scan-pipeline:execute] step=finalize-scan start: scanId=${scanId}`);
+      const sourceErrors = collectedSources
+        .filter((item) => item.status === "failed")
+        .map((item) => ({
+          adapter: item.adapter,
+          source: item.source,
+          error: item.error,
+          kind: item.kind ?? "permanent",
+          collectedAt: item.collectedAt,
+        }));
       await withRLS(workspaceId, [scopeId], async (tx) => {
         await tx.scan.update({
           where: { id: scanId },
@@ -400,6 +466,7 @@ export const executeScan = inngest.createFunction(
             finishedAt: new Date(),
             checksRun: evidenceSummary.checksRun,
             checksFailed: evidenceSummary.checksFailed,
+            sourceErrors,
           },
         });
 
@@ -416,6 +483,7 @@ export const executeScan = inngest.createFunction(
             status: "SUCCEEDED",
             checksRun: evidenceSummary.checksRun,
             checksFailed: evidenceSummary.checksFailed,
+            sourceErrorsCount: sourceErrors.length,
           },
         });
       });
