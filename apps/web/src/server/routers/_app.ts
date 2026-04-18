@@ -6,6 +6,7 @@ import { findingRouter } from "./finding.ts";
 import { frameworkRouter } from "./framework.ts";
 import { memberRouter } from "./member.ts";
 import { permissionRouter } from "./permission.ts";
+import { pluginRouter } from "./plugin.ts";
 import { roleRouter } from "./role.ts";
 import { scanRouter } from "./scan.ts";
 import { scopeRouter } from "./scope.ts";
@@ -20,6 +21,7 @@ export const appRouter = router({
   framework: frameworkRouter,
   member: memberRouter,
   permission: permissionRouter,
+  plugin: pluginRouter,
   role: roleRouter,
   scan: scanRouter,
   scope: scopeRouter,

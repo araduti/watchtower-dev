@@ -216,6 +216,11 @@ export const WATCHTOWER_ERRORS = {
       transport: "NOT_FOUND",
       message: "Plugin repository not found.",
     },
+    ALREADY_CONNECTED: {
+      code: "WATCHTOWER:PLUGIN:ALREADY_CONNECTED",
+      transport: "CONFLICT",
+      message: "This repository is already connected to this workspace.",
+    },
     CHECK_NOT_APPROVED: {
       code: "WATCHTOWER:PLUGIN:CHECK_NOT_APPROVED",
       transport: "PRECONDITION_FAILED",
