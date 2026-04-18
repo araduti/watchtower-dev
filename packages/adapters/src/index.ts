@@ -24,6 +24,15 @@ export type {
 } from "./graph-types.ts";
 export { AdapterError } from "./adapter-error.ts";
 export { MicrosoftGraphAdapter, createGraphAdapter } from "./graph-adapter.ts";
+export { ExchangeAdapter, createExchangeAdapter } from "./exchange-adapter.ts";
+export type { ExchangeDataSources } from "./exchange-adapter.ts";
+export { DnsAdapter, createDnsAdapter } from "./dns-adapter.ts";
+export type { DnsDataSources, DnsRecordSummary } from "./dns-adapter.ts";
+export {
+  tenantCredentialBundleSchema,
+  decryptTenantCredentialBundle,
+  type TenantCredentialBundle,
+} from "./credential-bundle.ts";
 export {
   encryptCredentials,
   verifyCredentials,
