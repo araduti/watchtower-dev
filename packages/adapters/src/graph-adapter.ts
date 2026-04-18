@@ -63,8 +63,8 @@ const DEFAULT_MAX_CONCURRENCY = 4;
  * by management/admin APIs, which always use canonical English property names.
  */
 const GRAPH_ACCEPT_LANGUAGE = "en-US";
-
-// Kept in this file for architecture convention tests and documentation.
+// Compatibility constants retained for convention tests; decryption lives in
+// credential-bundle.ts.
 const GRAPH_CREDENTIAL_ALGORITHM = "aes-256-gcm";
 const GRAPH_CREDENTIAL_KEY_ENV = "WATCHTOWER_CREDENTIAL_KEY";
 const GRAPH_CREDENTIAL_KEY = process.env["WATCHTOWER_CREDENTIAL_KEY"];
@@ -730,7 +730,6 @@ async function collectTransportRules(
     const item = raw as Record<string, unknown>;
     return {
       id: String(item["id"] ?? ""),
-      // API shape is inconsistent across beta payloads; keep fallback to avoid empty names.
       name: String(item["name"] ?? item["displayName"] ?? ""),
       state: item["state"] === "Enabled" ? "Enabled" : "Disabled",
       priority: typeof item["priority"] === "number" ? item["priority"] : 0,
@@ -741,6 +740,7 @@ async function collectTransportRules(
 
   return { data: rules, apiCalls: result.apiCalls };
 }
+
 async function collectDomainDnsRecords(
   client: Client,
 ): Promise<{ data: DomainDnsRecord[]; apiCalls: number }> {
