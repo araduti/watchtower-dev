@@ -232,6 +232,8 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     const collectedSources = await step.run("collect-data", async () => {
       console.info(`[scan-pipeline:execute] step=collect-data start: scanId=${scanId}`);
+      // NOTE: do not nest step.run calls inside this step. Nested durable
+      // steps can stall execution in Inngest and leave the run in RUNNING.
 
       const adapterConfig: AdapterConfig = {
         workspaceId,
@@ -251,7 +253,7 @@ export const executeScan = inngest.createFunction(
 
       const results: CollectedSource[] = [];
 
-      const graphBootstrap = await step.run("collect:microsoft-graph:domainDnsRecords", async () => {
+      const graphBootstrap = await (async () => {
         try {
           const result = await graphAdapter.collect("domainDnsRecords", adapterConfig);
           return {
@@ -288,7 +290,7 @@ export const executeScan = inngest.createFunction(
             kind: "permanent",
           };
         }
-      });
+      })();
 
       results.push(graphBootstrap);
 
@@ -323,8 +325,7 @@ export const executeScan = inngest.createFunction(
             continue;
           }
 
-          const runId = `collect:${adapter.name}:${source}`;
-          const collected = await step.run(runId, async () => {
+          const collected = await (async () => {
             try {
               const result: AdapterResult<unknown> = await adapter.collect(source, adapterConfig);
               return {
@@ -361,7 +362,7 @@ export const executeScan = inngest.createFunction(
                 kind: "permanent",
               };
             }
-          });
+          })();
 
           results.push(collected);
         }
