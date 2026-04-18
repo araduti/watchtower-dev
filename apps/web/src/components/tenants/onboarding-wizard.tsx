@@ -545,15 +545,7 @@ function StepVerifyConnection({
     { enabled: false },
   );
 
-  // Auto-check connection on mount if credentials were provided
-  useEffect(() => {
-    if (hasCredentials) {
-      void checkConnection();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const checkConnection = async () => {
+  const checkConnection = useCallback(async () => {
     setConnectionResult(null);
     const result = await connectionQuery.refetch();
     if (result.data) {
@@ -569,7 +561,14 @@ function StepVerifyConnection({
         error: result.error.message,
       });
     }
-  };
+  }, [connectionQuery]);
+
+  // Auto-check connection on mount if credentials were provided
+  useEffect(() => {
+    if (hasCredentials) {
+      void checkConnection();
+    }
+  }, [hasCredentials, checkConnection]);
 
   const isChecking = connectionQuery.isFetching;
   const isConnected = connectionResult?.connected === true;
@@ -680,7 +679,7 @@ function StepVerifyConnection({
             variant="outline"
             icon={<ShieldCheck className="h-4 w-4" />}
             onClick={() =>
-              router.push(`/dashboard/tenants/${tenantId}`)
+              router.push(`/dashboard/tenants/${tenantId}?trigger_scan=true`)
             }
           >
             Trigger First Scan
