@@ -376,12 +376,11 @@ export const executeScan = inngest.createFunction(
       console.info(`[scan-pipeline:execute] step=store-evidence start: scanId=${scanId}`);
 
       return await withRLS(workspaceId, [scopeId], async (tx) => {
-        // Keep this mapping for convention tests and as a canonical
-        // list of legacy (un-namespaced) source -> data pairs.
-        const collectedSourcesMap = collectedSources.map((item) => [
-          item.source,
-          item.rawData,
-        ] as const);
+        // Keep this map for convention tests and as a canonical
+        // legacy (un-namespaced) source -> data lookup.
+        const collectedSourcesMap = new Map(
+          collectedSources.map((item) => [item.source, item.rawData] as const),
+        );
 
         // 1. Build evidence snapshot from collected data
         const successfulSources = collectedSources.filter((item) => item.status === "ok");
@@ -399,8 +398,7 @@ export const executeScan = inngest.createFunction(
           // across adapters. If a source exists in multiple adapters, only the
           // namespaced keys are emitted to prevent silent overwrites.
           if ((sourceCounts.get(item.source) ?? 0) === 1) {
-            const legacyEntry = collectedSourcesMap.find(([source]) => source === item.source);
-            snapshotEntries.push([item.source, legacyEntry ? legacyEntry[1] : item.rawData]);
+            snapshotEntries.push([item.source, collectedSourcesMap.get(item.source) ?? item.rawData]);
           }
         }
 
