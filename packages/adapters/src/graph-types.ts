@@ -120,6 +120,7 @@ export interface SharePointTenantConfig {
   readonly externalSharingEnabled: boolean;
 }
 
+
 /** Exchange Online transport rule. */
 export interface TransportRule {
   readonly id: string;

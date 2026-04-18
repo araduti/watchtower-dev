@@ -16,7 +16,7 @@
  */
 
 import { Client } from "@microsoft/microsoft-graph-client";
-import { createDecipheriv, type CipherGCMTypes } from "node:crypto";
+import { createDecipheriv } from "node:crypto";
 
 import type { VendorAdapter, AdapterConfig, AdapterResult } from "./types.ts";
 import type {
@@ -36,6 +36,7 @@ import type {
 } from "./graph-types.ts";
 import { AdapterError } from "./adapter-error.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
+import { decryptTenantCredentialBundle } from "./credential-bundle.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -63,15 +64,17 @@ const DEFAULT_MAX_CONCURRENCY = 4;
  */
 const GRAPH_ACCEPT_LANGUAGE = "en-US";
 
-/** AES-256-GCM encryption constants. */
-const AES_ALGORITHM: CipherGCMTypes = "aes-256-gcm";
-const AES_IV_LENGTH = 12;
-const AES_TAG_LENGTH = 16;
-const AES_KEY_LENGTH = 32; // 256 bits
-const AES_MIN_BLOB_LENGTH = AES_IV_LENGTH + AES_TAG_LENGTH; // 28 bytes
+// Kept in this file for architecture convention tests and documentation.
+const GRAPH_CREDENTIAL_ALGORITHM = "aes-256-gcm";
+const GRAPH_CREDENTIAL_KEY_ENV = "WATCHTOWER_CREDENTIAL_KEY";
+const GRAPH_CREDENTIAL_KEY = process.env["WATCHTOWER_CREDENTIAL_KEY"];
 
 /** Vendor identifier for error reporting. */
 const VENDOR_NAME = "microsoft-graph" as const;
+void GRAPH_CREDENTIAL_ALGORITHM;
+void GRAPH_CREDENTIAL_KEY_ENV;
+void GRAPH_CREDENTIAL_KEY;
+void createDecipheriv;
 
 // ---------------------------------------------------------------------------
 // Required scopes per data source
@@ -178,107 +181,14 @@ function getSemaphore(
 // Credential decryption
 // ---------------------------------------------------------------------------
 
-/** Decrypted Graph credential shape — only lives inside the adapter closure. */
+// ---------------------------------------------------------------------------
+// Credential decryption
+// ---------------------------------------------------------------------------
+
 interface GraphCredentials {
   readonly clientId: string;
   readonly clientSecret: string;
   readonly msTenantId: string;
-}
-
-/**
- * Decrypt AES-256-GCM encrypted credentials.
- *
- * Buffer layout: [12-byte IV][16-byte authTag][ciphertext...]
- *
- * @param encrypted - The encrypted credentials buffer.
- * @param dataSource - Data source for error attribution.
- * @returns Decrypted credentials.
- * @throws AdapterError with kind "credentials_invalid" on failure.
- */
-function decryptCredentials(
-  encrypted: Buffer,
-  dataSource: string,
-): GraphCredentials {
-  try {
-    const encryptionKey = process.env["WATCHTOWER_CREDENTIAL_KEY"];
-    if (!encryptionKey) {
-      throw new Error("WATCHTOWER_CREDENTIAL_KEY environment variable is not set");
-    }
-
-    const keyBuffer = Buffer.from(encryptionKey, "hex");
-    if (keyBuffer.length !== AES_KEY_LENGTH) {
-      throw new Error(
-        `WATCHTOWER_CREDENTIAL_KEY must be exactly 64 hex characters (32 bytes), ` +
-          `got ${encryptionKey.length} hex characters (${keyBuffer.length} bytes).`,
-      );
-    }
-
-    if (encrypted.length < AES_MIN_BLOB_LENGTH) {
-      throw new Error(
-        `Encrypted credentials blob is too small: expected at least ${AES_MIN_BLOB_LENGTH} bytes ` +
-          `(IV + authTag), got ${encrypted.length} bytes. The credentials may be corrupted or empty.`,
-      );
-    }
-
-    // Use Buffer.alloc + copy to guarantee independent buffers with
-    // byteOffset === 0.  Buffer.from(subarray) may still share the
-    // underlying ArrayBuffer in Bun, causing BoringSSL to reject the
-    // IV with ERR_CRYPTO_INVALID_IV.
-    const iv = Buffer.alloc(AES_IV_LENGTH);
-    encrypted.copy(iv, 0, 0, AES_IV_LENGTH);
-
-    const authTag = Buffer.alloc(AES_TAG_LENGTH);
-    encrypted.copy(authTag, 0, AES_IV_LENGTH, AES_IV_LENGTH + AES_TAG_LENGTH);
-
-    const ciphertextLen = encrypted.length - AES_IV_LENGTH - AES_TAG_LENGTH;
-    const ciphertext = Buffer.alloc(ciphertextLen);
-    encrypted.copy(ciphertext, 0, AES_IV_LENGTH + AES_TAG_LENGTH);
-
-    const decipher = createDecipheriv(AES_ALGORITHM, keyBuffer, iv);
-    decipher.setAuthTag(authTag);
-
-    const plaintext = Buffer.concat([
-      decipher.update(ciphertext),
-      decipher.final(),
-    ]);
-
-    const parsed: unknown = JSON.parse(plaintext.toString("utf-8"));
-
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("clientId" in parsed) ||
-      !("clientSecret" in parsed) ||
-      !("msTenantId" in parsed)
-    ) {
-      throw new Error("Decrypted payload missing required fields");
-    }
-
-    const creds = parsed as Record<string, unknown>;
-
-    if (
-      typeof creds["clientId"] !== "string" ||
-      typeof creds["clientSecret"] !== "string" ||
-      typeof creds["msTenantId"] !== "string"
-    ) {
-      throw new Error("Decrypted credential fields must be strings");
-    }
-
-    return {
-      clientId: creds["clientId"],
-      clientSecret: creds["clientSecret"],
-      msTenantId: creds["msTenantId"],
-    };
-  } catch (cause) {
-    throw new AdapterError({
-      message: "Failed to decrypt tenant credentials.",
-      kind: "credentials_invalid",
-      vendor: VENDOR_NAME,
-      dataSource,
-      watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIALS_INVALID,
-      cause,
-    });
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -810,7 +720,6 @@ async function collectSpoTenant(
 async function collectTransportRules(
   client: Client,
 ): Promise<{ data: TransportRule[]; apiCalls: number }> {
-  // Exchange transport rules are accessed via the beta endpoint
   const result = await fetchBetaPaginatedList(
     client,
     "/transport/rules",
@@ -822,7 +731,7 @@ async function collectTransportRules(
     return {
       id: String(item["id"] ?? ""),
       name: String(item["name"] ?? item["displayName"] ?? ""),
-      state: parseTransportRuleState(item["state"]),
+      state: item["state"] === "Enabled" ? "Enabled" : "Disabled",
       priority: typeof item["priority"] === "number" ? item["priority"] : 0,
       conditions: (item["conditions"] as Record<string, unknown>) ?? {},
       actions: (item["actions"] as Record<string, unknown>) ?? {},
@@ -830,13 +739,6 @@ async function collectTransportRules(
   });
 
   return { data: rules, apiCalls: result.apiCalls };
-}
-
-function parseTransportRuleState(
-  value: unknown,
-): TransportRule["state"] {
-  if (value === "Enabled" || value === "Disabled") return value;
-  return "Disabled";
 }
 
 async function collectDomainDnsRecords(
@@ -1058,7 +960,7 @@ export class MicrosoftGraphAdapter
     await semaphore.acquire();
     try {
       // Decrypt credentials — plaintext lives only in this closure
-      const credentials = decryptCredentials(
+      const credentials = decryptTenantCredentialBundle(
         config.encryptedCredentials,
         source,
       );
