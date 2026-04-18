@@ -20,13 +20,11 @@
  */
 
 import { z } from "zod";
-import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 import { createAuditEvent } from "@watchtower/db";
 import {
   encryptCredentials,
-  verifyCredentials,
   verifyEncryptedCredentials,
   AdapterError,
 } from "@watchtower/adapters";
