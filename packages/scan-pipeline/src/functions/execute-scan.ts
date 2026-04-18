@@ -385,22 +385,43 @@ export const executeScan = inngest.createFunction(
         void collectedSourcesMap;
 
         const successfulSources = collectedSources.filter((item) => item.status === "ok");
-        const sourceCounts = new Map<string, number>();
+        const groupedBySource = new Map<string, CollectedSource[]>();
         for (const item of successfulSources) {
-          sourceCounts.set(item.source, (sourceCounts.get(item.source) ?? 0) + 1);
+          const existing = groupedBySource.get(item.source) ?? [];
+          existing.push(item);
+          groupedBySource.set(item.source, existing);
         }
+
+        // Canonical adapters for legacy source keys when multiple adapters
+        // emit the same source name.
+        const preferredLegacySourceAdapter: Readonly<Record<string, string>> = {
+          domainDnsRecords: "dns",
+          transportRules: "exchange-online",
+        };
 
         const snapshotEntries: Array<[string, unknown]> = [];
         for (const item of successfulSources) {
-          const namespacedKey = `${item.adapter}:${item.source}`;
-          snapshotEntries.push([namespacedKey, item.rawData]);
+          snapshotEntries.push([`${item.adapter}:${item.source}`, item.rawData]);
+        }
 
-          // Keep legacy un-namespaced keys only when source names are unique
-          // across adapters. If a source exists in multiple adapters, only the
-          // namespaced keys are emitted to prevent silent overwrites.
-          if ((sourceCounts.get(item.source) ?? 0) === 1) {
-            snapshotEntries.push([item.source, item.rawData]);
+        for (const [source, items] of groupedBySource.entries()) {
+          if (items.length === 1) {
+            snapshotEntries.push([source, items[0]!.rawData]);
+            continue;
           }
+
+          const preferredAdapter = preferredLegacySourceAdapter[source];
+          const canonical = (preferredAdapter
+            ? items.find((item) => item.adapter === preferredAdapter)
+            : undefined) ?? items[0];
+
+          if (!canonical) continue;
+
+          snapshotEntries.push([source, canonical.rawData]);
+          console.info(
+            `[scan-pipeline:execute] source collision resolved: source=${source} ` +
+              `chosenAdapter=${canonical.adapter} candidates=${items.map((i) => i.adapter).join(",")}`,
+          );
         }
 
         const snapshot: EvidenceSnapshot = {
