@@ -88,6 +88,39 @@ export default function SettingsPage() {
     setTimeout(() => setCopiedId(false), 2000);
   }
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const deleteWorkspace = trpc.workspace.softDelete.useMutation({
+    onSuccess: () => {
+      setFeedback({ type: "success", message: "Workspace deleted. Redirecting…" });
+      // Redirect to root after a short delay
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1500);
+    },
+    onError: (error) => {
+      const errorCode = (error as { data?: { cause?: { errorCode?: string } } }).data?.cause
+        ?.errorCode;
+      switch (errorCode) {
+        case "WATCHTOWER:WORKSPACE:NOT_FOUND":
+          setFeedback({ type: "error", message: "Workspace not found." });
+          break;
+        case "WATCHTOWER:WORKSPACE:ALREADY_DELETED":
+          setFeedback({ type: "error", message: "Workspace has already been deleted." });
+          break;
+        default:
+          setFeedback({ type: "error", message: error.message });
+      }
+      setShowDeleteConfirm(false);
+    },
+  });
+
+  function handleDeleteWorkspace() {
+    deleteWorkspace.mutate({
+      idempotencyKey: crypto.randomUUID(),
+    });
+  }
+
   if (workspace.isLoading) {
     return (
       <PageContainer title="Settings" description="Workspace configuration">
@@ -294,14 +327,39 @@ export default function SettingsPage() {
             cannot be undone.
           </p>
 
-          <InteractiveButton
-            variant="destructive"
-            disabled
-            className="rounded-2xl opacity-60 cursor-not-allowed"
-            icon={<AlertTriangle className="h-4 w-4" />}
-          >
-            Delete Workspace (coming soon)
-          </InteractiveButton>
+          {!showDeleteConfirm ? (
+            <InteractiveButton
+              variant="destructive"
+              className="rounded-2xl"
+              icon={<AlertTriangle className="h-4 w-4" />}
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              Delete Workspace
+            </InteractiveButton>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-destructive font-medium">
+                Are you sure? This cannot be undone.
+              </span>
+              <InteractiveButton
+                variant="destructive"
+                size="sm"
+                className="rounded-2xl"
+                onClick={handleDeleteWorkspace}
+                loading={deleteWorkspace.isPending}
+              >
+                Confirm Delete
+              </InteractiveButton>
+              <InteractiveButton
+                variant="outline"
+                size="sm"
+                className="rounded-2xl"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </InteractiveButton>
+            </div>
+          )}
         </GlowCard>
       </div>
     </PageContainer>
