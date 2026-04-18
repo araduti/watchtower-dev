@@ -1,0 +1,23 @@
+export default [
+  {
+    id: "6.2.1a",
+    framework: "CIS",
+    frameworkVersion: "3.0",
+    product: "M365",
+    title: "No transport rules redirect email to external domains",
+    custom: "no-external-forwarding-transport-rules",
+  },
+  {
+    id: "6.2.1b",
+    framework: "CIS",
+    frameworkVersion: "3.0",
+    product: "M365",
+    title: "Outbound spam policy has auto-forwarding disabled",
+    requiresConnector: "exchange-online",
+    source: "hostedOutboundSpamFilterPolicies",
+    assert: {
+      property: "autoForwardingMode",
+      value: "Off",
+    },
+  },
+];

@@ -1,0 +1,30 @@
+export default {
+  id: "2.1.7",
+  framework: "CIS",
+  frameworkVersion: "3.0",
+  product: "M365",
+  title: "An anti-phishing policy has been created",
+  requiresConnector: "defender-exchange", // Get-AntiPhishPolicy
+  source: "antiPhishPolicies",
+  assert: {
+    property: "enabled",
+    value: true,
+    also: [
+      { property: "phishThresholdLevel",                value: 3           },
+      { property: "enableTargetedUserProtection",       value: true        },
+      { property: "enableOrganizationDomainsProtection",value: true        },
+      { property: "enableMailboxIntelligence",          value: true        },
+      { property: "enableMailboxIntelligenceProtection",value: true        },
+      { property: "enableSpoofIntelligence",            value: true        },
+      { property: "targetedUserProtectionAction",       value: "Quarantine"},
+      { property: "targetedDomainProtectionAction",     value: "Quarantine"},
+      { property: "mailboxIntelligenceProtectionAction",value: "Quarantine"},
+      { property: "enableFirstContactSafetyTips",       value: true        },
+      { property: "enableSimilarUsersSafetyTips",       value: true        },
+      { property: "enableSimilarDomainsSafetyTips",     value: true        },
+      { property: "enableUnusualCharactersSafetyTips",  value: true        },
+      { property: "targetedUsersToProtect",             notEmpty: true     },
+      { property: "honorDmarcPolicy",                   value: true        },
+    ],
+  },
+};
