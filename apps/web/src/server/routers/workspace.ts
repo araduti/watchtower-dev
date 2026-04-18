@@ -422,13 +422,23 @@ export const workspaceRouter = router({
         });
       }
 
-      // Add "owner" role to target user's membership
-      await ctx.db.membershipRole.create({
-        data: {
+      // Add "owner" role to target user's membership (skip if already assigned)
+      const existingOwnerRoleOnTarget = await ctx.db.membershipRole.findFirst({
+        where: {
           membershipId: targetMembership.id,
           roleId: ownerRole.id,
         },
+        select: { id: true },
       });
+
+      if (!existingOwnerRoleOnTarget) {
+        await ctx.db.membershipRole.create({
+          data: {
+            membershipId: targetMembership.id,
+            roleId: ownerRole.id,
+          },
+        });
+      }
 
       // Audit log entry — same transaction as the mutation
       await createAuditEvent(ctx.db, {
