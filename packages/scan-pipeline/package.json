@@ -9,6 +9,7 @@
   "dependencies": {
     "@watchtower/adapters": "workspace:*",
     "@watchtower/db": "workspace:*",
+    "@watchtower/engine": "workspace:*",
     "@watchtower/errors": "workspace:*",
     "inngest": "^4.2.2"
   },
