@@ -51,6 +51,7 @@ The Inngest SDK auto-detects dev mode when `NODE_ENV` is anything other than `"p
 | Symptom | Cause | Fix |
 |---|---|---|
 | `fetch failed` or `ECONNREFUSED` on scan trigger | Inngest dev server not running | `docker compose -f docker-compose.dev.yml up -d inngest` |
+| `ENOTFOUND host.docker.internal` on `PUT /api/inngest` | SDK on the host can't resolve the Docker-only hostname | Set `INNGEST_DEV=http://localhost:8288` in `.env` (already set in `.env.example`) |
 | Functions don't appear in Inngest dev UI | App started before Inngest; dev server hasn't discovered the app | Open `http://localhost:8288` and click "Sync" / restart the app |
 | `response.json()` errors in console | Inngest dev server returns non-JSON responses; the SDK retries | Harmless — the `devSafeFetch` wrapper in `@watchtower/scan-pipeline` patches these automatically |
 | Events sent but functions not invoked | Dev server can't reach the app at `http://host.docker.internal:3000` | Verify the app is running on port 3000; on Linux, check that `host.docker.internal` resolves (or add `--add-host` to Docker) |
