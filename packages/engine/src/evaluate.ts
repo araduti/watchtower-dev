@@ -123,6 +123,12 @@ function applySourceFilter(
   );
 }
 
+function toArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value == null) return [];
+  return [value];
+}
+
 // ---------------------------------------------------------------------------
 // CA policy match engine (simplified from argus.engine-v2.ts)
 // ---------------------------------------------------------------------------
@@ -346,7 +352,7 @@ export function evaluateControl(
 
   // Nested find — find item in nested array, assert on property
   if (assertion.operator === "nestedFind" && assertion.nestedFind) {
-    const sourceData = (snapshot.data?.[assertion.source] ?? []) as Record<string, unknown>[];
+    const sourceData = toArray(snapshot.data?.[assertion.source]) as Record<string, unknown>[];
     if (sourceData.length === 0) {
       return { ...base, pass: false, actualValues: {}, warnings: [`source "${assertion.source}" not available or empty`] };
     }
@@ -387,7 +393,7 @@ export function evaluateControl(
 
   // Count assertion
   if (assertion.operator === "count") {
-    const sourceData = (snapshot.data?.[assertion.source] ?? []) as unknown[];
+    const sourceData = toArray(snapshot.data?.[assertion.source]);
     const filtered = applySourceFilter(sourceData, assertion.sourceFilter as Record<string, unknown> | undefined);
     const count = filtered.length;
     const { min, max } = (assertion.expectedValue as { min?: number; max?: number }) ?? {};
@@ -403,7 +409,7 @@ export function evaluateControl(
 
   // AllowedValues
   if (assertion.operator === "allowedValues") {
-    const rawData = (snapshot.data?.[assertion.source] ?? []) as Record<string, unknown>[];
+    const rawData = toArray(snapshot.data?.[assertion.source]) as Record<string, unknown>[];
     const sourceData = applySourceFilter(rawData, assertion.sourceFilter as Record<string, unknown> | undefined) as Record<string, unknown>[];
     if (sourceData.length === 0) {
       return { ...base, pass: false, actualValues: {}, warnings: [`source "${assertion.source}" not available or empty`] };
@@ -433,7 +439,7 @@ export function evaluateControl(
   }
 
   // Simple operator evaluation
-  const rawSourceData = (snapshot.data?.[assertion.source] ?? []) as Record<string, unknown>[];
+  const rawSourceData = toArray(snapshot.data?.[assertion.source]) as Record<string, unknown>[];
   const sourceData = applySourceFilter(rawSourceData, assertion.sourceFilter as Record<string, unknown> | undefined) as Record<string, unknown>[];
   const failures: string[] = [];
   const actualValues: Record<string, unknown> = {};
@@ -470,7 +476,7 @@ export function evaluateControl(
     const additionalFailures: string[] = [];
     for (const sub of assertion.additionalAssertions) {
       const subSource = sub.source ?? assertion.source;
-      let subData = (snapshot.data?.[subSource] ?? []) as unknown[];
+      let subData = toArray(snapshot.data?.[subSource]);
       subData = applySourceFilter(subData, sub.sourceFilter as Record<string, unknown> | undefined);
 
       if (subData.length === 0) {
