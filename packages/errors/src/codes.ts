@@ -103,6 +103,12 @@ export const WATCHTOWER_ERRORS = {
       transport: "CONFLICT",
       message: "This M365 tenant is already connected.",
     },
+    NOT_CONNECTED: {
+      code: "WATCHTOWER:TENANT:NOT_CONNECTED",
+      transport: "PRECONDITION_FAILED",
+      message:
+        "Tenant has no stored credentials. Connect the tenant before scanning.",
+    },
   },
 
   SCAN: {

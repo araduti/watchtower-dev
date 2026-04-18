@@ -240,7 +240,7 @@ export const scanRouter = router({
           workspaceId: ctx.session.workspaceId,
           deletedAt: null,
         },
-        select: { id: true, scopeId: true },
+        select: { id: true, scopeId: true, encryptedCredentials: true },
       });
 
       if (!tenant) {
@@ -251,6 +251,16 @@ export const scanRouter = router({
       await ctx.requirePermission("scans:trigger", {
         scopeId: tenant.scopeId,
       });
+
+      // Guard: reject scan if tenant has no stored credentials.
+      // Tenants are created with empty credentials (Buffer.alloc(0))
+      // and must be connected via tenants:rotate_credentials first.
+      if (
+        !tenant.encryptedCredentials ||
+        tenant.encryptedCredentials.length === 0
+      ) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.TENANT.NOT_CONNECTED);
+      }
 
       // Duplicate guard: reject if the tenant already has an active scan.
       const activeScan = await ctx.db.scan.findFirst({
