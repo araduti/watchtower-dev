@@ -136,6 +136,7 @@ export interface DomainDnsRecord {
   readonly domain: string;
   readonly recordType: string;
   readonly value: string;
+  readonly isVerified?: boolean;
 }
 
 /** Teams messaging policy. */

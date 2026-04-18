@@ -757,6 +757,13 @@ async function collectDomainDnsRecords(
       return typeof item["id"] === "string" ? item["id"] : null;
     })
     .filter((id): id is string => id !== null);
+  const domainVerification = new Map<string, boolean>();
+  for (const raw of domainResult.data) {
+    const item = raw as Record<string, unknown>;
+    const domainId = typeof item["id"] === "string" ? item["id"] : null;
+    if (!domainId) continue;
+    domainVerification.set(domainId, item["isVerified"] === true);
+  }
 
   // Step 2: Fetch DNS records per domain
   let totalApiCalls = domainResult.apiCalls;
@@ -777,6 +784,7 @@ async function collectDomainDnsRecords(
           domain: domainId,
           recordType: String(item["recordType"] ?? item["@odata.type"] ?? ""),
           value: String(item["text"] ?? item["mailExchange"] ?? item["nameTarget"] ?? ""),
+          isVerified: domainVerification.get(domainId) === true,
         });
       }
     } catch (err) {

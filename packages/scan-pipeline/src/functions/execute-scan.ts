@@ -97,6 +97,30 @@ function toRuntimeAdapter<TDataSources extends Record<string, unknown>>(
   };
 }
 
+function deriveExpectedValue(
+  operator: EngineAssertion["operator"],
+  allowedValues: unknown,
+): unknown {
+  if (allowedValues == null) return null;
+  if (!Array.isArray(allowedValues)) return allowedValues;
+
+  const values = allowedValues.map((item) => {
+    if (
+      item &&
+      typeof item === "object" &&
+      "value" in (item as Record<string, unknown>)
+    ) {
+      return (item as Record<string, unknown>)["value"];
+    }
+    return item;
+  });
+
+  if (operator === "in" || operator === "allowedValues") {
+    return values;
+  }
+  return values[0] ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Main function
 // ---------------------------------------------------------------------------
@@ -443,27 +467,56 @@ export const executeScan = inngest.createFunction(
           },
         });
 
+        let engineAssertions: EngineAssertion[];
         if (dbAssertions.length === 0) {
-          const checkCount = await tx.check.count();
-          const message =
-            checkCount > 0
-              ? `No ControlAssertion rows found (checks=${checkCount}). ` +
-                "Compliance metadata is incomplete; seed ControlAssertion data before scanning."
-              : "No compliance checks are configured. Seed checks/framework data before scanning.";
+          const checks = await tx.check.findMany({
+            select: {
+              slug: true,
+              dataSource: true,
+              property: true,
+              allowedOperators: true,
+              allowedValues: true,
+            },
+          });
 
-          console.error(`[scan-pipeline:execute] step=store-evidence: ${message}`);
-          throw new NonRetriableError(message);
+          if (checks.length === 0) {
+            throw new NonRetriableError(
+              "No compliance checks are configured. Seed checks/framework data before scanning.",
+            );
+          }
+
+          console.warn(
+            `[scan-pipeline:execute] step=store-evidence: no ControlAssertion rows found; ` +
+              `falling back to check-derived assertions (checks=${checks.length})`,
+          );
+
+          engineAssertions = checks.map((check) => {
+            const preferred = (check.allowedOperators.find((op) =>
+              ["eq", "contains", "in", "neq", "notEmpty", "allowedValues", "count", "manual"].includes(op),
+            ) ?? "manual") as EngineAssertion["operator"];
+
+            const operator = check.dataSource && check.property ? preferred : "manual";
+            return {
+              checkSlug: check.slug,
+              source: check.dataSource ?? "",
+              property: check.property ?? "",
+              operator,
+              expectedValue: deriveExpectedValue(operator, check.allowedValues),
+              sourceFilter: undefined,
+              assertionLogic: "ALL" as const,
+            };
+          });
+        } else {
+          engineAssertions = dbAssertions.map((dba) => ({
+            checkSlug: dba.checkSlug,
+            source: dba.control.check.dataSource ?? "",
+            property: dba.control.check.property ?? "",
+            operator: dba.operator as EngineAssertion["operator"],
+            expectedValue: dba.expectedValue,
+            sourceFilter: dba.sourceFilter as Record<string, unknown> | undefined,
+            assertionLogic: (dba.control.assertionLogic ?? "ALL") as "ALL" | "ANY",
+          }));
         }
-
-        const engineAssertions: EngineAssertion[] = dbAssertions.map((dba) => ({
-          checkSlug: dba.checkSlug,
-          source: dba.control.check.dataSource ?? "",
-          property: dba.control.check.property ?? "",
-          operator: dba.operator as EngineAssertion["operator"],
-          expectedValue: dba.expectedValue,
-          sourceFilter: dba.sourceFilter as Record<string, unknown> | undefined,
-          assertionLogic: (dba.control.assertionLogic ?? "ALL") as "ALL" | "ANY",
-        }));
 
         // 3. Run the engine
         const engineConfig: EngineConfig = {
