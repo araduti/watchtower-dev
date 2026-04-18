@@ -251,7 +251,7 @@ export const executeScan = inngest.createFunction(
 
         const results: CollectedSource[] = [];
 
-        const graphBootstrap = await step.run("collect:microsoft-graph:domainDnsRecords", async () => {
+        const graphBootstrap = await (async () => {
           try {
             const result = await graphAdapter.collect("domainDnsRecords", adapterConfig);
             return {
@@ -288,7 +288,7 @@ export const executeScan = inngest.createFunction(
               kind: "permanent",
             };
           }
-        });
+        })();
 
         results.push(graphBootstrap);
 
@@ -323,47 +323,43 @@ export const executeScan = inngest.createFunction(
               continue;
             }
 
-            const runId = `collect:${adapter.name}:${source}`;
-            const collected = await step.run(runId, async () => {
-              try {
-                const result: AdapterResult<unknown> = await adapter.collect(source, adapterConfig);
-                return {
-                  adapter: adapter.name,
-                  source,
-                  rawData: result.data,
-                  collectedAt: result.collectedAt,
-                  apiCallCount: result.apiCallCount,
-                  status: "ok" as const,
-                  error: null,
-                };
-              } catch (cause) {
-                if (cause instanceof AdapterError) {
-                  return {
-                    adapter: adapter.name,
-                    source,
-                    rawData: [],
-                    collectedAt: new Date().toISOString(),
-                    apiCallCount: 0,
-                    status: "failed" as const,
-                    error: cause.message,
-                    kind: cause.kind,
-                  };
-                }
-
-                return {
+            try {
+              const result: AdapterResult<unknown> = await adapter.collect(source, adapterConfig);
+              results.push({
+                adapter: adapter.name,
+                source,
+                rawData: result.data,
+                collectedAt: result.collectedAt,
+                apiCallCount: result.apiCallCount,
+                status: "ok" as const,
+                error: null,
+              });
+            } catch (cause) {
+              if (cause instanceof AdapterError) {
+                results.push({
                   adapter: adapter.name,
                   source,
                   rawData: [],
                   collectedAt: new Date().toISOString(),
                   apiCallCount: 0,
                   status: "failed" as const,
-                  error: cause instanceof Error ? cause.message : String(cause),
-                  kind: "permanent",
-                };
+                  error: cause.message,
+                  kind: cause.kind,
+                });
+                continue;
               }
-            });
 
-            results.push(collected);
+              results.push({
+                adapter: adapter.name,
+                source,
+                rawData: [],
+                collectedAt: new Date().toISOString(),
+                apiCallCount: 0,
+                status: "failed" as const,
+                error: cause instanceof Error ? cause.message : String(cause),
+                kind: "permanent",
+              });
+            }
           }
         }
 
