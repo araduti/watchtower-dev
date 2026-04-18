@@ -54,6 +54,13 @@ import { InteractiveButton } from "@/components/shared/interactive-button";
 type WizardStep = 1 | 2 | 3;
 type AuthMethod = "CLIENT_SECRET" | "WORKLOAD_IDENTITY";
 
+/**
+ * Delay (ms) before resetting wizard state after the dialog close animation.
+ * Matches the default Radix Dialog exit animation duration (200ms) so the user
+ * doesn't see a flash of the reset Step 1 form while the dialog is fading out.
+ */
+const DIALOG_CLOSE_RESET_DELAY_MS = 200;
+
 interface OnboardingWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -561,7 +568,9 @@ function StepVerifyConnection({
         error: result.error.message,
       });
     }
-  }, [connectionQuery]);
+    // connectionQuery.refetch is stable across renders — safe to exclude
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-check connection on mount if credentials were provided
   useEffect(() => {
@@ -614,7 +623,7 @@ function StepVerifyConnection({
                 Connection verified!
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                You&apos;re ready to run your first compliance scan.
+                You{"'"}re ready to run your first compliance scan.
               </p>
             </div>
           </>
@@ -710,7 +719,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
           setStep(1);
           setCreatedTenantId(null);
           setCredentialsProvided(false);
-        }, 200);
+        }, DIALOG_CLOSE_RESET_DELAY_MS);
       }
       onOpenChange(nextOpen);
     },
