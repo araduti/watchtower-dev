@@ -62,10 +62,8 @@ const tenantOutput = z.object({
 });
 
 /**
- * Standard select clause. Includes `encryptedCredentials` so
- * `toTenantOutput()` can derive the `hasCredentials` boolean.
- * The raw blob is stripped by the transform and NEVER returned
- * to the client.
+ * Standard select clause — encryptedCredentials NEVER selected.
+ * Reused across all queries to guarantee the sealed blob never leaks.
  */
 const TENANT_SELECT = {
   id: true,
@@ -75,9 +73,19 @@ const TENANT_SELECT = {
   msTenantId: true,
   authMethod: true,
   status: true,
-  encryptedCredentials: true,
   createdAt: true,
   updatedAt: true,
+} as const;
+
+/**
+ * Internal select that adds `encryptedCredentials` to the standard
+ * select clause. Used ONLY inside procedures that call `toTenantOutput()`
+ * to derive the `hasCredentials` boolean. The raw blob is stripped by
+ * the transform and NEVER returned to the client.
+ */
+const TENANT_SELECT_WITH_CREDS = {
+  ...TENANT_SELECT,
+  encryptedCredentials: true,
 } as const;
 
 /**
@@ -215,7 +223,7 @@ export const tenantRouter = router({
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
         skip: input.cursor ? 1 : 0,
-        select: TENANT_SELECT,
+        select: TENANT_SELECT_WITH_CREDS,
       });
 
       const hasMore = rows.length > input.limit;
@@ -244,7 +252,7 @@ export const tenantRouter = router({
           workspaceId: ctx.session.workspaceId,
           deletedAt: null,
         },
-        select: TENANT_SELECT,
+        select: TENANT_SELECT_WITH_CREDS,
       });
 
       if (!tenant) {
@@ -325,7 +333,7 @@ export const tenantRouter = router({
           authMethod: input.authMethod,
           encryptedCredentials: Buffer.alloc(0), // placeholder — credentials must be set via tenants:rotate_credentials
         },
-        select: TENANT_SELECT,
+        select: TENANT_SELECT_WITH_CREDS,
       });
 
       // Audit log entry — same transaction as the mutation
@@ -390,7 +398,7 @@ export const tenantRouter = router({
           workspaceId: ctx.session.workspaceId,
           deletedAt: null,
         },
-        select: TENANT_SELECT,
+        select: TENANT_SELECT_WITH_CREDS,
       });
 
       if (!existing) {
@@ -426,7 +434,7 @@ export const tenantRouter = router({
       const updated = await ctx.db.tenant.update({
         where: { id: existing.id },
         data,
-        select: TENANT_SELECT,
+        select: TENANT_SELECT_WITH_CREDS,
       });
 
       // Audit log entry — same transaction as the mutation
@@ -507,7 +515,7 @@ export const tenantRouter = router({
       const deleted = await ctx.db.tenant.update({
         where: { id: existing.id },
         data: { deletedAt: new Date() },
-        select: TENANT_SELECT,
+        select: TENANT_SELECT_WITH_CREDS,
       });
 
       // Audit log entry — same transaction as the mutation
@@ -597,7 +605,7 @@ export const tenantRouter = router({
           encryptedCredentials: sealed,
           status: "ACTIVE",
         },
-        select: TENANT_SELECT,
+        select: TENANT_SELECT_WITH_CREDS,
       });
 
       // Audit log entry — same transaction as the mutation
