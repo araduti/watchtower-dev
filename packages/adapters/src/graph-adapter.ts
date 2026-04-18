@@ -730,6 +730,7 @@ async function collectTransportRules(
     const item = raw as Record<string, unknown>;
     return {
       id: String(item["id"] ?? ""),
+      // API shape is inconsistent across beta payloads; keep fallback to avoid empty names.
       name: String(item["name"] ?? item["displayName"] ?? ""),
       state: item["state"] === "Enabled" ? "Enabled" : "Disabled",
       priority: typeof item["priority"] === "number" ? item["priority"] : 0,
