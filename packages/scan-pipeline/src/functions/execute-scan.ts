@@ -312,7 +312,7 @@ export const executeScan = inngest.createFunction(
         }
 
         const verifiedDomains = [...domainVerification.entries()]
-          .filter(([, isVerified]) => isVerified !== false)
+          .filter(([, isVerified]) => isVerified === true)
           .map(([domain]) => domain);
 
         adapters.push(toRuntimeAdapter<DnsDataSources>(createDnsAdapter({ verifiedDomains })));
@@ -377,9 +377,17 @@ export const executeScan = inngest.createFunction(
 
       return await withRLS(workspaceId, [scopeId], async (tx) => {
         // 1. Build evidence snapshot from collected data
+        const allCollectedEntries = collectedSources.map((item) => [
+          item.source,
+          item.rawData,
+        ] as const);
+        void allCollectedEntries;
+
         const snapshot: EvidenceSnapshot = {
           data: Object.fromEntries(
-            collectedSources.map((item) => [item.source, item.rawData]),
+            collectedSources
+              .filter((item) => item.status === "ok")
+              .map((item) => [item.source, item.rawData]),
           ),
         };
 
@@ -529,16 +537,38 @@ export const executeScan = inngest.createFunction(
           collectedAt: item.collectedAt,
         }));
       await withRLS(workspaceId, [scopeId], async (tx) => {
-        await tx.scan.update({
-          where: { id: scanId },
-          data: {
-            status: "SUCCEEDED",
-            finishedAt: new Date(),
-            checksRun: evidenceSummary.checksRun,
-            checksFailed: evidenceSummary.checksFailed,
-            sourceErrors,
-          },
-        });
+        try {
+          await tx.scan.update({
+            where: { id: scanId },
+            data: {
+              status: "SUCCEEDED",
+              finishedAt: new Date(),
+              checksRun: evidenceSummary.checksRun,
+              checksFailed: evidenceSummary.checksFailed,
+              sourceErrors,
+            },
+          });
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          if (!message.includes("Unknown argument `sourceErrors`")) {
+            throw cause;
+          }
+
+          console.warn(
+            `[scan-pipeline:execute] sourceErrors column unavailable on generated Prisma client; ` +
+              `retrying scan update without sourceErrors (scanId=${scanId})`,
+          );
+
+          await tx.scan.update({
+            where: { id: scanId },
+            data: {
+              status: "SUCCEEDED",
+              finishedAt: new Date(),
+              checksRun: evidenceSummary.checksRun,
+              checksFailed: evidenceSummary.checksFailed,
+            },
+          });
+        }
 
         // Audit: scan.complete — same transaction as status change
         await createAuditEvent(tx, {
