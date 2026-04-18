@@ -25,6 +25,8 @@ export type AdapterErrorKind =
   | "insufficient_scope"
   /** Credentials expired or revoked — not retryable. */
   | "credentials_invalid"
+  /** Resource/segment not found — service may not be provisioned for this tenant. */
+  | "resource_not_found"
   /** Permanent error — do not retry. */
   | "permanent";
 

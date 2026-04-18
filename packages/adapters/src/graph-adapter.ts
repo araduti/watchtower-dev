@@ -510,6 +510,18 @@ function translateError(err: unknown, dataSource: string): AdapterError {
     });
   }
 
+  if (statusCode === 404) {
+    return new AdapterError({
+      message: `Graph API resource not found for data source "${dataSource}".`,
+      kind: "resource_not_found",
+      vendor: VENDOR_NAME,
+      dataSource,
+      vendorStatusCode: statusCode,
+      watchtowerError: WATCHTOWER_ERRORS.VENDOR.GRAPH_ERROR,
+      cause: err,
+    });
+  }
+
   if (statusCode !== undefined && statusCode >= 500) {
     return new AdapterError({
       message: `Graph API server error (${statusCode}).`,
@@ -810,12 +822,22 @@ async function collectSpoTenant(
 async function collectTransportRules(
   client: Client,
 ): Promise<{ data: TransportRule[]; apiCalls: number }> {
-  // Exchange transport rules are accessed via the beta endpoint
-  const result = await fetchBetaPaginatedList(
-    client,
-    "/transport/rules",
-    "transportRules",
-  );
+  // Exchange transport rules are accessed via the beta endpoint.
+  // Tenants without Exchange Online will return 404 ("Resource not found
+  // for the segment 'transport'"). This is expected — return an empty list.
+  let result: { data: unknown[]; apiCalls: number };
+  try {
+    result = await fetchBetaPaginatedList(
+      client,
+      "/transport/rules",
+      "transportRules",
+    );
+  } catch (err: unknown) {
+    if (err instanceof AdapterError && err.kind === "resource_not_found") {
+      return { data: [], apiCalls: 0 };
+    }
+    throw err;
+  }
 
   const rules: TransportRule[] = result.data.map((raw) => {
     const item = raw as Record<string, unknown>;
@@ -891,11 +913,21 @@ async function collectDomainDnsRecords(
 async function collectTeamsMessagingPolicies(
   client: Client,
 ): Promise<{ data: TeamsMessagingPolicy[]; apiCalls: number }> {
-  const result = await fetchBetaPaginatedList(
-    client,
-    "/teamwork/teamsAppSettings",
-    "teamsMessagingPolicies",
-  );
+  // Teams app settings may not exist for tenants without Teams.
+  // Return an empty list on 404.
+  let result: { data: unknown[]; apiCalls: number };
+  try {
+    result = await fetchBetaPaginatedList(
+      client,
+      "/teamwork/teamsAppSettings",
+      "teamsMessagingPolicies",
+    );
+  } catch (err: unknown) {
+    if (err instanceof AdapterError && err.kind === "resource_not_found") {
+      return { data: [], apiCalls: 0 };
+    }
+    throw err;
+  }
 
   // Teams messaging policies may come from /teams/messaging/policies in beta
   // Fall back to top-level list if shape differs

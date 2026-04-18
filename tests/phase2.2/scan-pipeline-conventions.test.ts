@@ -403,12 +403,13 @@ describe("§6 — Adapter error translation", () => {
     expect(errorSrc).toContain("kind: AdapterErrorKind");
   });
 
-  it("AdapterError supports all 5 error kinds", () => {
+  it("AdapterError supports all 6 error kinds", () => {
     const expectedKinds = [
       "transient",
       "rate_limited",
       "insufficient_scope",
       "credentials_invalid",
+      "resource_not_found",
       "permanent",
     ];
     for (const kind of expectedKinds) {
@@ -438,6 +439,11 @@ describe("§6 — Adapter error translation", () => {
   it("adapter translates 5xx to transient", () => {
     expect(adapterSrc).toContain(">= 500");
     expect(adapterSrc).toContain('"transient"');
+  });
+
+  it("adapter translates 404 to resource_not_found", () => {
+    expect(adapterSrc).toContain("404");
+    expect(adapterSrc).toContain('"resource_not_found"');
   });
 
   it("adapter respects Retry-After header", () => {
