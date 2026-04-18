@@ -14,13 +14,17 @@
 
 import {
   createCipheriv,
-  createDecipheriv,
   randomBytes,
   type CipherGCMTypes,
 } from "node:crypto";
 
 import { AdapterError } from "./adapter-error.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
+import {
+  decryptTenantCredentialBundle,
+  tenantCredentialBundleSchema,
+  type TenantCredentialBundle,
+} from "./credential-bundle.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (must match graph-adapter.ts decryption constants)
@@ -40,11 +44,7 @@ const VENDOR_NAME = "microsoft-graph" as const;
  * These are the raw values from the user — they are encrypted immediately
  * and the plaintext is never stored or logged.
  */
-export interface CredentialInput {
-  readonly clientId: string;
-  readonly clientSecret: string;
-  readonly msTenantId: string;
-}
+export interface CredentialInput extends TenantCredentialBundle {}
 
 /**
  * Encrypt Graph API credentials using AES-256-GCM.
@@ -82,11 +82,7 @@ export function encryptCredentials(credentials: CredentialInput): Buffer {
     });
   }
 
-  const plaintext = JSON.stringify({
-    clientId: credentials.clientId,
-    clientSecret: credentials.clientSecret,
-    msTenantId: credentials.msTenantId,
-  });
+  const plaintext = JSON.stringify(tenantCredentialBundleSchema.parse(credentials));
 
   const iv = randomBytes(AES_IV_LENGTH);
   const cipher = createCipheriv(AES_ALGORITHM, keyBuffer, iv);
@@ -177,10 +173,6 @@ export async function verifyCredentials(
 // Encrypted credential verification
 // ---------------------------------------------------------------------------
 
-/** AES-256-GCM constants (must match graph-adapter.ts). */
-const AES_TAG_LENGTH = 16;
-const AES_MIN_BLOB_LENGTH = AES_IV_LENGTH + AES_TAG_LENGTH;
-
 /**
  * Decrypt an encrypted credentials blob and verify it can acquire a token.
  *
@@ -195,91 +187,10 @@ const AES_MIN_BLOB_LENGTH = AES_IV_LENGTH + AES_TAG_LENGTH;
 export async function verifyEncryptedCredentials(
   encrypted: Buffer,
 ): Promise<true> {
-  // Decrypt inside the adapter boundary
-  const encryptionKey = process.env["WATCHTOWER_CREDENTIAL_KEY"];
-  if (!encryptionKey) {
-    throw new AdapterError({
-      message: "WATCHTOWER_CREDENTIAL_KEY environment variable is not set.",
-      kind: "permanent",
-      vendor: VENDOR_NAME,
-      dataSource: "credential-verification",
-      watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIAL_VERIFICATION_FAILED,
-    });
-  }
+  const decryptedCredentials = decryptTenantCredentialBundle(
+    encrypted,
+    "credential-verification",
+  );
 
-  const keyBuffer = Buffer.from(encryptionKey, "hex");
-  if (keyBuffer.length !== AES_KEY_LENGTH) {
-    throw new AdapterError({
-      message: "WATCHTOWER_CREDENTIAL_KEY has invalid length.",
-      kind: "permanent",
-      vendor: VENDOR_NAME,
-      dataSource: "credential-verification",
-      watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIAL_VERIFICATION_FAILED,
-    });
-  }
-
-  if (encrypted.length < AES_MIN_BLOB_LENGTH) {
-    throw new AdapterError({
-      message: "Encrypted credentials blob is too small or empty.",
-      kind: "credentials_invalid",
-      vendor: VENDOR_NAME,
-      dataSource: "credential-verification",
-      watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIAL_VERIFICATION_FAILED,
-    });
-  }
-
-  let decryptedCredentials: CredentialInput;
-  try {
-    const iv = Buffer.alloc(AES_IV_LENGTH);
-    encrypted.copy(iv, 0, 0, AES_IV_LENGTH);
-
-    const authTag = Buffer.alloc(AES_TAG_LENGTH);
-    encrypted.copy(authTag, 0, AES_IV_LENGTH, AES_IV_LENGTH + AES_TAG_LENGTH);
-
-    const ciphertextLen = encrypted.length - AES_IV_LENGTH - AES_TAG_LENGTH;
-    const ciphertext = Buffer.alloc(ciphertextLen);
-    encrypted.copy(ciphertext, 0, AES_IV_LENGTH + AES_TAG_LENGTH);
-
-    const decipher = createDecipheriv(AES_ALGORITHM, keyBuffer, iv);
-    decipher.setAuthTag(authTag);
-
-    const plaintext = Buffer.concat([
-      decipher.update(ciphertext),
-      decipher.final(),
-    ]);
-
-    const parsed = JSON.parse(plaintext.toString("utf-8")) as Record<string, unknown>;
-
-    if (
-      typeof parsed["clientId"] !== "string" ||
-      typeof parsed["clientSecret"] !== "string" ||
-      typeof parsed["msTenantId"] !== "string"
-    ) {
-      throw new AdapterError({
-        message: "Decrypted payload missing required fields.",
-        kind: "credentials_invalid",
-        vendor: VENDOR_NAME,
-        dataSource: "credential-verification",
-        watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIAL_VERIFICATION_FAILED,
-      });
-    }
-
-    decryptedCredentials = {
-      clientId: parsed["clientId"],
-      clientSecret: parsed["clientSecret"],
-      msTenantId: parsed["msTenantId"],
-    };
-  } catch (cause) {
-    throw new AdapterError({
-      message: "Failed to decrypt credentials for verification.",
-      kind: "credentials_invalid",
-      vendor: VENDOR_NAME,
-      dataSource: "credential-verification",
-      watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIAL_VERIFICATION_FAILED,
-      cause,
-    });
-  }
-
-  // Delegate to plaintext verification
   return verifyCredentials(decryptedCredentials);
 }

@@ -578,6 +578,7 @@ model Scan {
   finishedAt   DateTime?
   checksRun    Int       @default(0)
   checksFailed Int       @default(0)
+  sourceErrors Json?
   inngestRunId String? // for debugging
 
   createdAt DateTime @default(now())
