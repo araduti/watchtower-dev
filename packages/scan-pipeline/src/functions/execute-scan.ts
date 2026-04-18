@@ -30,8 +30,20 @@ import { NonRetriableError } from "inngest";
 
 import { withRLS, createAuditEvent } from "@watchtower/db";
 import type { PrismaTransactionClient } from "@watchtower/db";
-import { createGraphAdapter } from "@watchtower/adapters";
-import type { AdapterConfig, AdapterResult } from "@watchtower/adapters";
+import {
+  AdapterError,
+  createDnsAdapter,
+  createExchangeAdapter,
+  createGraphAdapter,
+} from "@watchtower/adapters";
+import type {
+  AdapterConfig,
+  AdapterResult,
+  GraphDataSources,
+  ExchangeDataSources,
+  DnsDataSources,
+  VendorAdapter,
+} from "@watchtower/adapters";
 import {
   evaluateAssertions,
 } from "@watchtower/engine";
@@ -53,17 +65,36 @@ import { inngest } from "../inngest-client.ts";
  * Stored in memory between the collect and store steps.
  */
 interface CollectedSource {
-  /** Data source key (e.g., "conditionalAccessPolicies"). */
+  readonly adapter: string;
   readonly source: string;
-
-  /** Raw data returned by the adapter. */
   readonly rawData: unknown;
-
-  /** ISO 8601 timestamp when the data was collected. */
   readonly collectedAt: string;
-
-  /** Number of API calls consumed for this source. */
   readonly apiCallCount: number;
+  readonly status: "ok" | "failed";
+  readonly error: string | null;
+  readonly kind?: string;
+}
+
+interface RuntimeAdapter {
+  readonly name: string;
+  listSources(): readonly string[];
+  collect(source: string, config: AdapterConfig): Promise<AdapterResult<unknown>>;
+}
+
+function toRuntimeAdapter<TDataSources extends Record<string, unknown>>(
+  adapter: VendorAdapter<TDataSources>,
+): RuntimeAdapter {
+  const listSources = adapter.listSources() as readonly string[];
+
+  return {
+    name: adapter.name,
+    listSources: () => listSources,
+    collect: async (source, config) => {
+      const typedSource = source as keyof TDataSources & string;
+      const result = await adapter.collect(typedSource, config);
+      return result as AdapterResult<unknown>;
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -201,39 +232,140 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     const collectedSources = await step.run("collect-data", async () => {
       console.info(`[scan-pipeline:execute] step=collect-data start: scanId=${scanId}`);
-      const adapter = createGraphAdapter({
-        msTenantId: tenant.msTenantId,
-      });
+      // NOTE: do not nest step.run calls inside this step. Nested durable
+      // steps can stall execution in Inngest and leave the run in RUNNING.
 
       const adapterConfig: AdapterConfig = {
         workspaceId,
         tenantId,
-        encryptedCredentials: Buffer.from(
-          tenant.encryptedCredentials,
-          "base64",
-        ),
+        encryptedCredentials: Buffer.from(tenant.encryptedCredentials, "base64"),
         authMethod: tenant.authMethod,
         traceId: `scan:${scanId}`,
       };
 
-      const sources = adapter.listSources();
+      const graphAdapter = createGraphAdapter({ msTenantId: tenant.msTenantId });
+      const exchangeAdapter = createExchangeAdapter();
+
+      const adapters: RuntimeAdapter[] = [
+        toRuntimeAdapter<GraphDataSources>(graphAdapter),
+        toRuntimeAdapter<ExchangeDataSources>(exchangeAdapter),
+      ];
+
       const results: CollectedSource[] = [];
 
-      // Collect each data source sequentially.
-      // The adapter handles internal concurrency and rate limiting
-      // per (workspaceId, tenantId) tuple.
-      for (const source of sources) {
-        const result: AdapterResult<unknown> = await adapter.collect(
-          source,
-          adapterConfig,
-        );
+      const graphBootstrap = await (async () => {
+        try {
+          const result = await graphAdapter.collect("domainDnsRecords", adapterConfig);
+          return {
+            adapter: graphAdapter.name,
+            source: "domainDnsRecords",
+            rawData: result.data,
+            collectedAt: result.collectedAt,
+            apiCallCount: result.apiCallCount,
+            status: "ok" as const,
+            error: null,
+          };
+        } catch (cause) {
+          if (cause instanceof AdapterError) {
+            return {
+              adapter: "microsoft-graph",
+              source: "domainDnsRecords",
+              rawData: [],
+              collectedAt: new Date().toISOString(),
+              apiCallCount: 0,
+              status: "failed" as const,
+              error: cause.message,
+              kind: cause.kind,
+            };
+          }
 
-        results.push({
-          source,
-          rawData: result.data,
-          collectedAt: result.collectedAt,
-          apiCallCount: result.apiCallCount,
-        });
+          return {
+            adapter: "microsoft-graph",
+            source: "domainDnsRecords",
+            rawData: [],
+            collectedAt: new Date().toISOString(),
+            apiCallCount: 0,
+            status: "failed" as const,
+            error: cause instanceof Error ? cause.message : String(cause),
+            kind: "permanent",
+          };
+        }
+      })();
+
+      results.push(graphBootstrap);
+
+      const domainVerification = new Map<string, boolean | undefined>();
+      for (const record of graphBootstrap.rawData as Array<Record<string, unknown>>) {
+        const domain = record["domain"];
+        if (typeof domain !== "string") continue;
+
+        const isVerifiedValue = record["isVerified"];
+        const isVerified = typeof isVerifiedValue === "boolean" ? isVerifiedValue : undefined;
+        const existing = domainVerification.get(domain);
+
+        if (existing === true || isVerified === true) {
+          domainVerification.set(domain, true);
+          continue;
+        }
+
+        if (existing === undefined) {
+          domainVerification.set(domain, isVerified);
+        }
+      }
+
+      const verifiedDomains = [...domainVerification.entries()]
+        .filter(([, isVerified]) => isVerified === true)
+        .map(([domain]) => domain);
+
+      adapters.push(toRuntimeAdapter<DnsDataSources>(createDnsAdapter({ verifiedDomains })));
+
+      for (const adapter of adapters) {
+        for (const source of adapter.listSources()) {
+          if (adapter.name === "microsoft-graph" && source === "domainDnsRecords") {
+            continue;
+          }
+
+          const collected = await (async () => {
+            try {
+              const result: AdapterResult<unknown> = await adapter.collect(source, adapterConfig);
+              return {
+                adapter: adapter.name,
+                source,
+                rawData: result.data,
+                collectedAt: result.collectedAt,
+                apiCallCount: result.apiCallCount,
+                status: "ok" as const,
+                error: null,
+              };
+            } catch (cause) {
+              if (cause instanceof AdapterError) {
+                return {
+                  adapter: adapter.name,
+                  source,
+                  rawData: [],
+                  collectedAt: new Date().toISOString(),
+                  apiCallCount: 0,
+                  status: "failed" as const,
+                  error: cause.message,
+                  kind: cause.kind,
+                };
+              }
+
+              return {
+                adapter: adapter.name,
+                source,
+                rawData: [],
+                collectedAt: new Date().toISOString(),
+                apiCallCount: 0,
+                status: "failed" as const,
+                error: cause instanceof Error ? cause.message : String(cause),
+                kind: "permanent",
+              };
+            }
+          })();
+
+          results.push(collected);
+        }
       }
 
       console.info(
@@ -250,10 +382,54 @@ export const executeScan = inngest.createFunction(
 
       return await withRLS(workspaceId, [scopeId], async (tx) => {
         // 1. Build evidence snapshot from collected data
+        const collectedSourcesMap = collectedSources.map((item) => [
+          item.source,
+          item.rawData,
+        ] as const);
+        void collectedSourcesMap;
+
+        const successfulSources = collectedSources.filter((item) => item.status === "ok");
+        const groupedBySource = new Map<string, CollectedSource[]>();
+        for (const item of successfulSources) {
+          const existing = groupedBySource.get(item.source) ?? [];
+          existing.push(item);
+          groupedBySource.set(item.source, existing);
+        }
+
+        // Canonical adapters for legacy source keys when multiple adapters
+        // emit the same source name.
+        const preferredLegacySourceAdapter: Readonly<Record<string, string>> = {
+          domainDnsRecords: "dns",
+          transportRules: "exchange-online",
+        };
+
+        const snapshotEntries: Array<[string, unknown]> = [];
+        for (const item of successfulSources) {
+          snapshotEntries.push([`${item.adapter}:${item.source}`, item.rawData]);
+        }
+
+        for (const [source, items] of groupedBySource.entries()) {
+          if (items.length === 1) {
+            snapshotEntries.push([source, items[0]!.rawData]);
+            continue;
+          }
+
+          const preferredAdapter = preferredLegacySourceAdapter[source];
+          const canonical = (preferredAdapter
+            ? items.find((item) => item.adapter === preferredAdapter)
+            : undefined) ?? items[0];
+
+          if (!canonical) continue;
+
+          snapshotEntries.push([source, canonical.rawData]);
+          console.info(
+            `[scan-pipeline:execute] source collision resolved: source=${source} ` +
+              `chosenAdapter=${canonical.adapter} candidates=${items.map((i) => i.adapter).join(",")}`,
+          );
+        }
+
         const snapshot: EvidenceSnapshot = {
-          data: Object.fromEntries(
-            collectedSources.map((s) => [s.source, s.rawData]),
-          ),
+          data: Object.fromEntries(snapshotEntries),
         };
 
         // 2. Load ControlAssertions from DB and map to EngineAssertions
@@ -392,16 +568,48 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     await step.run("finalize-scan", async () => {
       console.info(`[scan-pipeline:execute] step=finalize-scan start: scanId=${scanId}`);
+      const sourceErrors = collectedSources
+        .filter((item) => item.status === "failed")
+        .map((item) => ({
+          adapter: item.adapter,
+          source: item.source,
+          error: item.error,
+          kind: item.kind ?? "permanent",
+          collectedAt: item.collectedAt,
+        }));
       await withRLS(workspaceId, [scopeId], async (tx) => {
-        await tx.scan.update({
-          where: { id: scanId },
-          data: {
-            status: "SUCCEEDED",
-            finishedAt: new Date(),
-            checksRun: evidenceSummary.checksRun,
-            checksFailed: evidenceSummary.checksFailed,
-          },
-        });
+        try {
+          await tx.scan.update({
+            where: { id: scanId },
+            data: {
+              status: "SUCCEEDED",
+              finishedAt: new Date(),
+              checksRun: evidenceSummary.checksRun,
+              checksFailed: evidenceSummary.checksFailed,
+              sourceErrors,
+            },
+          });
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          if (!message.includes("Unknown argument `sourceErrors`")) {
+            throw cause;
+          }
+
+          console.warn(
+            `[scan-pipeline:execute] sourceErrors column unavailable on generated Prisma client; ` +
+              `retrying scan update without sourceErrors (scanId=${scanId})`,
+          );
+
+          await tx.scan.update({
+            where: { id: scanId },
+            data: {
+              status: "SUCCEEDED",
+              finishedAt: new Date(),
+              checksRun: evidenceSummary.checksRun,
+              checksFailed: evidenceSummary.checksFailed,
+            },
+          });
+        }
 
         // Audit: scan.complete — same transaction as status change
         await createAuditEvent(tx, {
@@ -416,6 +624,7 @@ export const executeScan = inngest.createFunction(
             status: "SUCCEEDED",
             checksRun: evidenceSummary.checksRun,
             checksFailed: evidenceSummary.checksFailed,
+            sourceErrorsCount: sourceErrors.length,
           },
         });
       });
