@@ -283,7 +283,7 @@ To make the milestones explicit:
 - **`@watchtower/scan-pipeline` package** — Inngest-based scan orchestration:
   - `inngest-client.ts` — typed Inngest client for Watchtower events
   - `events.ts` — event type definitions (`scan/trigger`, `scan/cancel`, `scan/completed`)
-  - `execute-scan` — 4-step Inngest function: transition PENDING→RUNNING, collect data via Graph adapter, store evidence (deferred to engine integration), finalize scan status
+  - `execute-scan` — 4-step Inngest function: transition PENDING→RUNNING, collect data via Graph adapter, run engine + store evidence/findings, finalize scan status
   - `handle-cancellation` — event-driven cancellation with state guard (PENDING/RUNNING only)
   - `onFailure` handler — ensures scans never stuck in RUNNING on unhandled errors
 - **Graph adapter** (in `@watchtower/adapters`):
@@ -301,11 +301,39 @@ To make the milestones explicit:
 - **Inngest serve route** (`/api/inngest`) — Next.js App Router endpoint for function discovery
 - **Scan router wired to Inngest** — `trigger` emits `scan/trigger` event, `cancel` emits `scan/cancel` event
 - **ADR-004** — Single-engine collapse + Firecracker sandboxing decisions
-- **1,226 passing tests** — 81 Phase 2.2 convention tests + 61 sandbox tests
+- **1,319 passing tests** — 81 Phase 2.2 convention tests + 61 sandbox tests + 79 Phase 3 engine integration tests
+
+### Phase 3 — Engine ↔ scan pipeline integration
+
+- **`@watchtower/engine` package** — Compliance evaluation engine as a workspace library:
+  - `evaluateAssertions()` — batch evaluation of ControlAssertions against evidence snapshots
+  - `evaluateControl()` — single assertion evaluation with all operator types
+  - Framework-agnostic — evaluates CIS, ScubaGear, NIST, or custom framework assertions
+  - CA policy match engine — Conditional Access policy evaluation via `ca-match` operator
+  - No database dependency — pure evaluation logic, decoupled from persistence
+- **Engine integration in `execute-scan` Step 3** ("store-evidence"):
+  - Loads ControlAssertions from database via Prisma
+  - Maps DB rows to `EngineAssertion` types
+  - Calls `evaluateAssertions()` against collected evidence
+  - Upserts Findings with full lifecycle state machine
+  - Creates append-only Evidence records per check result
+  - Writes audit events for finding creation and status changes
+- **Finding lifecycle state machine** (`upsertFinding`):
+  - New failure → OPEN, new pass → RESOLVED (evidence shows compliance)
+  - OPEN/ACKNOWLEDGED/IN_PROGRESS → RESOLVED on pass
+  - RESOLVED → OPEN on regression (with `regressionFromResolvedAt`)
+  - ACCEPTED_RISK / NOT_APPLICABLE — never overridden by engine
+  - `lastSeenAt` updated on every evaluation
+  - Severity copied from Check at creation, never overwritten
+- **Compliance seed data** — CIS Microsoft 365 Foundations Benchmark v6.0.1 (not v3.1):
+  - ScubaGear M365 Security Baseline v1.5 cross-mapping (6 overlapping controls)
+  - NIST CSF v2.0 cross-mapping (4 controls)
+  - Framework-agnostic check catalog (10 checks with stable slugs)
+- **Real checksRun/checksFailed** — finalize step and completion events use engine results
 
 ### Not yet delivered
 
-Application code: engine ↔ scan pipeline integration (evidence storage, finding creation), GitHub App for plugin sync, UI, Stripe billing integration, API token management, webhook/SIEM integrations.
+Application code: GitHub App for plugin sync, UI, Stripe billing integration, API token management, webhook/SIEM integrations.
 
 ## 14. The tests that hold the schema honest
 

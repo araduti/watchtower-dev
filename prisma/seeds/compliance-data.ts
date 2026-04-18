@@ -3,7 +3,9 @@
 // =============================================================================
 //
 // Seeds the global compliance catalog with representative CIS Microsoft 365
-// checks and two compliance frameworks (CIS M365 v3.1 and NIST CSF v2.0).
+// checks and three compliance frameworks (CIS M365 v6.0.1, ScubaGear M365
+// v1.5, and NIST CSF v2.0). ScubaGear controls are cross-mapped to the same
+// checks where baselines overlap with CIS recommendations.
 //
 // This seeder is idempotent — safe to run repeatedly. It uses upsert
 // semantics for all records.
@@ -264,12 +266,20 @@ type FrameworkSeed = {
 
 export const FRAMEWORKS: readonly FrameworkSeed[] = [
   {
-    id: "fw-cis-m365-v3.1",
-    slug: "cis-m365-v3.1",
+    id: "fw-cis-m365-v6.0.1",
+    slug: "cis-m365-v6.0.1",
     name: "CIS Microsoft 365 Foundations Benchmark",
     publisher: "CIS",
-    version: "3.1.0",
+    version: "6.0.1",
     url: "https://www.cisecurity.org/benchmark/microsoft_365",
+  },
+  {
+    id: "fw-scubagear-m365-v1.5",
+    slug: "scubagear-m365-v1.5",
+    name: "ScubaGear M365 Security Baseline",
+    publisher: "CISA",
+    version: "1.5.0",
+    url: "https://github.com/cisagov/ScubaGear",
   },
   {
     id: "fw-nist-csf-v2.0",
@@ -303,7 +313,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.entra.ca.require_mfa_admins",
     checkId: "chk-cis-mfa-admins-001",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "1.1.1",
     controlTitle: "Ensure multifactor authentication is enabled for all users in administrative roles",
     classification: "L1",
@@ -313,7 +323,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.entra.ca.require_mfa_users",
     checkId: "chk-cis-mfa-users-002",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "1.1.2",
     controlTitle: "Ensure multifactor authentication is enabled for all users",
     classification: "L2",
@@ -323,7 +333,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.entra.ca.block_legacy_auth",
     checkId: "chk-cis-legacy-auth-003",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "1.1.4",
     controlTitle: "Ensure legacy authentication is not allowed",
     classification: "L1",
@@ -333,7 +343,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.spo.sharing_capability",
     checkId: "chk-cis-spo-sharing-004",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "3.1.1",
     controlTitle: "Ensure SharePoint external sharing is managed",
     classification: "L1",
@@ -343,7 +353,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.exo.disable_auto_forwarding",
     checkId: "chk-cis-exo-auto-forward-005",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "4.2.1",
     controlTitle: "Ensure automatic forwarding is disabled",
     classification: "L1",
@@ -353,7 +363,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.m365.unified_audit_log",
     checkId: "chk-cis-audit-log-006",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "5.1.1",
     controlTitle: "Ensure Microsoft 365 audit log search is enabled",
     classification: "L1",
@@ -363,7 +373,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.entra.limit_global_admins",
     checkId: "chk-cis-global-admin-007",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "1.1.3",
     controlTitle: "Ensure that between two and four global admins are designated",
     classification: "L1",
@@ -373,7 +383,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.entra.password_expiry_policy",
     checkId: "chk-cis-password-policy-008",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "1.3.1",
     controlTitle: "Ensure password expiration policy is set to not expire",
     classification: "L1",
@@ -383,7 +393,7 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.entra.self_service_password_reset",
     checkId: "chk-cis-sspr-009",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "1.3.2",
     controlTitle: "Ensure self-service password reset is enabled",
     classification: "L1",
@@ -393,10 +403,72 @@ const CONTROLS: readonly ControlSeed[] = [
   {
     checkSlug: "wt.teams.external_access_policy",
     checkId: "chk-cis-teams-ext-access-010",
-    frameworkId: "fw-cis-m365-v3.1",
+    frameworkId: "fw-cis-m365-v6.0.1",
     controlId: "8.1.1",
     controlTitle: "Ensure external access is restricted in Microsoft Teams",
     classification: "L2",
+    required: true,
+    automated: true,
+  },
+
+  // -- ScubaGear M365 controls (cross-mapping CIS checks to CISA baselines) --
+  {
+    checkSlug: "wt.entra.ca.require_mfa_admins",
+    checkId: "chk-cis-mfa-admins-001",
+    frameworkId: "fw-scubagear-m365-v1.5",
+    controlId: "MS.AAD.3.1v1",
+    controlTitle: "MFA SHALL be required for all users in administrative roles",
+    classification: null,
+    required: true,
+    automated: true,
+  },
+  {
+    checkSlug: "wt.entra.ca.require_mfa_users",
+    checkId: "chk-cis-mfa-users-002",
+    frameworkId: "fw-scubagear-m365-v1.5",
+    controlId: "MS.AAD.3.2v2",
+    controlTitle: "MFA SHALL be required for all users",
+    classification: null,
+    required: true,
+    automated: true,
+  },
+  {
+    checkSlug: "wt.entra.ca.block_legacy_auth",
+    checkId: "chk-cis-legacy-auth-003",
+    frameworkId: "fw-scubagear-m365-v1.5",
+    controlId: "MS.AAD.1.1v1",
+    controlTitle: "Legacy authentication SHALL be blocked",
+    classification: null,
+    required: true,
+    automated: true,
+  },
+  {
+    checkSlug: "wt.exo.disable_auto_forwarding",
+    checkId: "chk-cis-exo-auto-forward-005",
+    frameworkId: "fw-scubagear-m365-v1.5",
+    controlId: "MS.EXO.4.2v1",
+    controlTitle: "Automatic forwarding to external recipients SHALL be disabled",
+    classification: null,
+    required: true,
+    automated: true,
+  },
+  {
+    checkSlug: "wt.entra.limit_global_admins",
+    checkId: "chk-cis-global-admin-007",
+    frameworkId: "fw-scubagear-m365-v1.5",
+    controlId: "MS.AAD.7.1v1",
+    controlTitle: "A minimum of two users and a maximum of four users SHALL be provisioned with the Global Administrator role",
+    classification: null,
+    required: true,
+    automated: true,
+  },
+  {
+    checkSlug: "wt.teams.external_access_policy",
+    checkId: "chk-cis-teams-ext-access-010",
+    frameworkId: "fw-scubagear-m365-v1.5",
+    controlId: "MS.TEAMS.2.1v2",
+    controlTitle: "External access SHALL be restricted to approved domains",
+    classification: null,
     required: true,
     automated: true,
   },

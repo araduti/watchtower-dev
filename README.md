@@ -7,6 +7,54 @@ Watchtower treats compliance as structured knowledge, not a product feature. Fra
 
 This document is for contributors. For the system design, see [`docs/Architecture.md`](./docs/Architecture.md). For schema rationale, see [`docs/Schema-Design-Notes.md`](./docs/Schema-Design-Notes.md). For API conventions, see [`docs/API-Conventions.md`](./docs/API-Conventions.md). For broader code conventions (audit logging, soft-delete, testing, vendor adapters), see [`docs/Code-Conventions.md`](./docs/Code-Conventions.md).
 
+## Prerequisites
+
+| Tool | Minimum version | Install |
+|---|---|---|
+| **Bun** | 1.1+ | [bun.sh/docs/installation](https://bun.sh/docs/installation) |
+| **Docker Engine** | 24+ | Docker Desktop or Colima (see below) |
+| **Docker Compose** | v2 (plugin) | Ships with Docker Desktop; Colima users install via `brew install docker-compose` |
+| **OpenSSL** | 3.x | `brew install openssl` (macOS) or pre-installed on Linux |
+| **Git** | 2.39+ | `brew install git` (macOS) or `apt install git` (Linux) |
+
+**Optional tools:**
+
+| Tool | Purpose |
+|---|---|
+| **VS Code** | Recommended editor — workspace settings and extensions are included |
+| **Prisma Studio** | `bun run db:studio` — web-based DB browser |
+| **psql** | Direct PostgreSQL access for RLS debugging |
+| **jq** | Useful for inspecting JSON responses and evidence payloads |
+
+### macOS developers (Colima)
+
+If you're on macOS and using [Colima](https://github.com/abiosoft/colima) instead of Docker Desktop:
+
+```bash
+# Install Colima and Docker CLI tools
+brew install colima docker docker-compose docker-credential-helper
+
+# Start Colima with enough resources for the dev stack
+# 4 CPUs / 8 GB RAM is comfortable; 2/4 is the minimum
+colima start --cpu 4 --memory 8 --disk 60 --network-address
+
+# Verify Docker is working
+docker info
+docker compose version   # must be v2+
+```
+
+**Colima-specific notes:**
+
+- **`host.docker.internal`** — Colima supports this hostname out of the box (since v0.5.0+). If you're on an older version, upgrade or add `--network-address` to `colima start`.
+- **Port forwarding** — Colima forwards container ports to `localhost` automatically. The dev compose file binds to `127.0.0.1`, which works with Colima's default configuration.
+- **File sharing** — Colima uses a VirtioFS or SSHFS mount for the host filesystem. If you experience slow `bun install` or `prisma generate` inside the repo, ensure Colima is configured with VirtioFS: `colima start --mount-type virtiofs`.
+- **Firecracker / KVM** — Not available on macOS. Set `WATCHTOWER_SANDBOX_MODE=dev` in your `.env` (this is the default in `.env.example`). Plugin evaluators run in-process without isolation in dev mode.
+- **Rosetta (Apple Silicon)** — Colima runs x86_64 containers via Rosetta by default on Apple Silicon Macs. For best performance, use `colima start --arch aarch64` if all images support ARM64 (Postgres 18 and Inngest do; Garage v1.0.1 may need `--arch x86_64`).
+
+### Linux developers
+
+Docker Engine and Docker Compose plugin are sufficient — no additional setup is needed beyond the Quick start below. If using rootless Docker, ensure the user has access to the Docker socket.
+
 ## Quick start
 
 ```bash
@@ -38,7 +86,7 @@ The web app runs at `http://localhost:3000`. The Inngest dev UI runs at `http://
 
 Sign in with the dev credentials: **admin@watchtower.dev** / **watchtower-dev**. The seed creates a workspace, scope, and demo tenant so you can explore the dashboard immediately.
 
-If anything in steps 3–4 fails, the most likely cause is something else listening on port 5432 (typically a native Postgres installation). Run `sudo lsof -i :5432` to check, and stop the conflicting service before retrying.
+If anything in steps 3–4 fails, see [Troubleshooting](#troubleshooting) below. The most likely cause is something else listening on port 5432 (typically a native Postgres installation). Run `sudo lsof -i :5432` (macOS/Linux) to check, and stop the conflicting service before retrying.
 
 ### Inngest in development
 
@@ -58,6 +106,31 @@ The Inngest SDK auto-detects dev mode when `NODE_ENV` is anything other than `"p
 
 If you see Inngest-related warnings in the console during development, they are almost always caused by response-format mismatches between the Inngest dev server and SDK v4. The `devSafeFetch` wrapper handles these transparently — events are still delivered and functions still execute.
 
+### Recommended VS Code setup
+
+Watchtower works well with VS Code on any platform. Recommended extensions:
+
+- **Prisma** (`Prisma.prisma`) — schema highlighting, auto-format, jump-to-definition
+- **ESLint** (`dbaeumer.vscode-eslint`) — inline lint errors
+- **Tailwind CSS IntelliSense** (`bradlc.vscode-tailwindcss`) — class autocomplete in the UI layer
+- **Docker** (`ms-azuretools.vscode-docker`) — compose file management and container logs
+- **Pretty TypeScript Errors** (`yoavbls.pretty-ts-errors`) — human-readable type errors
+
+Workspace settings (create `.vscode/settings.json` if not present):
+
+```jsonc
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/prisma/generated": true
+  }
+}
+```
+
 ## Repo structure
 
 ```
@@ -74,7 +147,7 @@ watchtower-dev/
 │   ├── adapters/                  # Vendor adapter boundary (Graph types, AdapterError)
 │   ├── auth/                      # Better Auth configuration, Org plugin, session resolver
 │   ├── db/                        # Prisma client wrapper, RLS-aware proxy
-│   ├── engine/                    # Compliance engine — evaluator registry, assertions
+│   ├── engine/                    # Compliance engine — evaluation, evaluator registry, assertions
 │   ├── errors/                    # Two-layer error code catalog (zero dependencies)
 │   ├── sandbox/                   # Firecracker microVM lifecycle manager for plugin sandboxing
 │   ├── scan-pipeline/             # Inngest functions (execute-scan, handle-cancellation)
@@ -277,6 +350,8 @@ Watchtower uses two separate Docker Compose files to clearly separate developmen
 
 > **Status:** The production compose file defines the full stack but the web and worker Dockerfiles are not yet built. The infrastructure services (Postgres, Garage, Inngest, Traefik) are ready to use. Uncomment the `web` and `worker` services once their Dockerfiles exist.
 
+#### Step-by-step
+
 ```bash
 # 1. Prepare production environment
 cp .env.example .env.production
@@ -285,10 +360,23 @@ cp .env.example .env.production
 # Tip: grep 'CHANGE-FOR-PROD' .env.production to find all values that
 # need replacement (database passwords, credential key, Inngest keys).
 
-# 2. Generate production audit signing key
+# 2. Generate all required secrets
 mkdir -p secrets
+
+# Audit signing key (Ed25519)
 openssl genpkey -algorithm Ed25519 -out secrets/audit-signing-key.pem
 chmod 600 secrets/audit-signing-key.pem
+
+# Auth secret
+echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)" >> .env.production
+
+# Credential encryption key (AES-256-GCM, 64 hex chars)
+echo "WATCHTOWER_CREDENTIAL_KEY=$(openssl rand -hex 32)" >> .env.production
+
+# Database passwords (strong random values)
+echo "POSTGRES_SUPERUSER_PASSWORD=$(openssl rand -base64 24)" >> .env.production
+echo "WATCHTOWER_APP_PASSWORD=$(openssl rand -base64 24)" >> .env.production
+echo "WATCHTOWER_MIGRATE_PASSWORD=$(openssl rand -base64 24)" >> .env.production
 
 # 3. Set production Inngest keys
 # Option A: Self-hosted (default in docker-compose.prod.yml)
@@ -314,6 +402,31 @@ docker compose -f docker-compose.prod.yml exec web \
 docker compose -f docker-compose.prod.yml exec web \
   sh -c 'NODE_ENV=production DATABASE_URL=$DATABASE_MIGRATE_URL bun run prisma/seeds/index.ts -- --force'
 ```
+
+#### Backup and recovery
+
+```bash
+# Database backup (run from the production host)
+docker compose -f docker-compose.prod.yml exec pg \
+  pg_dump -U postgres watchtower | gzip > "watchtower-$(date +%Y%m%d-%H%M%S).sql.gz"
+
+# Restore (stop the app first)
+docker compose -f docker-compose.prod.yml stop web worker
+gunzip -c watchtower-YYYYMMDD-HHMMSS.sql.gz | \
+  docker compose -f docker-compose.prod.yml exec -T pg psql -U postgres watchtower
+
+# Garage S3 evidence vault — uses standard S3-compatible tools
+# Install mc (MinIO client) or aws-cli, then:
+#   mc alias set garage http://localhost:3900 $GARAGE_S3_ACCESS_KEY $GARAGE_S3_SECRET_KEY
+#   mc mirror garage/watchtower-evidence ./evidence-backup/
+```
+
+#### Monitoring
+
+- **Postgres health:** `docker compose -f docker-compose.prod.yml exec pg pg_isready` — the compose healthcheck already monitors this.
+- **Container status:** `docker compose -f docker-compose.prod.yml ps` — all services should show `Up (healthy)` or `Up`.
+- **Logs:** `docker compose -f docker-compose.prod.yml logs -f --tail=100 web` (or `pg`, `inngest`, `traefik`).
+- **Inngest dashboard:** If self-hosted, the Inngest admin UI is on port 8288 (internal only in production). Use `docker compose exec inngest` or SSH tunnel for access.
 
 ### Production checklist
 
@@ -366,6 +479,47 @@ Real-time scan progress (auto-polling scan detail with live indicator). Date-ran
 **Next:** Phase 3.3+ (API token management, webhook/SIEM integrations, Stripe billing UI, scheduled scan configuration).
 
 For the full roadmap, see [`docs/Architecture.md`](./docs/Architecture.md).
+
+## Troubleshooting
+
+### Docker / Colima issues
+
+| Problem | Solution |
+|---|---|
+| `Cannot connect to the Docker daemon` | Start Docker Desktop or run `colima start` |
+| `port 5432 already in use` | Stop the conflicting service: `sudo lsof -i :5432` to identify it, then `brew services stop postgresql` (Homebrew) or `sudo systemctl stop postgresql` (Linux) |
+| `port 3900 already in use` | Another service on 3900. Check with `sudo lsof -i :3900` |
+| Colima containers start but ports aren't reachable | Restart Colima: `colima stop && colima start --cpu 4 --memory 8` |
+| `docker compose` not found (only `docker-compose`) | Install the Compose plugin: `brew install docker-compose` or `apt install docker-compose-plugin` |
+| Postgres init script doesn't run | The init script runs only on first start with an empty volume. Wipe and recreate: `docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d` |
+
+### Database issues
+
+| Problem | Solution |
+|---|---|
+| `role "watchtower_app" does not exist` | The init script didn't run. Wipe volumes and restart: `docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d` |
+| `permission denied for table ...` | You're connecting with the wrong role. Runtime code must use `DATABASE_URL` (watchtower_app). Migrations and seeds use `DATABASE_MIGRATE_URL` (watchtower_migrate). |
+| `relation "..." does not exist` | Run `bun run db:migrate` to apply pending migrations |
+| Prisma client out of sync after schema change | Run `bun run db:generate` to regenerate the client |
+| RLS blocking all queries | Verify that `withRLS()` is setting `app.current_workspace_id` correctly. Run `SHOW app.current_workspace_id;` in a psql session to debug. |
+
+### Bun / Node issues
+
+| Problem | Solution |
+|---|---|
+| `bun install` fails with lockfile conflict | Delete `node_modules` and `bun.lock`, then run `bun install` again |
+| `Cannot find module '@watchtower/...'` | Bun workspace resolution — run `bun install` from the repo root |
+| TypeScript errors after pulling | Run `bun run db:generate` (Prisma client may need regenerating) then `bun run typecheck` |
+| `EACCES` on `secrets/audit-signing-key.pem` | Fix permissions: `chmod 600 secrets/audit-signing-key.pem` |
+
+### macOS-specific
+
+| Problem | Solution |
+|---|---|
+| `WATCHTOWER_SANDBOX_MODE=production` errors on macOS | macOS doesn't support KVM / Firecracker. Set `WATCHTOWER_SANDBOX_MODE=dev` in `.env` (this is the default) |
+| Slow file I/O in containers (Colima) | Use VirtioFS mount: `colima stop && colima start --mount-type virtiofs` |
+| `host.docker.internal` not resolving | Upgrade Colima to v0.5.0+ or add `--network-address` to `colima start` |
+| OpenSSL `Ed25519` not supported | Install OpenSSL 3.x: `brew install openssl` and use `/opt/homebrew/bin/openssl` (or `/usr/local/bin/openssl` on Intel Macs) instead of the system LibreSSL |
 
 ## License
 
