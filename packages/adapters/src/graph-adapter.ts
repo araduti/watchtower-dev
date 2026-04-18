@@ -2,10 +2,10 @@
  * Microsoft Graph adapter — the only place where Graph API calls happen.
  *
  * Implements `VendorAdapter<GraphDataSources>` with:
- * - AES-256-GCM credential decryption at the adapter boundary
+ * - AES-256-GCM credential decryption at the adapter boundary (shared helper)
  * - Client-credentials OAuth flow for Graph token acquisition
  * - Exponential backoff with jitter for transient failures (max 3 retries)
- * - Per-tenant concurrency limiting (default 4 concurrent requests)
+ * - Per-tenant concurrency limiting (default 4 concurrent requests, shared)
  * - OData `@odata.nextLink` pagination for list endpoints
  * - Error translation to `AdapterError` with `WATCHTOWER:VENDOR:*` codes
  *
@@ -16,7 +16,6 @@
  */
 
 import { Client } from "@microsoft/microsoft-graph-client";
-import { createDecipheriv, type CipherGCMTypes } from "node:crypto";
 
 import type { VendorAdapter, AdapterConfig, AdapterResult } from "./types.ts";
 import type {
@@ -29,26 +28,23 @@ import type {
   AuthMethodsPolicy,
   UserConsentConfig,
   SharePointTenantConfig,
-  TransportRule,
-  DomainDnsRecord,
   TeamsMessagingPolicy,
   B2BCollaborationPolicy,
+  VerifiedDomain,
 } from "./graph-types.ts";
 import { AdapterError } from "./adapter-error.ts";
+import { decryptCredentialBundle } from "./credential-decrypt.ts";
+import { getTenantSemaphore } from "./concurrency.ts";
+import {
+  withRetry,
+  classifyHttpStatus,
+  type RetryDecision,
+} from "./retry.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-/** Maximum number of retries per request (4 total attempts). */
-const MAX_RETRIES = 3;
-
-/** Base delay for exponential backoff in milliseconds. */
-const BASE_DELAY_MS = 1_000;
-
-/** Maximum delay cap for backoff in milliseconds. */
-const MAX_DELAY_MS = 30_000;
 
 /** Default concurrent requests per tenant. */
 const DEFAULT_MAX_CONCURRENCY = 4;
@@ -62,13 +58,6 @@ const DEFAULT_MAX_CONCURRENCY = 4;
  * by management/admin APIs, which always use canonical English property names.
  */
 const GRAPH_ACCEPT_LANGUAGE = "en-US";
-
-/** AES-256-GCM encryption constants. */
-const AES_ALGORITHM: CipherGCMTypes = "aes-256-gcm";
-const AES_IV_LENGTH = 12;
-const AES_TAG_LENGTH = 16;
-const AES_KEY_LENGTH = 32; // 256 bits
-const AES_MIN_BLOB_LENGTH = AES_IV_LENGTH + AES_TAG_LENGTH; // 28 bytes
 
 /** Vendor identifier for error reporting. */
 const VENDOR_NAME = "microsoft-graph" as const;
@@ -92,14 +81,18 @@ const REQUIRED_SCOPES: Readonly<Record<GraphDataSourceKey, readonly string[]>> =
   authMethodsPolicy: ["Policy.Read.All"],
   userConsentSettings: ["Policy.Read.All"],
   spoTenant: ["SharePointTenantSettings.Read.All"],
-  transportRules: ["TransportRules.Read"],
-  domainDnsRecords: ["Domain.Read.All"],
+  domains: ["Domain.Read.All"],
   teamsMessagingPolicies: ["TeamworkDevice.Read.All"],
   b2bPolicy: ["Policy.Read.All"],
 } as const;
 
 /**
  * All data source keys as a frozen array for `listSources()`.
+ *
+ * Sources removed in the multi-vendor refactor:
+ *   - `transportRules`     → moved to ExchangeAdapter (real `Get-TransportRule`)
+ *   - `domainDnsRecords`   → moved to DnsAdapter (real DNS resolution against
+ *                            verified domains)
  */
 const ALL_SOURCES = [
   "conditionalAccessPolicies",
@@ -108,178 +101,26 @@ const ALL_SOURCES = [
   "authMethodsPolicy",
   "userConsentSettings",
   "spoTenant",
-  "transportRules",
-  "domainDnsRecords",
+  "domains",
   "teamsMessagingPolicies",
   "b2bPolicy",
 ] as const satisfies readonly GraphDataSourceKey[];
 
 // ---------------------------------------------------------------------------
-// Concurrency limiter (per-tenant token bucket / semaphore)
+// Concurrency limiter — uses the shared per-(vendor, workspace, tenant) cache.
 // ---------------------------------------------------------------------------
 
-/**
- * Simple semaphore for limiting concurrent requests per tenant.
- * Keyed by `workspaceId:tenantId` to prevent cross-tenant interference.
- */
-class ConcurrencySemaphore {
-  private readonly waiters: Array<() => void> = [];
-  private active = 0;
-
-  constructor(private readonly maxConcurrency: number) {}
-
-  /** Acquire a slot. Resolves when a slot is available. */
-  async acquire(): Promise<void> {
-    if (this.active < this.maxConcurrency) {
-      this.active++;
-      return;
-    }
-    return new Promise<void>((resolve) => {
-      this.waiters.push(() => {
-        this.active++;
-        resolve();
-      });
-    });
-  }
-
-  /** Release a slot, unblocking the next waiter. */
-  release(): void {
-    const next = this.waiters.shift();
-    if (next) {
-      // Hand the slot directly to the next waiter (active count stays the same)
-      next();
-    } else {
-      this.active--;
-    }
-  }
-}
-
-/** Per-tenant semaphore cache (never persisted, GC'd with the adapter). */
-const semaphoreCache = new Map<string, ConcurrencySemaphore>();
-
-/**
- * Get or create a concurrency semaphore for a tenant.
- */
-function getSemaphore(
-  workspaceId: string,
-  tenantId: string,
-  maxConcurrency: number,
-): ConcurrencySemaphore {
-  const key = `${workspaceId}:${tenantId}`;
-  let sem = semaphoreCache.get(key);
-  if (!sem) {
-    sem = new ConcurrencySemaphore(maxConcurrency);
-    semaphoreCache.set(key, sem);
-  }
-  return sem;
-}
+// Keep this name local so existing call sites read `semaphore.acquire()`
+// rather than re-importing the type — the underlying class is the shared
+// `ConcurrencySemaphore` from `./concurrency.ts`.
 
 // ---------------------------------------------------------------------------
 // Credential decryption
 // ---------------------------------------------------------------------------
 
-/** Decrypted Graph credential shape — only lives inside the adapter closure. */
-interface GraphCredentials {
-  readonly clientId: string;
-  readonly clientSecret: string;
-  readonly msTenantId: string;
-}
-
-/**
- * Decrypt AES-256-GCM encrypted credentials.
- *
- * Buffer layout: [12-byte IV][16-byte authTag][ciphertext...]
- *
- * @param encrypted - The encrypted credentials buffer.
- * @param dataSource - Data source for error attribution.
- * @returns Decrypted credentials.
- * @throws AdapterError with kind "credentials_invalid" on failure.
- */
-function decryptCredentials(
-  encrypted: Buffer,
-  dataSource: string,
-): GraphCredentials {
-  try {
-    const encryptionKey = process.env["WATCHTOWER_CREDENTIAL_KEY"];
-    if (!encryptionKey) {
-      throw new Error("WATCHTOWER_CREDENTIAL_KEY environment variable is not set");
-    }
-
-    const keyBuffer = Buffer.from(encryptionKey, "hex");
-    if (keyBuffer.length !== AES_KEY_LENGTH) {
-      throw new Error(
-        `WATCHTOWER_CREDENTIAL_KEY must be exactly 64 hex characters (32 bytes), ` +
-          `got ${encryptionKey.length} hex characters (${keyBuffer.length} bytes).`,
-      );
-    }
-
-    if (encrypted.length < AES_MIN_BLOB_LENGTH) {
-      throw new Error(
-        `Encrypted credentials blob is too small: expected at least ${AES_MIN_BLOB_LENGTH} bytes ` +
-          `(IV + authTag), got ${encrypted.length} bytes. The credentials may be corrupted or empty.`,
-      );
-    }
-
-    // Use Buffer.alloc + copy to guarantee independent buffers with
-    // byteOffset === 0.  Buffer.from(subarray) may still share the
-    // underlying ArrayBuffer in Bun, causing BoringSSL to reject the
-    // IV with ERR_CRYPTO_INVALID_IV.
-    const iv = Buffer.alloc(AES_IV_LENGTH);
-    encrypted.copy(iv, 0, 0, AES_IV_LENGTH);
-
-    const authTag = Buffer.alloc(AES_TAG_LENGTH);
-    encrypted.copy(authTag, 0, AES_IV_LENGTH, AES_IV_LENGTH + AES_TAG_LENGTH);
-
-    const ciphertextLen = encrypted.length - AES_IV_LENGTH - AES_TAG_LENGTH;
-    const ciphertext = Buffer.alloc(ciphertextLen);
-    encrypted.copy(ciphertext, 0, AES_IV_LENGTH + AES_TAG_LENGTH);
-
-    const decipher = createDecipheriv(AES_ALGORITHM, keyBuffer, iv);
-    decipher.setAuthTag(authTag);
-
-    const plaintext = Buffer.concat([
-      decipher.update(ciphertext),
-      decipher.final(),
-    ]);
-
-    const parsed: unknown = JSON.parse(plaintext.toString("utf-8"));
-
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("clientId" in parsed) ||
-      !("clientSecret" in parsed) ||
-      !("msTenantId" in parsed)
-    ) {
-      throw new Error("Decrypted payload missing required fields");
-    }
-
-    const creds = parsed as Record<string, unknown>;
-
-    if (
-      typeof creds["clientId"] !== "string" ||
-      typeof creds["clientSecret"] !== "string" ||
-      typeof creds["msTenantId"] !== "string"
-    ) {
-      throw new Error("Decrypted credential fields must be strings");
-    }
-
-    return {
-      clientId: creds["clientId"],
-      clientSecret: creds["clientSecret"],
-      msTenantId: creds["msTenantId"],
-    };
-  } catch (cause) {
-    throw new AdapterError({
-      message: "Failed to decrypt tenant credentials.",
-      kind: "credentials_invalid",
-      vendor: VENDOR_NAME,
-      dataSource,
-      watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIALS_INVALID,
-      cause,
-    });
-  }
-}
+// Credential decryption is centralised in `./credential-decrypt.ts` —
+// every vendor adapter goes through `decryptCredentialBundle()` so there is
+// exactly one AES-256-GCM code path in the repository.
 
 // ---------------------------------------------------------------------------
 // OAuth token acquisition
@@ -294,7 +135,7 @@ function decryptCredentials(
  * @throws AdapterError on auth failure.
  */
 async function acquireToken(
-  credentials: GraphCredentials,
+  credentials: { clientId: string; clientSecret: string; msTenantId: string },
   dataSource: string,
 ): Promise<string> {
   const tokenUrl = `https://login.microsoftonline.com/${credentials.msTenantId}/oauth2/v2.0/token`;
@@ -365,55 +206,31 @@ function createGraphClient(accessToken: string): Client {
 }
 
 // ---------------------------------------------------------------------------
-// Retry with exponential backoff
+// Retry / backoff (shared)
 // ---------------------------------------------------------------------------
 
 /**
- * Execute a Graph API request with retry/backoff logic.
- *
- * Retries on 429 (rate limited) and 5xx (transient) errors.
- * Respects `Retry-After` header from 429 responses.
- * Exponential backoff: min(BASE_DELAY * 2^attempt + jitter, MAX_DELAY).
- *
- * @param fn - The async function to execute.
- * @param dataSource - Data source name for error attribution.
- * @returns The result of the function.
- * @throws AdapterError after exhausting retries or on non-retryable errors.
+ * Inspect a Graph SDK error to decide whether to retry.  The SDK exposes
+ * `statusCode` (or `code`) on errors, plus a `headers` object that may carry
+ * `Retry-After` for 429 responses.
  */
-async function withRetry<T>(
+function inspectGraphError(err: unknown): RetryDecision {
+  const statusCode = extractStatusCode(err);
+  const retryable =
+    statusCode === 429 || (statusCode !== undefined && statusCode >= 500);
+  if (!retryable) return { retryable: false };
+  const retryAfterMs = extractRetryAfterMs(err);
+  return retryAfterMs !== undefined
+    ? { retryable: true, retryAfterMs }
+    : { retryable: true };
+}
+
+/** Bind the shared `withRetry` to the Graph adapter's translator/inspector. */
+function withGraphRetry<T>(
   fn: () => Promise<T>,
   dataSource: string,
 ): Promise<T> {
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await fn();
-    } catch (err: unknown) {
-      const statusCode = extractStatusCode(err);
-      const isRetryable = statusCode === 429 || (statusCode !== undefined && statusCode >= 500);
-
-      if (!isRetryable || attempt === MAX_RETRIES) {
-        throw translateError(err, dataSource);
-      }
-
-      const retryAfterMs = extractRetryAfterMs(err);
-      const backoffMs = Math.min(
-        BASE_DELAY_MS * Math.pow(2, attempt) + Math.random() * 1_000,
-        MAX_DELAY_MS,
-      );
-      const waitMs = retryAfterMs ?? backoffMs;
-
-      await sleep(waitMs);
-    }
-  }
-
-  // Unreachable — the loop always returns or throws.
-  throw new AdapterError({
-    message: "Exhausted retry attempts.",
-    kind: "transient",
-    vendor: VENDOR_NAME,
-    dataSource,
-    watchtowerError: WATCHTOWER_ERRORS.VENDOR.GRAPH_ERROR,
-  });
+  return withRetry(fn, inspectGraphError, (err) => translateError(err, dataSource));
 }
 
 // ---------------------------------------------------------------------------
@@ -466,6 +283,7 @@ function translateError(err: unknown, dataSource: string): AdapterError {
   if (err instanceof AdapterError) return err;
 
   const statusCode = extractStatusCode(err);
+  const kind = classifyHttpStatus(statusCode);
   const retryAfterSeconds = (() => {
     const ms = extractRetryAfterMs(err);
     return ms !== undefined ? ms / 1_000 : undefined;
@@ -473,6 +291,9 @@ function translateError(err: unknown, dataSource: string): AdapterError {
   const message =
     err instanceof Error ? err.message : "Unknown Graph API error";
 
+  // Map AdapterErrorKind → human-readable message + WATCHTOWER_ERRORS code.
+  // Each branch is explicit so the error catalog reference and kind mapping
+  // stay grep-able for the convention tests in §6.
   if (statusCode === 429) {
     return new AdapterError({
       message: "Graph API rate limit exceeded.",
@@ -536,7 +357,7 @@ function translateError(err: unknown, dataSource: string): AdapterError {
 
   return new AdapterError({
     message,
-    kind: "permanent",
+    kind,
     vendor: VENDOR_NAME,
     dataSource,
     vendorStatusCode: statusCode,
@@ -558,7 +379,7 @@ async function fetchSingleton(
   path: string,
   dataSource: string,
 ): Promise<{ data: unknown; apiCalls: number }> {
-  const data = await withRetry(
+  const data = await withGraphRetry(
     () => client.api(path).version("v1.0").get(),
     dataSource,
   );
@@ -582,7 +403,7 @@ async function fetchPaginatedList(
 
   while (nextLink) {
     const currentLink = nextLink;
-    const response: Record<string, unknown> = await withRetry(
+    const response: Record<string, unknown> = await withGraphRetry(
       () => client.api(currentLink).version(version).get(),
       dataSource,
     );
@@ -610,29 +431,6 @@ async function fetchBetaPaginatedList(
   dataSource: string,
 ): Promise<{ data: unknown[]; apiCalls: number }> {
   return fetchPaginatedList(client, path, dataSource, true);
-}
-
-/**
- * Fetch a single Graph API endpoint using the beta API version.
- */
-async function fetchBetaSingleton(
-  client: Client,
-  path: string,
-  dataSource: string,
-): Promise<{ data: unknown; apiCalls: number }> {
-  const data = await withRetry(
-    () => client.api(path).version("beta").get(),
-    dataSource,
-  );
-  return { data, apiCalls: 1 };
-}
-
-// ---------------------------------------------------------------------------
-// Sleep utility
-// ---------------------------------------------------------------------------
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ---------------------------------------------------------------------------
@@ -819,95 +617,25 @@ async function collectSpoTenant(
   };
 }
 
-async function collectTransportRules(
+async function collectDomains(
   client: Client,
-): Promise<{ data: TransportRule[]; apiCalls: number }> {
-  // Exchange transport rules are accessed via the beta endpoint.
-  // Tenants without Exchange Online will return 404 ("Resource not found
-  // for the segment 'transport'"). This is expected — return an empty result.
-  let result: { data: unknown[]; apiCalls: number };
-  try {
-    result = await fetchBetaPaginatedList(
-      client,
-      "/transport/rules",
-      "transportRules",
-    );
-  } catch (err: unknown) {
-    if (err instanceof AdapterError && err.kind === "resource_not_found") {
-      return { data: [], apiCalls: 1 };
-    }
-    throw err;
-  }
+): Promise<{ data: VerifiedDomain[]; apiCalls: number }> {
+  const result = await fetchPaginatedList(client, "/domains", "domains");
 
-  const rules: TransportRule[] = result.data.map((raw) => {
+  const domains: VerifiedDomain[] = result.data.map((raw) => {
     const item = raw as Record<string, unknown>;
     return {
       id: String(item["id"] ?? ""),
-      name: String(item["name"] ?? item["displayName"] ?? ""),
-      state: parseTransportRuleState(item["state"]),
-      priority: typeof item["priority"] === "number" ? item["priority"] : 0,
-      conditions: (item["conditions"] as Record<string, unknown>) ?? {},
-      actions: (item["actions"] as Record<string, unknown>) ?? {},
+      isVerified: item["isVerified"] === true,
+      isDefault: item["isDefault"] === true,
+      authenticationType:
+        typeof item["authenticationType"] === "string"
+          ? (item["authenticationType"] as string)
+          : null,
     };
   });
 
-  return { data: rules, apiCalls: result.apiCalls };
-}
-
-function parseTransportRuleState(
-  value: unknown,
-): TransportRule["state"] {
-  if (value === "Enabled" || value === "Disabled") return value;
-  return "Disabled";
-}
-
-async function collectDomainDnsRecords(
-  client: Client,
-): Promise<{ data: DomainDnsRecord[]; apiCalls: number }> {
-  // Step 1: Fetch all domains
-  const domainResult = await fetchPaginatedList(
-    client,
-    "/domains",
-    "domainDnsRecords",
-  );
-
-  const domainIds = domainResult.data
-    .map((raw) => {
-      const item = raw as Record<string, unknown>;
-      return typeof item["id"] === "string" ? item["id"] : null;
-    })
-    .filter((id): id is string => id !== null);
-
-  // Step 2: Fetch DNS records per domain
-  let totalApiCalls = domainResult.apiCalls;
-  const allRecords: DomainDnsRecord[] = [];
-
-  for (const domainId of domainIds) {
-    try {
-      const dnsResult = await fetchPaginatedList(
-        client,
-        `/domains/${domainId}/serviceConfigurationRecords`,
-        "domainDnsRecords",
-      );
-      totalApiCalls += dnsResult.apiCalls;
-
-      for (const raw of dnsResult.data) {
-        const item = raw as Record<string, unknown>;
-        allRecords.push({
-          domain: domainId,
-          recordType: String(item["recordType"] ?? item["@odata.type"] ?? ""),
-          value: String(item["text"] ?? item["mailExchange"] ?? item["nameTarget"] ?? ""),
-        });
-      }
-    } catch (err) {
-      // If fetching DNS records for a single domain fails, translate and throw.
-      // The caller can handle partial failures at the source level.
-      if (err instanceof AdapterError) throw err;
-      throw translateError(err, "domainDnsRecords");
-    }
-  }
-
-  return { data: allRecords, apiCalls: totalApiCalls };
+  return { data: domains, apiCalls: result.apiCalls };
 }
 
 async function collectTeamsMessagingPolicies(
@@ -1022,8 +750,7 @@ const COLLECTORS: Readonly<
   authMethodsPolicy: collectAuthMethodsPolicy,
   userConsentSettings: collectUserConsentSettings,
   spoTenant: collectSpoTenant,
-  transportRules: collectTransportRules,
-  domainDnsRecords: collectDomainDnsRecords,
+  domains: collectDomains,
   teamsMessagingPolicies: collectTeamsMessagingPolicies,
   b2bPolicy: collectB2bPolicy,
 } as const;
@@ -1081,7 +808,8 @@ export class MicrosoftGraphAdapter
 
     const maxConcurrency =
       this.graphConfig.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY;
-    const semaphore = getSemaphore(
+    const semaphore = getTenantSemaphore(
+      VENDOR_NAME,
       config.workspaceId,
       config.tenantId,
       maxConcurrency,
@@ -1089,9 +817,10 @@ export class MicrosoftGraphAdapter
 
     await semaphore.acquire();
     try {
-      // Decrypt credentials — plaintext lives only in this closure
-      const credentials = decryptCredentials(
+      // Decrypt credentials — plaintext lives only in this closure.
+      const credentials = decryptCredentialBundle(
         config.encryptedCredentials,
+        VENDOR_NAME,
         source,
       );
 

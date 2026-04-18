@@ -55,11 +55,12 @@ export interface GraphDataSources {
   /** SharePoint/OneDrive tenant configuration. */
   spoTenant: SharePointTenantConfig;
 
-  /** Exchange Online transport rules. */
-  transportRules: TransportRule[];
-
-  /** Domain DNS records for DMARC/SPF/DKIM validation. */
-  domainDnsRecords: DomainDnsRecord[];
+  /**
+   * Verified directory domains.  Used internally and as the dependency input
+   * to the DNS adapter (which performs real DNS resolution against each
+   * verified domain).
+   */
+  domains: VerifiedDomain[];
 
   /** Teams messaging policies. */
   teamsMessagingPolicies: TeamsMessagingPolicy[];
@@ -120,21 +121,16 @@ export interface SharePointTenantConfig {
   readonly externalSharingEnabled: boolean;
 }
 
-/** Exchange Online transport rule. */
-export interface TransportRule {
+/**
+ * A directory domain entry from `/domains`.  The DNS adapter consumes this
+ * shape via `AdapterConfig.dependencies["domains"]` to resolve SPF / DMARC /
+ * DKIM records for each verified domain.
+ */
+export interface VerifiedDomain {
   readonly id: string;
-  readonly name: string;
-  readonly state: "Enabled" | "Disabled";
-  readonly priority: number;
-  readonly conditions: Record<string, unknown>;
-  readonly actions: Record<string, unknown>;
-}
-
-/** Domain DNS record for email security validation. */
-export interface DomainDnsRecord {
-  readonly domain: string;
-  readonly recordType: string;
-  readonly value: string;
+  readonly isVerified: boolean;
+  readonly isDefault: boolean;
+  readonly authenticationType: string | null;
 }
 
 /** Teams messaging policy. */

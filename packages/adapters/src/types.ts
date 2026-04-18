@@ -31,6 +31,19 @@ export interface AdapterConfig {
 
   /** Trace ID for correlation across adapter calls and audit log. */
   readonly traceId: string;
+
+  /**
+   * Optional dependency map carrying data already collected by other
+   * adapters in the same scan.  Used by adapters whose collection logic
+   * depends on the output of another adapter — e.g. the DNS adapter needs
+   * the verified-domain list collected by the Graph adapter.
+   *
+   * Keys are source names (matching the producer adapter's `listSources()`
+   * entries), values are the raw collected payload as stored on
+   * `Evidence.rawEvidence`.  The scan pipeline populates this map by
+   * collecting "leader" sources first.
+   */
+  readonly dependencies?: Readonly<Record<string, unknown>>;
 }
 
 /**
