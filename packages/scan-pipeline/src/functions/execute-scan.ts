@@ -166,11 +166,16 @@ export const executeScan = inngest.createFunction(
           eventData: { tenantId },
         });
 
+        // Prisma 7 returns Bytes as Uint8Array which may have a
+        // non-zero byteOffset in Bun.  Copy into a clean Buffer
+        // before base64-encoding to avoid garbled output.
+        const credBytes = tenantRecord.encryptedCredentials;
+        const credCopy = Buffer.alloc(credBytes.length);
+        Buffer.from(credBytes).copy(credCopy);
+
         return {
           msTenantId: tenantRecord.msTenantId,
-          encryptedCredentials: Buffer.from(
-            tenantRecord.encryptedCredentials,
-          ).toString("base64"),
+          encryptedCredentials: credCopy.toString("base64"),
           authMethod: tenantRecord.authMethod as
             | "CLIENT_SECRET"
             | "WORKLOAD_IDENTITY",
