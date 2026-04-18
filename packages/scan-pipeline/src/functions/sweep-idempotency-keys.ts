@@ -26,21 +26,16 @@ export const sweepIdempotencyKeys = inngest.createFunction(
   {
     id: "sweep-idempotency-keys",
     name: "Sweep expired idempotency keys",
-  },
-  {
-    cron: process.env.IDEMPOTENCY_SWEEP_CRON ?? "0 * * * *", // every hour
+    triggers: [{ cron: process.env.IDEMPOTENCY_SWEEP_CRON ?? "0 * * * *" }],
   },
   async ({ step }) => {
     const deletedCount = await step.run("delete-expired-keys", async () => {
       // Lazy-import to avoid circular dependency at module load time.
-      // The sweep uses the singleton PrismaClient which connects as
-      // watchtower_app. Since IdempotencyKey has RLS enabled, we need
-      // to bypass it. We use a raw query via $executeRawUnsafe through
-      // the migrate-role client.
-      //
-      // In production, this connects via DATABASE_MIGRATE_URL. In dev,
-      // it falls back to DATABASE_URL if the migrate URL is not set.
+      // The sweep uses a dedicated PrismaClient connecting via the
+      // migrate role (DATABASE_MIGRATE_URL) to bypass RLS, since this
+      // is a cross-workspace housekeeping operation.
       const { PrismaClient } = await import("@prisma/client");
+      const { PrismaPg } = await import("@prisma/adapter-pg");
 
       const migrateUrl =
         process.env.DATABASE_MIGRATE_URL ?? process.env.DATABASE_URL;
@@ -52,9 +47,8 @@ export const sweepIdempotencyKeys = inngest.createFunction(
         return 0;
       }
 
-      const client = new PrismaClient({
-        datasourceUrl: migrateUrl,
-      });
+      const adapter = new PrismaPg({ connectionString: migrateUrl });
+      const client = new PrismaClient({ adapter });
 
       try {
         const cutoff = new Date(Date.now() - MAX_AGE_MS);
