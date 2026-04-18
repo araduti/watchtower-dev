@@ -113,6 +113,16 @@ export const WATCHTOWER_ERRORS = {
       transport: "CONFLICT",
       message: "This M365 tenant is already connected.",
     },
+    CREDENTIALS_EMPTY: {
+      code: "WATCHTOWER:TENANT:CREDENTIALS_EMPTY",
+      transport: "PRECONDITION_FAILED",
+      message: "No credentials stored. Connect the tenant before scanning.",
+    },
+    CREDENTIAL_VERIFICATION_FAILED: {
+      code: "WATCHTOWER:TENANT:CREDENTIAL_VERIFICATION_FAILED",
+      transport: "PRECONDITION_FAILED",
+      message: "Failed to verify credentials against Microsoft Graph.",
+    },
   },
 
   SCAN: {

@@ -2,23 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Plus } from "lucide-react";
-import {
-  Badge,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@watchtower/ui";
+import { Building2, Plus, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Badge } from "@watchtower/ui";
 import { trpc } from "@/lib/trpc";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { PageContainer } from "@/components/shared/layouts";
@@ -27,6 +12,7 @@ import { DataTable } from "@/components/shared/data-table";
 import { CursorPagination } from "@/components/shared/pagination";
 import { InteractiveButton } from "@/components/shared/interactive-button";
 import { ClientDate } from "@/components/shared/client-date";
+import { OnboardingWizard } from "@/components/tenants/onboarding-wizard";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -54,6 +40,7 @@ interface Tenant extends Record<string, unknown> {
   msTenantId: string;
   authMethod: "CLIENT_SECRET" | "WORKLOAD_IDENTITY";
   status: "ACTIVE" | "DISCONNECTED" | "ERROR";
+  hasCredentials: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +100,22 @@ const columns = [
     },
   },
   {
+    key: "hasCredentials",
+    header: "Connection",
+    render: (t: Tenant) =>
+      t.hasCredentials ? (
+        <span className="flex items-center gap-1 text-xs text-emerald-400">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Configured
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-xs text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Setup needed
+        </span>
+      ),
+  },
+  {
     key: "createdAt",
     header: "Created",
     render: (t: Tenant) => (
@@ -127,11 +130,7 @@ const columns = [
 
 export default function TenantsPage() {
   const router = useRouter();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [displayName, setDisplayName] = useState("");
-  const [msTenantId, setMsTenantId] = useState("");
-  const [authMethod, setAuthMethod] = useState<"CLIENT_SECRET" | "WORKLOAD_IDENTITY">("CLIENT_SECRET");
-  const [selectedScopeId, setSelectedScopeId] = useState("");
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   /* ---- Pagination state ---- */
   const { cursor, hasPrevPage, goToNextPage, goToPrevPage } = useCursorPagination();
@@ -144,28 +143,12 @@ export default function TenantsPage() {
   const tenants = (data?.items ?? []) as unknown as Tenant[];
   const nextCursor = data?.nextCursor ?? null;
 
-  /* ---- Scope list for create dialog ---- */
-  const { data: scopeData } = trpc.scope.list.useQuery({ limit: 100 });
-  const scopes = scopeData?.items ?? [];
-
-  /* ---- Create tenant mutation ---- */
-  const utils = trpc.useUtils();
-  const createMutation = trpc.tenant.create.useMutation({
-    onSuccess: (tenant) => {
-      utils.tenant.list.invalidate();
-      setCreateOpen(false);
-      setDisplayName("");
-      setMsTenantId("");
-      router.push(`/dashboard/tenants/${tenant.id}`);
-    },
-  });
-
   const handleRowClick = useCallback(
     (t: Tenant) => router.push(`/dashboard/tenants/${t.id}`),
     [router],
   );
 
-  const openCreateDialog = useCallback(() => setCreateOpen(true), []);
+  const openWizard = useCallback(() => setWizardOpen(true), []);
 
   return (
     <PageContainer
@@ -174,7 +157,7 @@ export default function TenantsPage() {
       actions={
         <InteractiveButton
           icon={<Plus className="h-4 w-4" />}
-          onClick={openCreateDialog}
+          onClick={openWizard}
           aria-label="Connect a new tenant"
         >
           Connect Tenant
@@ -202,7 +185,7 @@ export default function TenantsPage() {
           action={
             <InteractiveButton
               icon={<Plus className="h-4 w-4" />}
-              onClick={openCreateDialog}
+              onClick={openWizard}
             >
               Connect Tenant
             </InteractiveButton>
@@ -229,85 +212,9 @@ export default function TenantsPage() {
           />
         </>
       )}
-      {/* Create Tenant Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Connect Tenant</DialogTitle>
-            <DialogDescription>
-              Connect a Microsoft 365 tenant to begin compliance monitoring.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4 py-4">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="tenant-name" className="text-sm font-medium">Display Name</label>
-              <Input
-                id="tenant-name"
-                placeholder="e.g. Contoso Production"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="ms-tenant-id" className="text-sm font-medium">M365 Tenant ID</label>
-              <Input
-                id="ms-tenant-id"
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                value={msTenantId}
-                onChange={(e) => setMsTenantId(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Auth Method</label>
-              <Select value={authMethod} onValueChange={(v) => setAuthMethod(v as "CLIENT_SECRET" | "WORKLOAD_IDENTITY")}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CLIENT_SECRET">Client Secret</SelectItem>
-                  <SelectItem value="WORKLOAD_IDENTITY">Workload Identity</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Scope</label>
-              <Select value={selectedScopeId} onValueChange={setSelectedScopeId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a scope…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(scopes as Array<{ id: string; name: string }>).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {scopes.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  No scopes available. <a href="/dashboard/scopes" className="underline text-primary">Create a scope</a> first.
-                </p>
-              )}
-            </div>
-            {createMutation.error && (
-              <p className="text-sm text-red-400">{createMutation.error.message}</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button
-              disabled={!displayName || !msTenantId || !selectedScopeId || createMutation.isPending}
-              onClick={() => createMutation.mutate({
-                idempotencyKey: crypto.randomUUID(),
-                displayName,
-                msTenantId,
-                authMethod,
-                scopeId: selectedScopeId,
-              })}
-            >
-              {createMutation.isPending ? "Creating…" : "Connect Tenant"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+      {/* Onboarding Wizard */}
+      <OnboardingWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     </PageContainer>
   );
 }
