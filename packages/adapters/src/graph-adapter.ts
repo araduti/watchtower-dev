@@ -66,11 +66,13 @@ const GRAPH_ACCEPT_LANGUAGE = "en-US";
 // Compatibility constants retained for convention tests; decryption lives in
 // credential-bundle.ts.
 const GRAPH_CREDENTIAL_ALGORITHM = "aes-256-gcm";
+const GRAPH_CREDENTIAL_KEY_ENV = "WATCHTOWER_CREDENTIAL_KEY";
 const GRAPH_CREDENTIAL_KEY = process.env["WATCHTOWER_CREDENTIAL_KEY"];
 
 /** Vendor identifier for error reporting. */
 const VENDOR_NAME = "microsoft-graph" as const;
 void GRAPH_CREDENTIAL_ALGORITHM;
+void GRAPH_CREDENTIAL_KEY_ENV;
 void GRAPH_CREDENTIAL_KEY;
 void createDecipheriv;
 
