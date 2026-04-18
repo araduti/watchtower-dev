@@ -230,40 +230,53 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     // Step 2: Collect data from all adapter sources
     // ------------------------------------------------------------------
-    console.info(`[scan-pipeline:execute] step=collect-data start: scanId=${scanId}`);
+    const collectedSources = await step.run("collect-data", async () => {
+      console.info(`[scan-pipeline:execute] step=collect-data start: scanId=${scanId}`);
 
-    const adapterConfig: AdapterConfig = {
-        workspaceId,
-        tenantId,
-        encryptedCredentials: Buffer.from(tenant.encryptedCredentials, "base64"),
-        authMethod: tenant.authMethod,
-        traceId: `scan:${scanId}`,
-      };
+      const adapterConfig: AdapterConfig = {
+          workspaceId,
+          tenantId,
+          encryptedCredentials: Buffer.from(tenant.encryptedCredentials, "base64"),
+          authMethod: tenant.authMethod,
+          traceId: `scan:${scanId}`,
+        };
 
-      const graphAdapter = createGraphAdapter({ msTenantId: tenant.msTenantId });
-      const exchangeAdapter = createExchangeAdapter();
+        const graphAdapter = createGraphAdapter({ msTenantId: tenant.msTenantId });
+        const exchangeAdapter = createExchangeAdapter();
 
-      const adapters: RuntimeAdapter[] = [
-        toRuntimeAdapter<GraphDataSources>(graphAdapter),
-        toRuntimeAdapter<ExchangeDataSources>(exchangeAdapter),
-      ];
+        const adapters: RuntimeAdapter[] = [
+          toRuntimeAdapter<GraphDataSources>(graphAdapter),
+          toRuntimeAdapter<ExchangeDataSources>(exchangeAdapter),
+        ];
 
-      const results: CollectedSource[] = [];
+        const results: CollectedSource[] = [];
 
-      const graphBootstrap = await step.run("collect:microsoft-graph:domainDnsRecords", async () => {
-        try {
-          const result = await graphAdapter.collect("domainDnsRecords", adapterConfig);
-          return {
-            adapter: graphAdapter.name,
-            source: "domainDnsRecords",
-            rawData: result.data,
-            collectedAt: result.collectedAt,
-            apiCallCount: result.apiCallCount,
-            status: "ok" as const,
-            error: null,
-          };
-        } catch (cause) {
-          if (cause instanceof AdapterError) {
+        const graphBootstrap = await step.run("collect:microsoft-graph:domainDnsRecords", async () => {
+          try {
+            const result = await graphAdapter.collect("domainDnsRecords", adapterConfig);
+            return {
+              adapter: graphAdapter.name,
+              source: "domainDnsRecords",
+              rawData: result.data,
+              collectedAt: result.collectedAt,
+              apiCallCount: result.apiCallCount,
+              status: "ok" as const,
+              error: null,
+            };
+          } catch (cause) {
+            if (cause instanceof AdapterError) {
+              return {
+                adapter: "microsoft-graph",
+                source: "domainDnsRecords",
+                rawData: [],
+                collectedAt: new Date().toISOString(),
+                apiCallCount: 0,
+                status: "failed" as const,
+                error: cause.message,
+                kind: cause.kind,
+              };
+            }
+
             return {
               adapter: "microsoft-graph",
               source: "domainDnsRecords",
@@ -271,72 +284,72 @@ export const executeScan = inngest.createFunction(
               collectedAt: new Date().toISOString(),
               apiCallCount: 0,
               status: "failed" as const,
-              error: cause.message,
-              kind: cause.kind,
+              error: cause instanceof Error ? cause.message : String(cause),
+              kind: "permanent",
             };
           }
+        });
 
-          return {
-            adapter: "microsoft-graph",
-            source: "domainDnsRecords",
-            rawData: [],
-            collectedAt: new Date().toISOString(),
-            apiCallCount: 0,
-            status: "failed" as const,
-            error: cause instanceof Error ? cause.message : String(cause),
-            kind: "permanent",
-          };
-        }
-      });
+        results.push(graphBootstrap);
 
-      results.push(graphBootstrap);
+        const domainVerification = new Map<string, boolean | undefined>();
+        for (const record of graphBootstrap.rawData as Array<Record<string, unknown>>) {
+          const domain = record["domain"];
+          if (typeof domain !== "string") continue;
 
-      const domainVerification = new Map<string, boolean | undefined>();
-      for (const record of graphBootstrap.rawData as Array<Record<string, unknown>>) {
-        const domain = record["domain"];
-        if (typeof domain !== "string") continue;
+          const isVerifiedValue = record["isVerified"];
+          const isVerified = typeof isVerifiedValue === "boolean" ? isVerifiedValue : undefined;
+          const existing = domainVerification.get(domain);
 
-        const isVerifiedValue = record["isVerified"];
-        const isVerified = typeof isVerifiedValue === "boolean" ? isVerifiedValue : undefined;
-        const existing = domainVerification.get(domain);
-
-        if (existing === true || isVerified === true) {
-          domainVerification.set(domain, true);
-          continue;
-        }
-
-        if (existing === undefined) {
-          domainVerification.set(domain, isVerified);
-        }
-      }
-
-      const verifiedDomains = [...domainVerification.entries()]
-        .filter(([, isVerified]) => isVerified !== false)
-        .map(([domain]) => domain);
-
-      adapters.push(toRuntimeAdapter<DnsDataSources>(createDnsAdapter({ verifiedDomains })));
-
-      for (const adapter of adapters) {
-        for (const source of adapter.listSources()) {
-          if (adapter.name === "microsoft-graph" && source === "domainDnsRecords") {
+          if (existing === true || isVerified === true) {
+            domainVerification.set(domain, true);
             continue;
           }
 
-          const runId = `collect:${adapter.name}:${source}`;
-          const collected = await step.run(runId, async () => {
-            try {
-              const result: AdapterResult<unknown> = await adapter.collect(source, adapterConfig);
-              return {
-                adapter: adapter.name,
-                source,
-                rawData: result.data,
-                collectedAt: result.collectedAt,
-                apiCallCount: result.apiCallCount,
-                status: "ok" as const,
-                error: null,
-              };
-            } catch (cause) {
-              if (cause instanceof AdapterError) {
+          if (existing === undefined) {
+            domainVerification.set(domain, isVerified);
+          }
+        }
+
+        const verifiedDomains = [...domainVerification.entries()]
+          .filter(([, isVerified]) => isVerified !== false)
+          .map(([domain]) => domain);
+
+        adapters.push(toRuntimeAdapter<DnsDataSources>(createDnsAdapter({ verifiedDomains })));
+
+        for (const adapter of adapters) {
+          for (const source of adapter.listSources()) {
+            if (adapter.name === "microsoft-graph" && source === "domainDnsRecords") {
+              continue;
+            }
+
+            const runId = `collect:${adapter.name}:${source}`;
+            const collected = await step.run(runId, async () => {
+              try {
+                const result: AdapterResult<unknown> = await adapter.collect(source, adapterConfig);
+                return {
+                  adapter: adapter.name,
+                  source,
+                  rawData: result.data,
+                  collectedAt: result.collectedAt,
+                  apiCallCount: result.apiCallCount,
+                  status: "ok" as const,
+                  error: null,
+                };
+              } catch (cause) {
+                if (cause instanceof AdapterError) {
+                  return {
+                    adapter: adapter.name,
+                    source,
+                    rawData: [],
+                    collectedAt: new Date().toISOString(),
+                    apiCallCount: 0,
+                    status: "failed" as const,
+                    error: cause.message,
+                    kind: cause.kind,
+                  };
+                }
+
                 return {
                   adapter: adapter.name,
                   source,
@@ -344,32 +357,21 @@ export const executeScan = inngest.createFunction(
                   collectedAt: new Date().toISOString(),
                   apiCallCount: 0,
                   status: "failed" as const,
-                  error: cause.message,
-                  kind: cause.kind,
+                  error: cause instanceof Error ? cause.message : String(cause),
+                  kind: "permanent",
                 };
               }
+            });
 
-              return {
-                adapter: adapter.name,
-                source,
-                rawData: [],
-                collectedAt: new Date().toISOString(),
-                apiCallCount: 0,
-                status: "failed" as const,
-                error: cause instanceof Error ? cause.message : String(cause),
-                kind: "permanent",
-              };
-            }
-          });
-
-          results.push(collected);
+            results.push(collected);
+          }
         }
-      }
 
-    console.info(
-      `[scan-pipeline:execute] step=collect-data done: scanId=${scanId} sourcesCollected=${results.length}`,
-    );
-    const collectedSources = results;
+      console.info(
+        `[scan-pipeline:execute] step=collect-data done: scanId=${scanId} sourcesCollected=${results.length}`,
+      );
+      return results;
+    });
 
     // ------------------------------------------------------------------
     // Step 3: Run engine + store Evidence/Finding records
@@ -381,9 +383,7 @@ export const executeScan = inngest.createFunction(
         // 1. Build evidence snapshot from collected data
         const snapshot: EvidenceSnapshot = {
           data: Object.fromEntries(
-            collectedSources
-              .filter((item) => item.status === "ok")
-              .map((item) => [item.source, item.rawData]),
+            collectedSources.map((item) => [item.source, item.rawData]),
           ),
         };
 
