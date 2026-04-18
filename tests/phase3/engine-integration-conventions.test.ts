@@ -362,7 +362,7 @@ describe("§5 — Compliance seed data", () => {
     let match;
     const slugs: string[] = [];
     while ((match = slugPattern.exec(seedSrc)) !== null) {
-      slugs.push(match[1]);
+      slugs.push(match[1]!);
     }
     expect(slugs.length).toBeGreaterThan(0);
     for (const slug of slugs) {

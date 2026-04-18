@@ -344,7 +344,10 @@ export const executeScan = inngest.createFunction(
               rawEvidence: {
                 pass: result.pass,
                 warnings: result.warnings,
-                actualValues: result.actualValues,
+                // Engine actualValues are always JSON-serializable; cast to
+                // satisfy Prisma's InputJsonValue constraint.
+                actualValues:
+                  result.actualValues as Record<string, import("@prisma/client").Prisma.InputJsonValue | null>,
               },
               type: "AUTOMATED",
               collectedBy: "SYSTEM",
