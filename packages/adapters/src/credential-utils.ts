@@ -55,20 +55,31 @@ export interface CredentialInput {
  *
  * @param credentials - The plaintext credentials to encrypt.
  * @returns Encrypted buffer ready for database storage.
- * @throws Error if WATCHTOWER_CREDENTIAL_KEY is missing or invalid.
+ * @throws AdapterError if WATCHTOWER_CREDENTIAL_KEY is missing or invalid.
  */
 export function encryptCredentials(credentials: CredentialInput): Buffer {
   const encryptionKey = process.env["WATCHTOWER_CREDENTIAL_KEY"];
   if (!encryptionKey) {
-    throw new Error("WATCHTOWER_CREDENTIAL_KEY environment variable is not set");
+    throw new AdapterError({
+      message: "WATCHTOWER_CREDENTIAL_KEY environment variable is not set.",
+      kind: "permanent",
+      vendor: VENDOR_NAME,
+      dataSource: "credential-encryption",
+      watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIALS_INVALID,
+    });
   }
 
   const keyBuffer = Buffer.from(encryptionKey, "hex");
   if (keyBuffer.length !== AES_KEY_LENGTH) {
-    throw new Error(
-      `WATCHTOWER_CREDENTIAL_KEY must be exactly 64 hex characters (32 bytes), ` +
+    throw new AdapterError({
+      message:
+        `WATCHTOWER_CREDENTIAL_KEY must be exactly 64 hex characters (32 bytes), ` +
         `got ${encryptionKey.length} hex characters (${keyBuffer.length} bytes).`,
-    );
+      kind: "permanent",
+      vendor: VENDOR_NAME,
+      dataSource: "credential-encryption",
+      watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIALS_INVALID,
+    });
   }
 
   const plaintext = JSON.stringify({
@@ -244,7 +255,13 @@ export async function verifyEncryptedCredentials(
       typeof parsed["clientSecret"] !== "string" ||
       typeof parsed["msTenantId"] !== "string"
     ) {
-      throw new Error("Decrypted payload missing required fields");
+      throw new AdapterError({
+        message: "Decrypted payload missing required fields.",
+        kind: "credentials_invalid",
+        vendor: VENDOR_NAME,
+        dataSource: "credential-verification",
+        watchtowerError: WATCHTOWER_ERRORS.TENANT.CREDENTIAL_VERIFICATION_FAILED,
+      });
     }
 
     decryptedCredentials = {
