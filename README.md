@@ -74,7 +74,7 @@ watchtower-dev/
 │   ├── adapters/                  # Vendor adapter boundary (Graph types, AdapterError)
 │   ├── auth/                      # Better Auth configuration, Org plugin, session resolver
 │   ├── db/                        # Prisma client wrapper, RLS-aware proxy
-│   ├── engine/                    # Compliance engine — evaluator registry, assertions
+│   ├── engine/                    # Compliance engine — evaluation, evaluator registry, assertions
 │   ├── errors/                    # Two-layer error code catalog (zero dependencies)
 │   ├── sandbox/                   # Firecracker microVM lifecycle manager for plugin sandboxing
 │   ├── scan-pipeline/             # Inngest functions (execute-scan, handle-cancellation)
