@@ -71,7 +71,7 @@ const READ_ONLY_ROUTERS = [
   "audit.ts",
 ] as const;
 
-/** All 12 routers that must be registered in _app.ts */
+/** All 13 routers that must be registered in _app.ts */
 const ALL_REGISTERED_ROUTERS = [
   { key: "audit", export: "auditRouter" },
   { key: "check", export: "checkRouter" },
@@ -80,6 +80,7 @@ const ALL_REGISTERED_ROUTERS = [
   { key: "framework", export: "frameworkRouter" },
   { key: "member", export: "memberRouter" },
   { key: "permission", export: "permissionRouter" },
+  { key: "plugin", export: "pluginRouter" },
   { key: "role", export: "roleRouter" },
   { key: "scan", export: "scanRouter" },
   { key: "scope", export: "scopeRouter" },
@@ -94,9 +95,9 @@ const ALL_REGISTERED_ROUTERS = [
 describe("§1 — Router registration in _app.ts", () => {
   const appSrc = readRouter("_app.ts");
 
-  it("has exactly 12 routers registered", () => {
+  it("has exactly 13 routers registered", () => {
     const routerFiles = getRouterFiles();
-    expect(routerFiles.length).toBe(12);
+    expect(routerFiles.length).toBe(13);
   });
 
   for (const { key, export: exportName } of ALL_REGISTERED_ROUTERS) {

@@ -70,6 +70,35 @@ const createInput = z.object({
 
 const createOutput = scopeOutput;
 
+// -- update --
+const updateInput = z.object({
+  idempotencyKey: z.string().uuid(),
+  scopeId: z.string(),
+  name: z.string().min(1).max(200).optional(),
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+      message:
+        "Slug must be lowercase alphanumeric with hyphens (e.g. 'my-scope').",
+    })
+    .optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+const updateOutput = scopeOutput;
+
+// -- softDelete --
+const softDeleteInput = z.object({
+  idempotencyKey: z.string().uuid(),
+  scopeId: z.string(),
+});
+
+const softDeleteOutput = z.object({
+  id: z.string(),
+});
+
 /**
  * Reusable Prisma select clause for scope queries.
  */
@@ -265,6 +294,213 @@ export const scopeRouter = router({
         ...created,
         metadata: created.metadata as Record<string, unknown>,
       };
+
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        result,
+        200,
+      );
+
+      return result;
+    }),
+
+  /**
+   * Update a scope's name, slug, or metadata.
+   *
+   * Permission: scopes:edit (workspace-level, no scope — per conventions
+   * for scope admin operations).
+   * Audit: scope.update logged with changed fields.
+   * Idempotency: required.
+   *
+   * Guards:
+   * - Scope must exist (NOT_FOUND)
+   * - Slug must be unique within the workspace (SLUG_TAKEN)
+   */
+  update: protectedProcedure
+    .input(updateInput)
+    .output(updateOutput)
+    .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof updateOutput>;
+      }
+
+      // Existence check
+      const existing = await ctx.db.scope.findFirst({
+        where: {
+          id: input.scopeId,
+          workspaceId: ctx.session.workspaceId,
+          deletedAt: null,
+        },
+        select: SCOPE_SELECT,
+      });
+
+      if (!existing) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.SCOPE.NOT_FOUND);
+      }
+
+      // Permission check — workspace-level (no scope)
+      await ctx.requirePermission("scopes:edit");
+
+      // Guard: duplicate slug within the workspace
+      if (input.slug && input.slug !== existing.slug) {
+        const duplicate = await ctx.db.scope.findFirst({
+          where: {
+            workspaceId: ctx.session.workspaceId,
+            slug: input.slug,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+
+        if (duplicate) {
+          throwWatchtowerError(WATCHTOWER_ERRORS.SCOPE.SLUG_TAKEN);
+        }
+      }
+
+      // Build only the changed fields
+      const data: Record<string, unknown> = {};
+      const changedFields: Record<string, unknown> = {};
+
+      if (input.name !== undefined && input.name !== existing.name) {
+        data.name = input.name;
+        changedFields.name = { from: existing.name, to: input.name };
+      }
+      if (input.slug !== undefined && input.slug !== existing.slug) {
+        data.slug = input.slug;
+        changedFields.slug = { from: existing.slug, to: input.slug };
+      }
+      if (input.metadata !== undefined) {
+        data.metadata = input.metadata;
+        changedFields.metadata = {
+          from: existing.metadata,
+          to: input.metadata,
+        };
+      }
+
+      // Update scope and write audit log in the same transaction
+      const updated = await ctx.db.scope.update({
+        where: { id: input.scopeId },
+        data,
+        select: SCOPE_SELECT,
+      });
+
+      // Audit log entry — same transaction as the mutation
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        scopeId: updated.id,
+        eventType: "scope.update",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Scope",
+        targetId: updated.id,
+        eventData: changedFields,
+        traceId: ctx.traceId,
+      });
+
+      // Cache the successful result for idempotency replay
+      const result = {
+        ...updated,
+        metadata: updated.metadata as Record<string, unknown>,
+      };
+
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        result,
+        200,
+      );
+
+      return result;
+    }),
+
+  /**
+   * Soft-delete a scope.
+   *
+   * Permission: scopes:delete (workspace-level, no scope).
+   * Audit: scope.softDelete logged.
+   * Idempotency: required.
+   *
+   * Guards:
+   * - Scope must exist (NOT_FOUND)
+   * - Scope must not have connected tenants (HAS_TENANTS)
+   */
+  softDelete: protectedProcedure
+    .input(softDeleteInput)
+    .output(softDeleteOutput)
+    .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof softDeleteOutput>;
+      }
+
+      // Existence check
+      const existing = await ctx.db.scope.findFirst({
+        where: {
+          id: input.scopeId,
+          workspaceId: ctx.session.workspaceId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.SCOPE.NOT_FOUND);
+      }
+
+      // Permission check — workspace-level (no scope)
+      await ctx.requirePermission("scopes:delete");
+
+      // Guard: scope has connected tenants
+      const tenantCount = await ctx.db.tenant.count({
+        where: { scopeId: input.scopeId, deletedAt: null },
+      });
+
+      if (tenantCount > 0) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.SCOPE.HAS_TENANTS);
+      }
+
+      // Soft-delete and write audit log in the same transaction
+      const deleted = await ctx.db.scope.update({
+        where: { id: input.scopeId },
+        data: { deletedAt: new Date() },
+        select: { id: true },
+      });
+
+      // Audit log entry — same transaction as the mutation
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        scopeId: deleted.id,
+        eventType: "scope.softDelete",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Scope",
+        targetId: deleted.id,
+        eventData: {},
+        traceId: ctx.traceId,
+      });
+
+      // Cache the successful result for idempotency replay
+      const result = { id: deleted.id };
 
       await saveIdempotencyResult(
         ctx.db,

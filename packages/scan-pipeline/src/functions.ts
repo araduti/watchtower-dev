@@ -7,6 +7,7 @@
 
 import { executeScan } from "./functions/execute-scan.ts";
 import { handleCancellation } from "./functions/handle-cancellation.ts";
+import { sweepIdempotencyKeys } from "./functions/sweep-idempotency-keys.ts";
 
 /**
  * All scan pipeline Inngest functions.
@@ -17,4 +18,4 @@ import { handleCancellation } from "./functions/handle-cancellation.ts";
  * serve({ client: inngest, functions: scanFunctions });
  * ```
  */
-export const scanFunctions = [executeScan, handleCancellation] as const;
+export const scanFunctions = [executeScan, handleCancellation, sweepIdempotencyKeys] as const;

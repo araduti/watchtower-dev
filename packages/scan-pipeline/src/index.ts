@@ -44,6 +44,7 @@ export type {
 // -- Functions --
 export { executeScan } from "./functions/execute-scan.ts";
 export { handleCancellation } from "./functions/handle-cancellation.ts";
+export { sweepIdempotencyKeys } from "./functions/sweep-idempotency-keys.ts";
 
 /**
  * All scan pipeline functions, ready for Inngest `serve()`.
