@@ -478,7 +478,7 @@ function StepAuthorize({
                 Authorize in Azure
               </a>
             ) : consentUrlQuery.isError ? (
-              <div className="flex items-center justify-center gap-2 rounded-2xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300/80">
+              <div role="alert" className="flex items-center justify-center gap-2 rounded-2xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300/80">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 Azure AD consent is not configured. Enter credentials manually.
               </div>

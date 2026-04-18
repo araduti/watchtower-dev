@@ -645,7 +645,7 @@ function SetupCredentialsDialog({
                 Authorize in Azure
               </a>
             ) : consentUrlQuery.isError ? (
-              <span className="mt-2 inline-block text-xs text-amber-300/80">
+              <span role="alert" className="mt-2 inline-block text-xs text-amber-300/80">
                 Azure AD consent is not configured.
               </span>
             ) : (
