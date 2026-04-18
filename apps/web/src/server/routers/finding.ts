@@ -165,6 +165,43 @@ const resolveInput = z.object({
 
 const resolveOutput = z.object({ id: z.string() });
 
+const unmuteInput = z.object({
+  idempotencyKey: z.string().uuid(),
+  findingId: z.string(),
+});
+
+const unmuteOutput = z.object({ id: z.string() });
+
+const reopenInput = z.object({
+  idempotencyKey: z.string().uuid(),
+  findingId: z.string(),
+});
+
+const reopenOutput = z.object({ id: z.string() });
+
+const revokeAcceptanceInput = z.object({
+  idempotencyKey: z.string().uuid(),
+  findingId: z.string(),
+});
+
+const revokeAcceptanceOutput = z.object({ id: z.string() });
+
+const assignInput = z.object({
+  idempotencyKey: z.string().uuid(),
+  findingId: z.string(),
+  userId: z.string().nullable(),
+});
+
+const assignOutput = z.object({ id: z.string() });
+
+const addNoteInput = z.object({
+  idempotencyKey: z.string().uuid(),
+  findingId: z.string(),
+  note: z.string().min(1).max(2000),
+});
+
+const addNoteOutput = z.object({ id: z.string() });
+
 // ---------------------------------------------------------------------------
 // Reusable Prisma selects
 // ---------------------------------------------------------------------------
@@ -692,6 +729,471 @@ export const findingRouter = router({
         eventData: {
           previousStatus: finding.status,
           newStatus: "RESOLVED",
+        },
+        traceId: ctx.traceId,
+      });
+
+      const result = { id: updated.id };
+
+      // Cache the successful result for idempotency replay (API-Conventions §8)
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        result,
+        200,
+      );
+
+      return result;
+    }),
+
+  // =========================================================================
+  // finding.unmute — restore visibility from MUTED to DEFAULT
+  // =========================================================================
+
+  /**
+   * Unmute a finding to restore it to default visibility.
+   *
+   * Permission: findings:unmute, scoped to the finding's scopeId.
+   * Guard: visibility must be MUTED — throws NOT_MUTED otherwise.
+   * Sets: visibility = DEFAULT, mutedAt = null, mutedBy = null, mutedUntil = null.
+   * Audit: finding.unmute logged.
+   */
+  unmute: protectedProcedure
+    .input(unmuteInput)
+    .output(unmuteOutput)
+    .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof unmuteOutput>;
+      }
+
+      // Existence check first (API-Conventions §5)
+      const finding = await ctx.db.finding.findFirst({
+        where: {
+          id: input.findingId,
+          workspaceId: ctx.session.workspaceId,
+        },
+        select: { id: true, scopeId: true, visibility: true },
+      });
+
+      if (!finding) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.FINDING.NOT_FOUND);
+      }
+
+      // Permission check after existence check — scope derived from resource
+      await ctx.requirePermission("findings:unmute", {
+        scopeId: finding.scopeId,
+      });
+
+      // Guard: must be MUTED → NOT_MUTED for any other visibility
+      if (finding.visibility !== "MUTED") {
+        throwWatchtowerError(WATCHTOWER_ERRORS.FINDING.NOT_MUTED);
+      }
+
+      // Mutation + audit in same transaction (Code-Conventions §1)
+      const updated = await ctx.db.finding.update({
+        where: { id: finding.id },
+        data: {
+          visibility: "DEFAULT",
+          mutedAt: null,
+          mutedBy: null,
+          mutedUntil: null,
+        },
+        select: { id: true },
+      });
+
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        scopeId: finding.scopeId,
+        eventType: "finding.unmute",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Finding",
+        targetId: updated.id,
+        eventData: {
+          previousVisibility: "MUTED",
+          newVisibility: "DEFAULT",
+        },
+        traceId: ctx.traceId,
+      });
+
+      const result = { id: updated.id };
+
+      // Cache the successful result for idempotency replay (API-Conventions §8)
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        result,
+        200,
+      );
+
+      return result;
+    }),
+
+  // =========================================================================
+  // finding.reopen — transition RESOLVED/ACCEPTED_RISK → OPEN
+  // =========================================================================
+
+  /**
+   * Reopen a finding that was previously resolved or risk-accepted.
+   *
+   * Permission: findings:reopen, scoped to the finding's scopeId.
+   * Guard: status must be RESOLVED or ACCEPTED_RISK — throws INVALID_TRANSITION.
+   * Sets: status = OPEN, clears resolution or acceptance fields based on previous status.
+   * Audit: finding.reopen logged with previousStatus.
+   */
+  reopen: protectedProcedure
+    .input(reopenInput)
+    .output(reopenOutput)
+    .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof reopenOutput>;
+      }
+
+      // Existence check first (API-Conventions §5)
+      const finding = await ctx.db.finding.findFirst({
+        where: {
+          id: input.findingId,
+          workspaceId: ctx.session.workspaceId,
+        },
+        select: { id: true, scopeId: true, status: true },
+      });
+
+      if (!finding) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.FINDING.NOT_FOUND);
+      }
+
+      // Permission check after existence check — scope derived from resource
+      await ctx.requirePermission("findings:reopen", {
+        scopeId: finding.scopeId,
+      });
+
+      // Guard: must be RESOLVED or ACCEPTED_RISK
+      const reopenableStatuses = ["RESOLVED", "ACCEPTED_RISK"];
+      if (!reopenableStatuses.includes(finding.status)) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.FINDING.INVALID_TRANSITION);
+      }
+
+      // Clear the appropriate fields based on previous status
+      const clearData =
+        finding.status === "RESOLVED"
+          ? { resolvedAt: null, resolvedBy: null }
+          : {
+              acceptedAt: null,
+              acceptedBy: null,
+              acceptanceReason: null,
+              acceptanceExpiresAt: null,
+            };
+
+      // Mutation + audit in same transaction (Code-Conventions §1)
+      const updated = await ctx.db.finding.update({
+        where: { id: finding.id },
+        data: {
+          status: "OPEN",
+          ...clearData,
+        },
+        select: { id: true },
+      });
+
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        scopeId: finding.scopeId,
+        eventType: "finding.reopen",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Finding",
+        targetId: updated.id,
+        eventData: {
+          previousStatus: finding.status,
+          newStatus: "OPEN",
+        },
+        traceId: ctx.traceId,
+      });
+
+      const result = { id: updated.id };
+
+      // Cache the successful result for idempotency replay (API-Conventions §8)
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        result,
+        200,
+      );
+
+      return result;
+    }),
+
+  // =========================================================================
+  // finding.revokeAcceptance — transition ACCEPTED_RISK → OPEN
+  // =========================================================================
+
+  /**
+   * Revoke a previously accepted risk, returning the finding to OPEN.
+   *
+   * Permission: findings:revoke_acceptance, scoped to the finding's scopeId.
+   * Guard: status must be ACCEPTED_RISK — throws NO_ACCEPTANCE otherwise.
+   * Sets: status = OPEN, acceptedAt = null, acceptedBy = null,
+   *        acceptanceReason = null, acceptanceExpiresAt = null.
+   * Audit: finding.revokeAcceptance logged with previousStatus.
+   */
+  revokeAcceptance: protectedProcedure
+    .input(revokeAcceptanceInput)
+    .output(revokeAcceptanceOutput)
+    .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof revokeAcceptanceOutput>;
+      }
+
+      // Existence check first (API-Conventions §5)
+      const finding = await ctx.db.finding.findFirst({
+        where: {
+          id: input.findingId,
+          workspaceId: ctx.session.workspaceId,
+        },
+        select: { id: true, scopeId: true, status: true },
+      });
+
+      if (!finding) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.FINDING.NOT_FOUND);
+      }
+
+      // Permission check after existence check — scope derived from resource
+      await ctx.requirePermission("findings:revoke_acceptance", {
+        scopeId: finding.scopeId,
+      });
+
+      // Guard: must be ACCEPTED_RISK → NO_ACCEPTANCE for any other status
+      if (finding.status !== "ACCEPTED_RISK") {
+        throwWatchtowerError(WATCHTOWER_ERRORS.FINDING.NO_ACCEPTANCE);
+      }
+
+      // Mutation + audit in same transaction (Code-Conventions §1)
+      const updated = await ctx.db.finding.update({
+        where: { id: finding.id },
+        data: {
+          status: "OPEN",
+          acceptedAt: null,
+          acceptedBy: null,
+          acceptanceReason: null,
+          acceptanceExpiresAt: null,
+        },
+        select: { id: true },
+      });
+
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        scopeId: finding.scopeId,
+        eventType: "finding.revokeAcceptance",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Finding",
+        targetId: updated.id,
+        eventData: {
+          previousStatus: finding.status,
+          newStatus: "OPEN",
+        },
+        traceId: ctx.traceId,
+      });
+
+      const result = { id: updated.id };
+
+      // Cache the successful result for idempotency replay (API-Conventions §8)
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        result,
+        200,
+      );
+
+      return result;
+    }),
+
+  // =========================================================================
+  // finding.assign — assign finding to a user
+  // =========================================================================
+
+  /**
+   * Assign (or unassign) a finding to a user.
+   *
+   * Permission: findings:assign, scoped to the finding's scopeId.
+   * Sets: assignedTo = userId (nullable — pass null to unassign).
+   * Audit: finding.assign logged with previous and new assignee.
+   */
+  assign: protectedProcedure
+    .input(assignInput)
+    .output(assignOutput)
+    .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof assignOutput>;
+      }
+
+      // Existence check first (API-Conventions §5)
+      const finding = await ctx.db.finding.findFirst({
+        where: {
+          id: input.findingId,
+          workspaceId: ctx.session.workspaceId,
+        },
+        select: { id: true, scopeId: true, assignedTo: true },
+      });
+
+      if (!finding) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.FINDING.NOT_FOUND);
+      }
+
+      // Permission check after existence check — scope derived from resource
+      await ctx.requirePermission("findings:assign", {
+        scopeId: finding.scopeId,
+      });
+
+      // Mutation + audit in same transaction (Code-Conventions §1)
+      const updated = await ctx.db.finding.update({
+        where: { id: finding.id },
+        data: {
+          assignedTo: input.userId,
+        },
+        select: { id: true },
+      });
+
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        scopeId: finding.scopeId,
+        eventType: "finding.assign",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Finding",
+        targetId: updated.id,
+        eventData: {
+          previousAssignee: finding.assignedTo,
+          newAssignee: input.userId,
+        },
+        traceId: ctx.traceId,
+      });
+
+      const result = { id: updated.id };
+
+      // Cache the successful result for idempotency replay (API-Conventions §8)
+      await saveIdempotencyResult(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+        result,
+        200,
+      );
+
+      return result;
+    }),
+
+  // =========================================================================
+  // finding.addNote — add or update notes on a finding
+  // =========================================================================
+
+  /**
+   * Add a note to a finding, appended with a timestamp header.
+   *
+   * Permission: findings:add_note, scoped to the finding's scopeId.
+   * Sets: notes = existing notes + timestamp header + new note.
+   * Audit: finding.addNote logged.
+   */
+  addNote: protectedProcedure
+    .input(addNoteInput)
+    .output(addNoteOutput)
+    .mutation(async ({ input, ctx }) => {
+      // Idempotency check (API-Conventions §8)
+      const requestHash = computeRequestHash(input as Record<string, unknown>);
+      const cached = await checkIdempotencyKey(
+        ctx.db,
+        ctx.session.workspaceId,
+        input.idempotencyKey,
+        requestHash,
+      );
+      if (cached) {
+        return cached.responseBody as z.infer<typeof addNoteOutput>;
+      }
+
+      // Existence check first (API-Conventions §5)
+      const finding = await ctx.db.finding.findFirst({
+        where: {
+          id: input.findingId,
+          workspaceId: ctx.session.workspaceId,
+        },
+        select: { id: true, scopeId: true, notes: true },
+      });
+
+      if (!finding) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.FINDING.NOT_FOUND);
+      }
+
+      // Permission check after existence check — scope derived from resource
+      await ctx.requirePermission("findings:add_note", {
+        scopeId: finding.scopeId,
+      });
+
+      // Append note with timestamp header
+      const now = new Date();
+      const header = `\n--- ${now.toISOString()} by ${ctx.session.userId} ---\n`;
+      const updatedNotes = finding.notes
+        ? `${finding.notes}${header}${input.note}`
+        : `${header.trimStart()}${input.note}`;
+
+      // Mutation + audit in same transaction (Code-Conventions §1)
+      const updated = await ctx.db.finding.update({
+        where: { id: finding.id },
+        data: {
+          notes: updatedNotes,
+        },
+        select: { id: true },
+      });
+
+      await createAuditEvent(ctx.db, {
+        workspaceId: ctx.session.workspaceId,
+        scopeId: finding.scopeId,
+        eventType: "finding.addNote",
+        actorType: "USER",
+        actorId: ctx.session.userId,
+        targetType: "Finding",
+        targetId: updated.id,
+        eventData: {
+          noteLength: input.note.length,
         },
         traceId: ctx.traceId,
       });

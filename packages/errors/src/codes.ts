@@ -85,6 +85,16 @@ export const WATCHTOWER_ERRORS = {
       transport: "PRECONDITION_FAILED",
       message: "This status transition is not allowed.",
     },
+    NOT_MUTED: {
+      code: "WATCHTOWER:FINDING:NOT_MUTED",
+      transport: "PRECONDITION_FAILED",
+      message: "This finding is not muted.",
+    },
+    NO_ACCEPTANCE: {
+      code: "WATCHTOWER:FINDING:NO_ACCEPTANCE",
+      transport: "PRECONDITION_FAILED",
+      message: "This finding does not have an active risk acceptance.",
+    },
   },
 
   TENANT: {
@@ -128,6 +138,21 @@ export const WATCHTOWER_ERRORS = {
       code: "WATCHTOWER:WORKSPACE:NOT_FOUND",
       transport: "NOT_FOUND",
       message: "Workspace not found.",
+    },
+    ALREADY_DELETED: {
+      code: "WATCHTOWER:WORKSPACE:ALREADY_DELETED",
+      transport: "CONFLICT",
+      message: "This workspace has already been deleted.",
+    },
+    CANNOT_TRANSFER_TO_SELF: {
+      code: "WATCHTOWER:WORKSPACE:CANNOT_TRANSFER_TO_SELF",
+      transport: "BAD_REQUEST",
+      message: "Cannot transfer ownership to the current owner.",
+    },
+    TRANSFER_TARGET_NOT_MEMBER: {
+      code: "WATCHTOWER:WORKSPACE:TRANSFER_TARGET_NOT_MEMBER",
+      transport: "PRECONDITION_FAILED",
+      message: "The target user must be a member of this workspace.",
     },
   },
 
