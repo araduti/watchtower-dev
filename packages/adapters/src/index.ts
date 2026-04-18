@@ -24,3 +24,9 @@ export type {
 } from "./graph-types.ts";
 export { AdapterError } from "./adapter-error.ts";
 export { MicrosoftGraphAdapter, createGraphAdapter } from "./graph-adapter.ts";
+export {
+  encryptCredentials,
+  verifyCredentials,
+  verifyEncryptedCredentials,
+  type CredentialInput,
+} from "./credential-utils.ts";
