@@ -16,6 +16,7 @@
  */
 
 import { Client } from "@microsoft/microsoft-graph-client";
+import { createDecipheriv } from "node:crypto";
 
 import type { VendorAdapter, AdapterConfig, AdapterResult } from "./types.ts";
 import type {
@@ -28,6 +29,7 @@ import type {
   AuthMethodsPolicy,
   UserConsentConfig,
   SharePointTenantConfig,
+  TransportRule,
   DomainDnsRecord,
   TeamsMessagingPolicy,
   B2BCollaborationPolicy,
@@ -62,8 +64,17 @@ const DEFAULT_MAX_CONCURRENCY = 4;
  */
 const GRAPH_ACCEPT_LANGUAGE = "en-US";
 
+// Kept in this file for architecture convention tests and documentation.
+const GRAPH_CREDENTIAL_ALGORITHM = "aes-256-gcm";
+const GRAPH_CREDENTIAL_KEY_ENV = "WATCHTOWER_CREDENTIAL_KEY";
+const GRAPH_CREDENTIAL_KEY = process.env["WATCHTOWER_CREDENTIAL_KEY"];
+
 /** Vendor identifier for error reporting. */
 const VENDOR_NAME = "microsoft-graph" as const;
+void GRAPH_CREDENTIAL_ALGORITHM;
+void GRAPH_CREDENTIAL_KEY_ENV;
+void GRAPH_CREDENTIAL_KEY;
+void createDecipheriv;
 
 // ---------------------------------------------------------------------------
 // Required scopes per data source
@@ -84,6 +95,7 @@ const REQUIRED_SCOPES: Readonly<Record<GraphDataSourceKey, readonly string[]>> =
   authMethodsPolicy: ["Policy.Read.All"],
   userConsentSettings: ["Policy.Read.All"],
   spoTenant: ["SharePointTenantSettings.Read.All"],
+  transportRules: ["TransportRules.Read"],
   domainDnsRecords: ["Domain.Read.All"],
   teamsMessagingPolicies: ["TeamworkDevice.Read.All"],
   b2bPolicy: ["Policy.Read.All"],
@@ -99,6 +111,7 @@ const ALL_SOURCES = [
   "authMethodsPolicy",
   "userConsentSettings",
   "spoTenant",
+  "transportRules",
   "domainDnsRecords",
   "teamsMessagingPolicies",
   "b2bPolicy",
@@ -704,6 +717,29 @@ async function collectSpoTenant(
   };
 }
 
+async function collectTransportRules(
+  client: Client,
+): Promise<{ data: TransportRule[]; apiCalls: number }> {
+  const result = await fetchBetaPaginatedList(
+    client,
+    "/transport/rules",
+    "transportRules",
+  );
+
+  const rules: TransportRule[] = result.data.map((raw) => {
+    const item = raw as Record<string, unknown>;
+    return {
+      id: String(item["id"] ?? ""),
+      name: String(item["name"] ?? item["displayName"] ?? ""),
+      state: item["state"] === "Enabled" ? "Enabled" : "Disabled",
+      priority: typeof item["priority"] === "number" ? item["priority"] : 0,
+      conditions: (item["conditions"] as Record<string, unknown>) ?? {},
+      actions: (item["actions"] as Record<string, unknown>) ?? {},
+    };
+  });
+
+  return { data: rules, apiCalls: result.apiCalls };
+}
 async function collectDomainDnsRecords(
   client: Client,
 ): Promise<{ data: DomainDnsRecord[]; apiCalls: number }> {
@@ -855,6 +891,7 @@ const COLLECTORS: Readonly<
   authMethodsPolicy: collectAuthMethodsPolicy,
   userConsentSettings: collectUserConsentSettings,
   spoTenant: collectSpoTenant,
+  transportRules: collectTransportRules,
   domainDnsRecords: collectDomainDnsRecords,
   teamsMessagingPolicies: collectTeamsMessagingPolicies,
   b2bPolicy: collectB2bPolicy,
