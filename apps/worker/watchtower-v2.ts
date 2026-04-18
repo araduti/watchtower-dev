@@ -30,6 +30,12 @@
 
 import { Client } from "@microsoft/microsoft-graph-client";
 
+/**
+ * Default Accept-Language header for Graph API requests.
+ * Bun may omit or default to "*", causing CultureNotFoundException server-side.
+ */
+const GRAPH_ACCEPT_LANGUAGE = "en-US";
+
 // ─── Select map ───────────────────────────────────────────────────────────────
 //
 // getSelectMap() simulates what will eventually be:
@@ -373,6 +379,9 @@ const graphToken = await getGraphToken();
 const client = Client.initWithMiddleware({
   authProvider: {
     getAccessToken: async () => graphToken,
+  },
+  fetchOptions: {
+    headers: { "Accept-Language": GRAPH_ACCEPT_LANGUAGE },
   },
 });
 
