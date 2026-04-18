@@ -10,10 +10,11 @@ export interface DnsRecordSummary {
 }
 
 export interface DnsDataSources {
+  readonly [key: string]: unknown;
   domainDnsRecords: DnsRecordSummary[];
 }
 
-type DnsSource = keyof DnsDataSources;
+type DnsSource = keyof DnsDataSources & string;
 
 export interface DnsAdapterConfig {
   readonly verifiedDomains: readonly string[];

@@ -68,6 +68,24 @@ interface CollectedSource {
   readonly kind?: string;
 }
 
+interface RuntimeAdapter {
+  readonly name: string;
+  listSources(): readonly string[];
+  collect(source: string, config: AdapterConfig): Promise<AdapterResult<unknown>>;
+}
+
+function toRuntimeAdapter<TDataSources extends Record<string, unknown>>(
+  adapter: VendorAdapter<TDataSources>,
+): RuntimeAdapter {
+  return {
+    name: adapter.name,
+    listSources: () => adapter.listSources() as readonly string[],
+    collect: async (source, config) => {
+      return await adapter.collect(source as keyof TDataSources & string, config);
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Main function
 // ---------------------------------------------------------------------------
@@ -211,32 +229,79 @@ export const executeScan = inngest.createFunction(
         traceId: `scan:${scanId}`,
       };
 
-      const adapters: Array<VendorAdapter<any>> = [
-        createGraphAdapter({ msTenantId: tenant.msTenantId }),
-        createExchangeAdapter(),
+      const adapters: RuntimeAdapter[] = [
+        toRuntimeAdapter(createGraphAdapter({ msTenantId: tenant.msTenantId })),
+        toRuntimeAdapter(createExchangeAdapter()),
       ];
 
-      const graphResult = await step.run("collect:microsoft-graph:domains", async () => {
-        const graphAdapter = createGraphAdapter({ msTenantId: tenant.msTenantId });
-        return await graphAdapter.collect("domainDnsRecords", adapterConfig);
+      const results: CollectedSource[] = [];
+
+      const graphBootstrap = await step.run("collect:microsoft-graph:domainDnsRecords", async () => {
+        try {
+          const graphAdapter = createGraphAdapter({ msTenantId: tenant.msTenantId });
+          const result = await graphAdapter.collect("domainDnsRecords", adapterConfig);
+          return {
+            adapter: graphAdapter.name,
+            source: "domainDnsRecords",
+            rawData: result.data,
+            collectedAt: result.collectedAt,
+            apiCallCount: result.apiCallCount,
+            status: "ok" as const,
+            error: null,
+          };
+        } catch (cause) {
+          if (cause instanceof AdapterError) {
+            return {
+              adapter: "microsoft-graph",
+              source: "domainDnsRecords",
+              rawData: [],
+              collectedAt: new Date().toISOString(),
+              apiCallCount: 0,
+              status: "failed" as const,
+              error: cause.message,
+              kind: cause.kind,
+            };
+          }
+
+          return {
+            adapter: "microsoft-graph",
+            source: "domainDnsRecords",
+            rawData: [],
+            collectedAt: new Date().toISOString(),
+            apiCallCount: 0,
+            status: "failed" as const,
+            error: cause instanceof Error ? cause.message : String(cause),
+            kind: "permanent",
+          };
+        }
       });
-      const verifiedDomains = (graphResult.data as Array<Record<string, unknown>>)
-        .map((record) => record["domain"])
-        .filter((domain): domain is string => typeof domain === "string");
 
-      adapters.push(createDnsAdapter({ verifiedDomains }));
+      results.push(graphBootstrap);
 
-      const results: CollectedSource[] = [
-        {
-          adapter: "microsoft-graph",
-          source: "domainDnsRecords",
-          rawData: graphResult.data,
-          collectedAt: graphResult.collectedAt,
-          apiCallCount: graphResult.apiCallCount,
-          status: "ok",
-          error: null,
-        },
-      ];
+      const domainVerification = new Map<string, boolean | undefined>();
+      for (const record of graphBootstrap.rawData as Array<Record<string, unknown>>) {
+        const domain = record["domain"];
+        if (typeof domain !== "string") continue;
+
+        const isVerifiedValue = record["isVerified"];
+        const isVerified = typeof isVerifiedValue === "boolean" ? isVerifiedValue : undefined;
+        const existing = domainVerification.get(domain);
+
+        if (existing === true || isVerified === true) {
+          domainVerification.set(domain, true);
+          continue;
+        }
+
+        if (existing === undefined) {
+          domainVerification.set(domain, isVerified);
+        }
+      }
+
+      const verifiedDomains = [...domainVerification.entries()]
+        .filter(([, isVerified]) => isVerified !== false)
+        .map(([domain]) => domain);
+
+      adapters.push(toRuntimeAdapter(createDnsAdapter({ verifiedDomains })));
 
       for (const adapter of adapters) {
         for (const source of adapter.listSources()) {

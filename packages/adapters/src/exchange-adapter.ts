@@ -180,7 +180,7 @@ async function invokeCommand(
   token: string,
   tenantName: string,
 ): Promise<unknown[]> {
-  const workload = WORKLOADS[source];
+  const workload = WORKLOADS[source] as Workload | undefined;
   if (!workload) {
     throw new AdapterError({
       message: `Unknown Exchange source: ${source}`,
@@ -193,62 +193,67 @@ async function invokeCommand(
   const anchor = `SystemMailbox{bb558c35-97f1-4cb9-8ff7-d53741dc928c}@${tenantName}`;
   const url = `https://outlook.office365.com/adminapi/beta/${tenantName}/InvokeCommand`;
 
-  const response = await fetchWithRetry(
-    url,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "X-ResponseFormat": "json",
-        "X-AnchorMailbox": anchor,
-        Prefer: "odata.maxpagesize=1000",
-      },
-      body: JSON.stringify({
-        CmdletInput: {
-          CmdletName: workload.cmdlet,
-          Parameters: workload.params ?? {},
+  let nextUrl: string | null = url;
+  const aggregated: unknown[] = [];
+
+  while (nextUrl) {
+    const response = await fetchWithRetry(
+      nextUrl,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "X-ResponseFormat": "json",
+          "X-AnchorMailbox": anchor,
+          Prefer: "odata.maxpagesize=1000",
         },
-      }),
-    },
-    source,
-  );
+        body: JSON.stringify({
+          CmdletInput: {
+            CmdletName: workload.cmdlet,
+            Parameters: workload.params ?? {},
+          },
+        }),
+      },
+      source,
+    );
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    const kind = response.status === 429
-      ? "rate_limited"
-      : response.status === 401 || response.status === 403
-      ? "insufficient_scope"
-      : response.status >= 500
-      ? "transient"
-      : "permanent";
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      const kind = response.status === 429
+        ? "rate_limited"
+        : response.status === 401 || response.status === 403
+        ? "insufficient_scope"
+        : response.status >= 500
+        ? "transient"
+        : "permanent";
 
-    throw new AdapterError({
-      message: `${workload.cmdlet} failed (${response.status}).`,
-      kind,
-      vendor: VENDOR_NAME,
-      dataSource: source,
-      vendorStatusCode: response.status,
-      watchtowerError:
-        kind === "rate_limited"
-          ? WATCHTOWER_ERRORS.VENDOR.RATE_LIMITED
-          : kind === "insufficient_scope"
-          ? WATCHTOWER_ERRORS.VENDOR.INSUFFICIENT_SCOPE
-          : WATCHTOWER_ERRORS.VENDOR.GRAPH_ERROR,
-      cause: new Error(body),
-    });
+      throw new AdapterError({
+        message: `${workload.cmdlet} failed (${response.status}).`,
+        kind,
+        vendor: VENDOR_NAME,
+        dataSource: source,
+        vendorStatusCode: response.status,
+        watchtowerError:
+          kind === "rate_limited"
+            ? WATCHTOWER_ERRORS.VENDOR.RATE_LIMITED
+            : kind === "insufficient_scope"
+            ? WATCHTOWER_ERRORS.VENDOR.INSUFFICIENT_SCOPE
+            : WATCHTOWER_ERRORS.VENDOR.GRAPH_ERROR,
+        cause: new Error(body),
+      });
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>;
+    const values = Array.isArray(raw["value"])
+      ? (raw["value"] as unknown[])
+      : [raw];
+
+    aggregated.push(...values.map(normalizeKeys));
+    nextUrl = typeof raw["@odata.nextLink"] === "string" ? raw["@odata.nextLink"] : null;
   }
 
-  const raw = (await response.json()) as Record<string, unknown>;
-  const values = Array.isArray(raw["value"])
-    ? (raw["value"] as unknown[])
-    : Array.isArray(raw)
-    ? raw
-    : [raw];
-
-  const normalized = values.map(normalizeKeys);
-  return workload.transform ? workload.transform(normalized) : normalized;
+  return workload.transform ? workload.transform(aggregated) : aggregated;
 }
 
 export class ExchangeAdapter implements VendorAdapter<ExchangeDataSources> {
