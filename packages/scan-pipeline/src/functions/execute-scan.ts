@@ -312,7 +312,7 @@ export const executeScan = inngest.createFunction(
         }
 
         const verifiedDomains = [...domainVerification.entries()]
-           .filter(([, isVerified]) => isVerified === true)
+          .filter(([, isVerified]) => isVerified === true)
           .map(([domain]) => domain);
 
         adapters.push(toRuntimeAdapter<DnsDataSources>(createDnsAdapter({ verifiedDomains })));
