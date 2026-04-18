@@ -135,7 +135,10 @@ export const executeScan = inngest.createFunction(
           );
         }
 
-        if (!tenantRecord.encryptedCredentials) {
+        if (
+          !tenantRecord.encryptedCredentials ||
+          tenantRecord.encryptedCredentials.length === 0
+        ) {
           throw new NonRetriableError(
             `Tenant ${tenantId} has no stored credentials. ` +
               "Connect the tenant before scanning.",

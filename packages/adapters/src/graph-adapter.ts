@@ -57,6 +57,8 @@ const DEFAULT_MAX_CONCURRENCY = 4;
 const AES_ALGORITHM: CipherGCMTypes = "aes-256-gcm";
 const AES_IV_LENGTH = 12;
 const AES_TAG_LENGTH = 16;
+const AES_KEY_LENGTH = 32; // 256 bits
+const AES_MIN_BLOB_LENGTH = AES_IV_LENGTH + AES_TAG_LENGTH; // 28 bytes
 
 /** Vendor identifier for error reporting. */
 const VENDOR_NAME = "microsoft-graph" as const;
@@ -194,9 +196,27 @@ function decryptCredentials(
     }
 
     const keyBuffer = Buffer.from(encryptionKey, "hex");
-    const iv = encrypted.subarray(0, AES_IV_LENGTH);
-    const authTag = encrypted.subarray(AES_IV_LENGTH, AES_IV_LENGTH + AES_TAG_LENGTH);
-    const ciphertext = encrypted.subarray(AES_IV_LENGTH + AES_TAG_LENGTH);
+    if (keyBuffer.length !== AES_KEY_LENGTH) {
+      throw new Error(
+        `WATCHTOWER_CREDENTIAL_KEY must be exactly 64 hex characters (32 bytes), ` +
+          `got ${encryptionKey.length} hex characters (${keyBuffer.length} bytes).`,
+      );
+    }
+
+    if (encrypted.length < AES_MIN_BLOB_LENGTH) {
+      throw new Error(
+        `Encrypted credentials blob is too small: expected at least ${AES_MIN_BLOB_LENGTH} bytes ` +
+          `(IV + authTag), got ${encrypted.length} bytes. The credentials may be corrupted or empty.`,
+      );
+    }
+
+    // Use Buffer.from() copies (not subarray views) to ensure independent
+    // buffers are passed to the crypto module — some runtimes (e.g. Bun /
+    // BoringSSL) may not correctly handle TypedArray views with non-zero
+    // byteOffset in native crypto operations.
+    const iv = Buffer.from(encrypted.subarray(0, AES_IV_LENGTH));
+    const authTag = Buffer.from(encrypted.subarray(AES_IV_LENGTH, AES_IV_LENGTH + AES_TAG_LENGTH));
+    const ciphertext = Buffer.from(encrypted.subarray(AES_IV_LENGTH + AES_TAG_LENGTH));
 
     const decipher = createDecipheriv(AES_ALGORITHM, keyBuffer, iv);
     decipher.setAuthTag(authTag);
