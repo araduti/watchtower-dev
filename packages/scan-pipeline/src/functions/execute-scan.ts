@@ -36,7 +36,14 @@ import {
   createExchangeAdapter,
   createGraphAdapter,
 } from "@watchtower/adapters";
-import type { AdapterConfig, AdapterResult, VendorAdapter } from "@watchtower/adapters";
+import type {
+  AdapterConfig,
+  AdapterResult,
+  GraphDataSources,
+  ExchangeDataSources,
+  DnsDataSources,
+  VendorAdapter,
+} from "@watchtower/adapters";
 import {
   evaluateAssertions,
 } from "@watchtower/engine";
@@ -77,11 +84,15 @@ interface RuntimeAdapter {
 function toRuntimeAdapter<TDataSources extends Record<string, unknown>>(
   adapter: VendorAdapter<TDataSources>,
 ): RuntimeAdapter {
+  const listSources = adapter.listSources() as readonly string[];
+
   return {
     name: adapter.name,
-    listSources: () => adapter.listSources() as readonly string[],
+    listSources: () => listSources,
     collect: async (source, config) => {
-      return await adapter.collect(source as keyof TDataSources & string, config);
+      const typedSource = source as keyof TDataSources & string;
+      const result = await adapter.collect(typedSource, config);
+      return result as AdapterResult<unknown>;
     },
   };
 }
@@ -229,16 +240,18 @@ export const executeScan = inngest.createFunction(
         traceId: `scan:${scanId}`,
       };
 
+      const graphAdapter = createGraphAdapter({ msTenantId: tenant.msTenantId });
+      const exchangeAdapter = createExchangeAdapter();
+
       const adapters: RuntimeAdapter[] = [
-        toRuntimeAdapter(createGraphAdapter({ msTenantId: tenant.msTenantId })),
-        toRuntimeAdapter(createExchangeAdapter()),
+        toRuntimeAdapter<GraphDataSources>(graphAdapter),
+        toRuntimeAdapter<ExchangeDataSources>(exchangeAdapter),
       ];
 
       const results: CollectedSource[] = [];
 
       const graphBootstrap = await step.run("collect:microsoft-graph:domainDnsRecords", async () => {
         try {
-          const graphAdapter = createGraphAdapter({ msTenantId: tenant.msTenantId });
           const result = await graphAdapter.collect("domainDnsRecords", adapterConfig);
           return {
             adapter: graphAdapter.name,
@@ -301,7 +314,7 @@ export const executeScan = inngest.createFunction(
         .filter(([, isVerified]) => isVerified !== false)
         .map(([domain]) => domain);
 
-      adapters.push(toRuntimeAdapter(createDnsAdapter({ verifiedDomains })));
+      adapters.push(toRuntimeAdapter<DnsDataSources>(createDnsAdapter({ verifiedDomains })));
 
       for (const adapter of adapters) {
         for (const source of adapter.listSources()) {
