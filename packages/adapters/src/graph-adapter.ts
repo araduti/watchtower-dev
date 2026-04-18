@@ -210,13 +210,19 @@ function decryptCredentials(
       );
     }
 
-    // Use Buffer.from() copies (not subarray views) to ensure independent
-    // buffers are passed to the crypto module — some runtimes (e.g. Bun /
-    // BoringSSL) may not correctly handle TypedArray views with non-zero
-    // byteOffset in native crypto operations.
-    const iv = Buffer.from(encrypted.subarray(0, AES_IV_LENGTH));
-    const authTag = Buffer.from(encrypted.subarray(AES_IV_LENGTH, AES_IV_LENGTH + AES_TAG_LENGTH));
-    const ciphertext = Buffer.from(encrypted.subarray(AES_IV_LENGTH + AES_TAG_LENGTH));
+    // Use Buffer.alloc + copy to guarantee independent buffers with
+    // byteOffset === 0.  Buffer.from(subarray) may still share the
+    // underlying ArrayBuffer in Bun, causing BoringSSL to reject the
+    // IV with ERR_CRYPTO_INVALID_IV.
+    const iv = Buffer.alloc(AES_IV_LENGTH);
+    encrypted.copy(iv, 0, 0, AES_IV_LENGTH);
+
+    const authTag = Buffer.alloc(AES_TAG_LENGTH);
+    encrypted.copy(authTag, 0, AES_IV_LENGTH, AES_IV_LENGTH + AES_TAG_LENGTH);
+
+    const ciphertextLen = encrypted.length - AES_IV_LENGTH - AES_TAG_LENGTH;
+    const ciphertext = Buffer.alloc(ciphertextLen);
+    encrypted.copy(ciphertext, 0, AES_IV_LENGTH + AES_TAG_LENGTH);
 
     const decipher = createDecipheriv(AES_ALGORITHM, keyBuffer, iv);
     decipher.setAuthTag(authTag);
