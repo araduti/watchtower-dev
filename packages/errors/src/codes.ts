@@ -123,6 +123,12 @@ export const WATCHTOWER_ERRORS = {
       transport: "PRECONDITION_FAILED",
       message: "Failed to verify credentials against Microsoft Graph.",
     },
+    CONSENT_NOT_CONFIGURED: {
+      code: "WATCHTOWER:TENANT:CONSENT_NOT_CONFIGURED",
+      transport: "PRECONDITION_FAILED",
+      message:
+        "Azure AD consent is not available. The server is not configured for Azure integration.",
+    },
   },
 
   SCAN: {

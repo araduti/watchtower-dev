@@ -725,10 +725,7 @@ export const tenantRouter = router({
       // client ID. The redirect URI points back to our callback handler.
       const azureClientId = process.env["WATCHTOWER_AZURE_CLIENT_ID"];
       if (!azureClientId) {
-        throwWatchtowerError(WATCHTOWER_ERRORS.VENDOR.GRAPH_ERROR, {
-          message:
-            "Azure consent is not available. WATCHTOWER_AZURE_CLIENT_ID is not configured.",
-        });
+        throwWatchtowerError(WATCHTOWER_ERRORS.TENANT.CONSENT_NOT_CONFIGURED);
       }
       const baseUrl = process.env["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000";
       const redirectUri = `${baseUrl}/api/auth/ms-callback`;

@@ -75,8 +75,8 @@ describe("Error catalog invariants", () => {
     }
   });
 
-  it("there are exactly 40 error codes", () => {
-    expect(allErrors.size).toBe(40);
+  it("there are exactly 41 error codes", () => {
+    expect(allErrors.size).toBe(41);
   });
 
   it("all domain keys are uppercase", () => {
