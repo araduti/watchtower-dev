@@ -86,6 +86,8 @@ function evalOperator(actual: unknown, operator: Operator, expected: unknown): b
 
 function getProperty(obj: unknown, path: string): unknown {
   if (!path) return obj;
+  // Supports dot-notation ("a.b.c") and bracket-escaped keys ('a.["@odata.type"]').
+  // Examples: "sharingCapability", "grantControls.builtInControls", '["@odata.type"]'
   const segments = path.match(/\["[^"]*"\]|[^.\[\]]+/g) ?? [];
   return segments.reduce((o: unknown, seg) => {
     const key = seg.startsWith('["') ? seg.slice(2, -2) : seg;
@@ -411,6 +413,8 @@ export function evaluateControl(
     const actualValues: Record<string, unknown> = {};
     for (const item of sourceData) {
       let actual = getProperty((item as Record<string, unknown>).principal ?? item, assertion.property);
+      // Microsoft Graph returns license assignments as [{skuId: "...", ...}] arrays.
+      // Extract skuId for comparison against allowedValues lists.
       if (Array.isArray(actual)) actual = actual.map((x: unknown) => (x as Record<string, unknown>)?.skuId ?? x);
       const label = (item as Record<string, unknown>).id ?? (item as Record<string, unknown>).userPrincipalName ?? (item as Record<string, unknown>).displayName ?? "item";
       actualValues[label as string] = actual;
