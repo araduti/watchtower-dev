@@ -568,9 +568,7 @@ function StepVerifyConnection({
         error: result.error.message,
       });
     }
-    // connectionQuery.refetch is stable across renders — safe to exclude
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [connectionQuery]);
 
   // Auto-check connection on mount if credentials were provided
   useEffect(() => {
@@ -623,7 +621,7 @@ function StepVerifyConnection({
                 Connection verified!
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                You{"'"}re ready to run your first compliance scan.
+                You&apos;re ready to run your first compliance scan.
               </p>
             </div>
           </>

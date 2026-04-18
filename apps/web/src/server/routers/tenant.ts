@@ -62,10 +62,10 @@ const tenantOutput = z.object({
 });
 
 /**
- * Standard select clause that explicitly excludes `encryptedCredentials`
- * but includes the raw `encryptedCredentials` field for computing
- * `hasCredentials`. The blob is NEVER returned to the client — it's
- * only used to derive the boolean.
+ * Standard select clause. Includes `encryptedCredentials` so
+ * `toTenantOutput()` can derive the `hasCredentials` boolean.
+ * The raw blob is stripped by the transform and NEVER returned
+ * to the client.
  */
 const TENANT_SELECT = {
   id: true,
@@ -715,7 +715,13 @@ export const tenantRouter = router({
       // Build the Azure AD admin consent URL.
       // WATCHTOWER_AZURE_CLIENT_ID is the multi-tenant app registration's
       // client ID. The redirect URI points back to our callback handler.
-      const azureClientId = process.env["WATCHTOWER_AZURE_CLIENT_ID"] ?? "";
+      const azureClientId = process.env["WATCHTOWER_AZURE_CLIENT_ID"];
+      if (!azureClientId) {
+        throwWatchtowerError(WATCHTOWER_ERRORS.VENDOR.GRAPH_ERROR, {
+          message:
+            "Azure consent is not available. WATCHTOWER_AZURE_CLIENT_ID is not configured.",
+        });
+      }
       const baseUrl = process.env["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000";
       const redirectUri = `${baseUrl}/api/auth/ms-callback`;
 

@@ -544,9 +544,9 @@ function SetupCredentialsDialog({
       setFormError(null);
     },
     onError: (err) => {
-      const errorCode = (err.data as Record<string, unknown> | undefined)
+      const errorCause = (err.data as Record<string, unknown> | undefined)
         ?.cause as Record<string, unknown> | undefined;
-      switch (errorCode?.errorCode) {
+      switch (errorCause?.errorCode) {
         case "WATCHTOWER:TENANT:NOT_FOUND":
           setFormError("Tenant no longer exists.");
           break;

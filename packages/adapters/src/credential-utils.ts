@@ -217,7 +217,7 @@ export async function verifyEncryptedCredentials(
     });
   }
 
-  let credentials: CredentialInput;
+  let decryptedCredentials: CredentialInput;
   try {
     const iv = Buffer.alloc(AES_IV_LENGTH);
     encrypted.copy(iv, 0, 0, AES_IV_LENGTH);
@@ -247,7 +247,7 @@ export async function verifyEncryptedCredentials(
       throw new Error("Decrypted payload missing required fields");
     }
 
-    credentials = {
+    decryptedCredentials = {
       clientId: parsed["clientId"],
       clientSecret: parsed["clientSecret"],
       msTenantId: parsed["msTenantId"],
@@ -264,5 +264,5 @@ export async function verifyEncryptedCredentials(
   }
 
   // Delegate to plaintext verification
-  return verifyCredentials(credentials);
+  return verifyCredentials(decryptedCredentials);
 }
