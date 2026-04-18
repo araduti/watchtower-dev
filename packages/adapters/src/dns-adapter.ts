@@ -1,6 +1,8 @@
 import { resolveTxt } from "node:dns/promises";
 
+import { AdapterError } from "./adapter-error.ts";
 import type { AdapterConfig, AdapterResult, VendorAdapter } from "./types.ts";
+import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 
 export interface DnsRecordSummary {
   readonly domain: string;
@@ -20,12 +22,31 @@ export interface DnsAdapterConfig {
   readonly verifiedDomains: readonly string[];
 }
 
-async function lookupTxt(name: string): Promise<string[]> {
+const VENDOR_NAME = "dns" as const;
+const EMPTY_RECORD_CODES = new Set(["ENODATA", "ENOTFOUND", "ENONAME", "NXDOMAIN"]);
+const TRANSIENT_CODES = new Set(["EAI_AGAIN", "ETIMEOUT", "ESERVFAIL", "ECONNREFUSED"]);
+
+async function lookupTxt(name: string, source: string): Promise<string[]> {
   try {
     const records = await resolveTxt(name);
     return records.map((entry) => entry.join(""));
-  } catch {
-    return [];
+  } catch (cause) {
+    const code = cause && typeof cause === "object" && "code" in cause
+      ? String((cause as { code?: unknown }).code ?? "")
+      : "";
+
+    if (EMPTY_RECORD_CODES.has(code)) {
+      return [];
+    }
+
+    throw new AdapterError({
+      message: `DNS lookup failed for ${name}.`,
+      kind: TRANSIENT_CODES.has(code) ? "transient" : "permanent",
+      vendor: VENDOR_NAME,
+      dataSource: source,
+      watchtowerError: WATCHTOWER_ERRORS.VENDOR.GRAPH_ERROR,
+      cause,
+    });
   }
 }
 
@@ -50,10 +71,10 @@ export class DnsAdapter implements VendorAdapter<DnsDataSources> {
     const records = await Promise.all(
       this.dnsConfig.verifiedDomains.map(async (domain) => {
         const [spf, dmarc, dkimSelector1, dkimSelector2] = await Promise.all([
-          lookupTxt(domain),
-          lookupTxt(`_dmarc.${domain}`),
-          lookupTxt(`selector1._domainkey.${domain}`),
-          lookupTxt(`selector2._domainkey.${domain}`),
+          lookupTxt(domain, source),
+          lookupTxt(`_dmarc.${domain}`, source),
+          lookupTxt(`selector1._domainkey.${domain}`, source),
+          lookupTxt(`selector2._domainkey.${domain}`, source),
         ]);
 
         return {

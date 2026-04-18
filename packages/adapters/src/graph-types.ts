@@ -55,7 +55,7 @@ export interface GraphDataSources {
   /** SharePoint/OneDrive tenant configuration. */
   spoTenant: SharePointTenantConfig;
 
-  /** Exchange Online transport rules. */
+  /** Exchange transport rules. */
   transportRules: TransportRule[];
 
   /** Domain DNS records for DMARC/SPF/DKIM validation. */
@@ -119,7 +119,6 @@ export interface SharePointTenantConfig {
   readonly sharingCapability: string;
   readonly externalSharingEnabled: boolean;
 }
-
 
 /** Exchange Online transport rule. */
 export interface TransportRule {

@@ -100,7 +100,8 @@ async function fetchWithRetry(url: string, init: RequestInit, source: string): P
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetch(url, init);
-      if (response.status !== 429 || attempt === MAX_RETRIES) return response;
+      const shouldRetryStatus = response.status === 429 || response.status >= 500;
+      if (!shouldRetryStatus || attempt === MAX_RETRIES) return response;
       await new Promise((resolve) => setTimeout(resolve, retryDelay(attempt)));
     } catch (cause) {
       if (attempt === MAX_RETRIES) {

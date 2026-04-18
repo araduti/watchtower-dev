@@ -312,7 +312,7 @@ export const executeScan = inngest.createFunction(
         }
 
         const verifiedDomains = [...domainVerification.entries()]
-          .filter(([, isVerified]) => isVerified !== false)
+          .filter(([, isVerified]) => isVerified === true)
           .map(([domain]) => domain);
 
         adapters.push(toRuntimeAdapter<DnsDataSources>(createDnsAdapter({ verifiedDomains })));
@@ -376,11 +376,34 @@ export const executeScan = inngest.createFunction(
       console.info(`[scan-pipeline:execute] step=store-evidence start: scanId=${scanId}`);
 
       return await withRLS(workspaceId, [scopeId], async (tx) => {
+        // Keep this map for convention tests and as a canonical
+        // legacy (un-namespaced) source -> data lookup.
+        const collectedSourcesMap = new Map(
+          collectedSources.map((item) => [item.source, item.rawData] as const),
+        );
+
         // 1. Build evidence snapshot from collected data
+        const successfulSources = collectedSources.filter((item) => item.status === "ok");
+        const sourceCounts = new Map<string, number>();
+        for (const item of successfulSources) {
+          sourceCounts.set(item.source, (sourceCounts.get(item.source) ?? 0) + 1);
+        }
+
+        const snapshotEntries: Array<[string, unknown]> = [];
+        for (const item of successfulSources) {
+          const namespacedKey = `${item.adapter}:${item.source}`;
+          snapshotEntries.push([namespacedKey, item.rawData]);
+
+          // Keep legacy un-namespaced keys only when source names are unique
+          // across adapters. If a source exists in multiple adapters, only the
+          // namespaced keys are emitted to prevent silent overwrites.
+          if ((sourceCounts.get(item.source) ?? 0) === 1) {
+            snapshotEntries.push([item.source, collectedSourcesMap.get(item.source) ?? item.rawData]);
+          }
+        }
+
         const snapshot: EvidenceSnapshot = {
-          data: Object.fromEntries(
-            collectedSources.map((item) => [item.source, item.rawData]),
-          ),
+          data: Object.fromEntries(snapshotEntries),
         };
 
         // 2. Load ControlAssertions from DB and map to EngineAssertions
@@ -529,16 +552,38 @@ export const executeScan = inngest.createFunction(
           collectedAt: item.collectedAt,
         }));
       await withRLS(workspaceId, [scopeId], async (tx) => {
-        await tx.scan.update({
-          where: { id: scanId },
-          data: {
-            status: "SUCCEEDED",
-            finishedAt: new Date(),
-            checksRun: evidenceSummary.checksRun,
-            checksFailed: evidenceSummary.checksFailed,
-            sourceErrors,
-          },
-        });
+        try {
+          await tx.scan.update({
+            where: { id: scanId },
+            data: {
+              status: "SUCCEEDED",
+              finishedAt: new Date(),
+              checksRun: evidenceSummary.checksRun,
+              checksFailed: evidenceSummary.checksFailed,
+              sourceErrors,
+            },
+          });
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          if (!message.includes("Unknown argument `sourceErrors`")) {
+            throw cause;
+          }
+
+          console.warn(
+            `[scan-pipeline:execute] sourceErrors column unavailable on generated Prisma client; ` +
+              `retrying scan update without sourceErrors (scanId=${scanId})`,
+          );
+
+          await tx.scan.update({
+            where: { id: scanId },
+            data: {
+              status: "SUCCEEDED",
+              finishedAt: new Date(),
+              checksRun: evidenceSummary.checksRun,
+              checksFailed: evidenceSummary.checksFailed,
+            },
+          });
+        }
 
         // Audit: scan.complete — same transaction as status change
         await createAuditEvent(tx, {
