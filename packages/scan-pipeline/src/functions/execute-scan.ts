@@ -201,10 +201,9 @@ export const executeScan = inngest.createFunction(
     // ------------------------------------------------------------------
     // Step 2: Collect data from all adapter sources
     // ------------------------------------------------------------------
-    const collectedSources = await step.run("collect-data", async () => {
-      console.info(`[scan-pipeline:execute] step=collect-data start: scanId=${scanId}`);
+    console.info(`[scan-pipeline:execute] step=collect-data start: scanId=${scanId}`);
 
-      const adapterConfig: AdapterConfig = {
+    const adapterConfig: AdapterConfig = {
         workspaceId,
         tenantId,
         encryptedCredentials: Buffer.from(tenant.encryptedCredentials, "base64"),
@@ -212,9 +211,9 @@ export const executeScan = inngest.createFunction(
         traceId: `scan:${scanId}`,
       };
 
-      const adapters: VendorAdapter<Record<string, unknown>>[] = [
-        createGraphAdapter({ msTenantId: tenant.msTenantId }) as unknown as VendorAdapter<Record<string, unknown>>,
-        createExchangeAdapter() as unknown as VendorAdapter<Record<string, unknown>>,
+      const adapters: Array<VendorAdapter<any>> = [
+        createGraphAdapter({ msTenantId: tenant.msTenantId }),
+        createExchangeAdapter(),
       ];
 
       const graphResult = await step.run("collect:microsoft-graph:domains", async () => {
@@ -225,9 +224,7 @@ export const executeScan = inngest.createFunction(
         .map((record) => record["domain"])
         .filter((domain): domain is string => typeof domain === "string");
 
-      adapters.push(
-        createDnsAdapter({ verifiedDomains }) as unknown as VendorAdapter<Record<string, unknown>>,
-      );
+      adapters.push(createDnsAdapter({ verifiedDomains }));
 
       const results: CollectedSource[] = [
         {
@@ -291,11 +288,10 @@ export const executeScan = inngest.createFunction(
         }
       }
 
-      console.info(
-        `[scan-pipeline:execute] step=collect-data done: scanId=${scanId} sourcesCollected=${results.length}`,
-      );
-      return results;
-    });
+    console.info(
+      `[scan-pipeline:execute] step=collect-data done: scanId=${scanId} sourcesCollected=${results.length}`,
+    );
+    const collectedSources = results;
 
     // ------------------------------------------------------------------
     // Step 3: Run engine + store Evidence/Finding records

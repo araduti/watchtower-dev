@@ -8,34 +8,6 @@ const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
 
-type ExchangeSource = keyof ExchangeDataSources & string;
-
-export interface ExchangeDataSources {
-  readonly [key: string]: unknown;
-  exoTransportRules: unknown[];
-  m365AuditConfig: unknown[];
-  organizationConfig: unknown[];
-  userMailboxes: unknown[];
-  mailboxAuditBypassAssociations: unknown[];
-  sharingPolicies: unknown[];
-  transportConfig: unknown[];
-  owaMailboxPolicies: unknown[];
-  externalInOutlook: unknown[];
-  roleAssignmentPolicies: unknown[];
-  transportRules: unknown[];
-  adminAuditLogConfig: unknown[];
-  safeLinksPolicies: unknown[];
-  safeAttachmentPolicies: unknown[];
-  malwareFilterPolicies: unknown[];
-  malwareFilterRules: unknown[];
-  hostedConnectionFilterPolicies: unknown[];
-  hostedContentFilterPolicies: unknown[];
-  hostedOutboundSpamFilterPolicies: unknown[];
-  antiPhishPolicies: unknown[];
-  atpPolicyForO365: unknown[];
-  atpProtectionPolicyRules: unknown[];
-}
-
 interface Workload {
   readonly cmdlet: string;
   readonly params?: Record<string, string>;
@@ -54,7 +26,7 @@ function checkActions(actual: unknown, required: readonly string[]): boolean {
   return required.every((action) => normalized.has(action.toLowerCase()));
 }
 
-const WORKLOADS: Readonly<Record<ExchangeSource, Workload>> = {
+const WORKLOADS = {
   exoTransportRules: { cmdlet: "Get-TransportRule" },
   m365AuditConfig: { cmdlet: "Get-AdminAuditLogConfig" },
   organizationConfig: { cmdlet: "Get-OrganizationConfig" },
@@ -93,6 +65,12 @@ const WORKLOADS: Readonly<Record<ExchangeSource, Workload>> = {
   antiPhishPolicies: { cmdlet: "Get-AntiPhishPolicy" },
   atpPolicyForO365: { cmdlet: "Get-AtpPolicyForO365" },
   atpProtectionPolicyRules: { cmdlet: "Get-ATPProtectionPolicyRule" },
+} as const satisfies Record<string, Workload>;
+
+export type ExchangeSource = keyof typeof WORKLOADS;
+
+export type ExchangeDataSources = {
+  readonly [K in ExchangeSource]: unknown[];
 };
 
 const SOURCES = Object.keys(WORKLOADS) as ExchangeSource[];
@@ -203,6 +181,15 @@ async function invokeCommand(
   tenantName: string,
 ): Promise<unknown[]> {
   const workload = WORKLOADS[source];
+  if (!workload) {
+    throw new AdapterError({
+      message: `Unknown Exchange source: ${source}`,
+      kind: "permanent",
+      vendor: VENDOR_NAME,
+      dataSource: source,
+      watchtowerError: WATCHTOWER_ERRORS.VENDOR.GRAPH_ERROR,
+    });
+  }
   const anchor = `SystemMailbox{bb558c35-97f1-4cb9-8ff7-d53741dc928c}@${tenantName}`;
   const url = `https://outlook.office365.com/adminapi/beta/${tenantName}/InvokeCommand`;
 
