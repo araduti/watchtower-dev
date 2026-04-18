@@ -532,7 +532,7 @@ function SetupCredentialsDialog({
 
   const consentUrlQuery = trpc.tenant.getConsentUrl.useQuery(
     { tenantId },
-    { enabled: open },
+    { enabled: open, retry: false },
   );
 
   const mutation = trpc.tenant.setCredentials.useMutation({
@@ -644,6 +644,10 @@ function SetupCredentialsDialog({
                 <ExternalLink className="h-3.5 w-3.5" />
                 Authorize in Azure
               </a>
+            ) : consentUrlQuery.isError ? (
+              <span className="mt-2 inline-block text-xs text-amber-300/80">
+                Azure AD consent is not configured.
+              </span>
             ) : (
               <span className="mt-2 inline-block text-xs text-muted-foreground/50">
                 Loading consent URL…
