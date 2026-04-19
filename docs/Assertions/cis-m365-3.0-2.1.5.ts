@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.safe-attachments-cloud-enabled",
   id: "2.1.5",
   framework: "CIS",
   frameworkVersion: "3.0",

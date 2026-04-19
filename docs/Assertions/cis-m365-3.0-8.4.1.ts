@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.app-permission-policies-configured",
   id: "8.4.1",
   framework: "CIS",
   frameworkVersion: "3.0",

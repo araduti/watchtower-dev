@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.managed-device-required-for-auth",
   id: "5.2.2.9",
   framework: "CIS",
   frameworkVersion: "3.0",

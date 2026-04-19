@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.channel-email-disabled",
   id: "8.1.2",
   framework: "CIS",
   frameworkVersion: "3.0",

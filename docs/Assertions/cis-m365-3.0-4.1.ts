@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.intune.default-noncompliant-devices",
   id: "4.1",
   framework: "CIS",
   frameworkVersion: "3.0",

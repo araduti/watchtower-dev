@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.hybrid.password-hash-sync",
   id: "5.1.8.1",
   framework: "CIS",
   frameworkVersion: "3.0",

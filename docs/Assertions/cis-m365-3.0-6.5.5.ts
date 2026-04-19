@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.direct-send-rejected",
   id: "6.5.5",
   framework: "CIS",
   frameworkVersion: "3.0",

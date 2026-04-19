@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.cloud-app-security-enabled",
   id: "2.4.3",
   framework: "CIS",
   frameworkVersion: "3.0",

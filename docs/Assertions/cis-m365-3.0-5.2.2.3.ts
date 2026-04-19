@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.legacy-auth-blocked",
   id: "5.2.2.3",
   framework: "CIS",
   frameworkVersion: "3.0",

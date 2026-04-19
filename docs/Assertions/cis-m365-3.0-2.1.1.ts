@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.safe-links-enabled",
   id: "2.1.1",
   framework: "CIS",
   frameworkVersion: "3.0",

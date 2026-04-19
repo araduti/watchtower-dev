@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.auth.system-preferred-mfa",
   id: "5.2.3.6",
   framework: "CIS",
   frameworkVersion: "3.0",

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.m365.forms-phishing-protection",
   id: "1.3.5",
   framework: "CIS",
   frameworkVersion: "3.0",

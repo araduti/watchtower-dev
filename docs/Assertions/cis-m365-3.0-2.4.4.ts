@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.teams-zap-enabled",
   id: "2.4.4",
   framework: "CIS",
   frameworkVersion: "3.0",

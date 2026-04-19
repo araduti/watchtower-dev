@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.external-sharing-security-group",
   id: "7.2.8",
   framework: "CIS",
   frameworkVersion: "3.0",

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.no-domain-whitelist-rules",
   id: "6.2.2",
   framework: "CIS",
   frameworkVersion: "3.0",

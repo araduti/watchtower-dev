@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.admin-signin-frequency",
   id: "5.2.2.4",
   framework: "CIS",
   frameworkVersion: "3.0",

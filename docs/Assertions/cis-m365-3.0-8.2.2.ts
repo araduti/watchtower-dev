@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.unmanaged-user-access-disabled",
   id: "8.2.2",
   framework: "CIS",
   frameworkVersion: "3.0",

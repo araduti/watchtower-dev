@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.modern-auth-required",
   id: "7.2.1",
   framework: "CIS",
   frameworkVersion: "3.0",

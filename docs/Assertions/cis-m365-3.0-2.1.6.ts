@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.spam-admin-notification-enabled",
   id: "2.1.6",
   framework: "CIS",
   frameworkVersion: "3.0",

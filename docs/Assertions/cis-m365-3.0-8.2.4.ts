@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.trial-tenant-communication-blocked",
   id: "8.2.4",
   framework: "CIS",
   frameworkVersion: "3.0",

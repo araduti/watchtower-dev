@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.device.join-restricted",
   id: "5.1.4.1",
   framework: "CIS",
   frameworkVersion: "3.0",

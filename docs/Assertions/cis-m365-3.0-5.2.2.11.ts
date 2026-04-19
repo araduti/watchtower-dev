@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.signin-frequency-intune-enrollment",
   id: "5.2.2.11",
   framework: "CIS",
   frameworkVersion: "3.0",

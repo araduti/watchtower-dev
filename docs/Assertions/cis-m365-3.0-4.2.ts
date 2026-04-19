@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.intune.personal-enrollment-blocked",
   id: "4.2",
   framework: "CIS",
   frameworkVersion: "3.0",

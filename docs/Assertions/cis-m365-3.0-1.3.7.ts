@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.m365.third-party-storage-disabled",
   id: "1.3.7",
   framework: "CIS",
   frameworkVersion: "3.0",

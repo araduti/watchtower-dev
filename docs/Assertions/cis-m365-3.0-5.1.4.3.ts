@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.device.ga-not-local-admin-on-join",
   id: "5.1.4.3",
   framework: "CIS",
   frameworkVersion: "3.0",

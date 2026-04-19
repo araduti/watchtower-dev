@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.stay-signed-in-hidden",
   id: "5.1.2.5",
   framework: "CIS",
   frameworkVersion: "3.0",

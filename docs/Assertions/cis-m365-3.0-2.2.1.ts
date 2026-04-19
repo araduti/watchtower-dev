@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.breakglass-activity-monitored",
   id: "2.2.1",
   framework: "CIS",
   frameworkVersion: "3.0",

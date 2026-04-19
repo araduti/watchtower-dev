@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.phishing-resistant-mfa-admins",
   id: "5.2.2.5",
   framework: "CIS",
   frameworkVersion: "3.0",

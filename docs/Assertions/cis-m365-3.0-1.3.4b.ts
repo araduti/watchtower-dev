@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.m365.org-trials-disabled",
   id: "1.3.4",
   part: 2,
   groupId: "1.3.4",

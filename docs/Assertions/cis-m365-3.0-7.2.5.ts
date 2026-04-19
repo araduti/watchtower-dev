@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.guest-resharing-disabled",
   id: "7.2.5",
   framework: "CIS",
   frameworkVersion: "3.0",

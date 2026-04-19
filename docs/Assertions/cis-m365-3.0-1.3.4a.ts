@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.m365.office-store-disabled",
   id: "1.3.4",
   part: 1,
   groupId: "1.3.4",

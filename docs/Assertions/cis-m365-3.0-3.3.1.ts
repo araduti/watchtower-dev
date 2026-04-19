@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.purview.sensitivity-labels-published",
   id: "3.3.1",
   framework: "CIS",
   frameworkVersion: "3.0",

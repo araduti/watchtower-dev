@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.guest.allowed-domains-only",
   id: "5.1.6.1",
   framework: "CIS",
   frameworkVersion: "3.0",

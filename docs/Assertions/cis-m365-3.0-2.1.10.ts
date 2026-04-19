@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.dmarc-published",
   id: "2.1.10",
   framework: "CIS",
   frameworkVersion: "3.0",

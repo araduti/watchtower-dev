@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.owa-additional-storage-restricted",
   id: "6.5.3",
   framework: "CIS",
   frameworkVersion: "3.0",

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.m365.customer-lockbox-enabled",
   id: "1.3.6",
   framework: "CIS",
   frameworkVersion: "3.0",

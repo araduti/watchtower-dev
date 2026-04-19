@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.anti-spam-no-allowed-domains",
   id: "2.1.14",
   framework: "CIS",
   frameworkVersion: "3.0",

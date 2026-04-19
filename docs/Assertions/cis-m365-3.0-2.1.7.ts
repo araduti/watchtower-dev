@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.anti-phishing-policy-exists",
   id: "2.1.7",
   framework: "CIS",
   frameworkVersion: "3.0",

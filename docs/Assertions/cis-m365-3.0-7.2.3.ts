@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.external-sharing-restricted",
   id: "7.2.3",
   framework: "CIS",
   frameworkVersion: "3.0",

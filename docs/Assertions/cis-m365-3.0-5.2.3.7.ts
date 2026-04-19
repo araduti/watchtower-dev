@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.auth.email-otp-disabled",
   id: "5.2.3.7",
   framework: "CIS",
   frameworkVersion: "3.0",

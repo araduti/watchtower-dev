@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.signin-risk-policy-enabled",
   id: "5.2.2.7",
   framework: "CIS",
   frameworkVersion: "3.0",

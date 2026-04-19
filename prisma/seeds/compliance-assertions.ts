@@ -33,6 +33,7 @@ import { join } from "node:path";
 // =============================================================================
 
 type AssertionSpec = {
+  slug?: string;
   id: string;
   framework?: string;
   frameworkVersion?: string;
@@ -172,7 +173,7 @@ function subAssertionFromAlso(item: Record<string, unknown>): SubAssertion | nul
 
 function translateSpec(loaded: LoadedSpec): AssertionRow[] {
   const { spec, fileVersion, localId } = loaded;
-  const checkSlug = makeCheckSlug(fileVersion, localId);
+  const checkSlug = spec.slug ?? makeCheckSlug(fileVersion, localId);
   const frameworkId = makeFrameworkId(fileVersion);
 
   const controlKey = {
@@ -315,7 +316,7 @@ function buildCatalog(loaded: LoadedSpec[]): BuiltCatalog {
 
   for (const entry of loaded) {
     const { spec, fileVersion, localId } = entry;
-    const checkSlug = makeCheckSlug(fileVersion, localId);
+    const checkSlug = spec.slug ?? makeCheckSlug(fileVersion, localId);
     const frameworkId = makeFrameworkId(fileVersion);
 
     // Framework
@@ -506,11 +507,12 @@ async function replaceAssertions(db: PrismaClient, catalog: BuiltCatalog): Promi
  * Remove ControlAssertions, Controls, and orphaned Checks that were seeded
  * by a previous run but are no longer in the current docs/Assertions catalog.
  *
- * Scope: only touches slugs starting with "cis.m365.v" so we never
- * accidentally delete manually-curated or customer-added records.
+ * Scope: only touches Controls belonging to CIS frameworks (frameworkId startsWith
+ * "fw-cis-m365-v"). This correctly handles both old-style cis.m365.v* slugs and
+ * new wt.* slugs — we scope by framework membership rather than slug prefix.
  */
 async function purgeStaleEntries(db: PrismaClient, catalog: BuiltCatalog): Promise<void> {
-  const CIS_PREFIX = "cis.m365.v";
+  const CIS_FRAMEWORK_PREFIX = "fw-cis-m365-v";
 
   // Build the set of (checkSlug, frameworkId, controlId) triples that are
   // still valid according to the current catalog.
@@ -519,9 +521,9 @@ async function purgeStaleEntries(db: PrismaClient, catalog: BuiltCatalog): Promi
   );
   const validCheckSlugs = new Set<string>(catalog.checks.keys());
 
-  // 1. Find all cis.m365.v* Controls currently in the DB.
+  // 1. Find all Controls in CIS frameworks (those seeded by this file).
   const dbControls = await db.control.findMany({
-    where: { checkSlug: { startsWith: CIS_PREFIX } },
+    where: { frameworkId: { startsWith: CIS_FRAMEWORK_PREFIX } },
     select: { checkSlug: true, frameworkId: true, controlId: true },
   });
 
@@ -549,22 +551,31 @@ async function purgeStaleEntries(db: PrismaClient, catalog: BuiltCatalog): Promi
     console.warn(`  ♻ purged stale control ${ctrl.controlId} (${ctrl.checkSlug})`);
   }
 
-  // 3. Delete orphaned Checks (cis.m365.v* with no remaining Controls).
-  const dbChecks = await db.check.findMany({
-    where: { slug: { startsWith: CIS_PREFIX } },
-    select: { id: true, slug: true },
-  });
+  // 3. Find orphaned Checks: checks where ALL their controls belonged to CIS
+  // frameworks and none of those controls are in the current catalog.
+  // We collect checkSlugs that appeared in the DB controls but are no longer valid.
+  const staleCisCheckSlugs = new Set<string>();
+  for (const ctrl of dbControls) {
+    const key = `${ctrl.checkSlug}|${ctrl.frameworkId}|${ctrl.controlId}`;
+    if (!validControlKeys.has(key)) {
+      staleCisCheckSlugs.add(ctrl.checkSlug);
+    }
+  }
 
-  for (const chk of dbChecks) {
-    if (validCheckSlugs.has(chk.slug)) continue;
+  for (const slug of staleCisCheckSlugs) {
+    // Skip if this slug is still valid in the current catalog
+    if (validCheckSlugs.has(slug)) continue;
 
     // Safety guard: only delete if no controls remain (the loop above may
     // have already removed them, but be explicit in case of partial runs).
-    const remainingControls = await db.control.count({ where: { checkSlug: chk.slug } });
+    const remainingControls = await db.control.count({ where: { checkSlug: slug } });
     if (remainingControls > 0) continue;
 
+    const chk = await db.check.findFirst({ where: { slug }, select: { id: true } });
+    if (!chk) continue;
+
     await db.check.delete({ where: { id: chk.id } });
-    console.warn(`  ♻ purged orphaned check ${chk.slug}`);
+    console.warn(`  ♻ purged orphaned check ${slug}`);
   }
 }
 

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.guest.access-restricted",
   id: "5.1.6.2",
   framework: "CIS",
   frameworkVersion: "3.0",

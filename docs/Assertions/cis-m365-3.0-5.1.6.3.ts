@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.guest.invitations-restricted",
   id: "5.1.6.3",
   framework: "CIS",
   frameworkVersion: "3.0",

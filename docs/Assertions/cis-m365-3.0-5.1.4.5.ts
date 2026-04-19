@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.device.laps-enabled",
   id: "5.1.4.5",
   framework: "CIS",
   frameworkVersion: "3.0",

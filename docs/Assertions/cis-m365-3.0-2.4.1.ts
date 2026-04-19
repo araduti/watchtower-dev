@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.priority-account-protection-enabled",
   id: "2.4.1",
   framework: "CIS",
   frameworkVersion: "3.0",

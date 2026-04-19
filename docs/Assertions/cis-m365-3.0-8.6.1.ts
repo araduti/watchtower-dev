@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.security-reporting-enabled",
   id: "8.6.1",
   framework: "CIS",
   frameworkVersion: "3.0",

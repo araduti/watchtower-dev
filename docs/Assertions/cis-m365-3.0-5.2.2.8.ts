@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.signin-risk-blocked",
   id: "5.2.2.8",
   framework: "CIS",
   frameworkVersion: "3.0",

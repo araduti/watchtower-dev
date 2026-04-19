@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.admin-center-access-restricted",
   id: "5.1.2.4",
   framework: "CIS",
   frameworkVersion: "3.0",

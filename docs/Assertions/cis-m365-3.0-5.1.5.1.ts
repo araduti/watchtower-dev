@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.app.user-consent-disabled",
   id: "5.1.5.1",
   framework: "CIS",
   frameworkVersion: "3.0",

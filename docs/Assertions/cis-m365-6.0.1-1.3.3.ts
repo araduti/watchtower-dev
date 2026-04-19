@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.calendar-external-sharing-disabled",
   id: "1.3.3",
   framework: "CIS",
   frameworkVersion: "3.0",

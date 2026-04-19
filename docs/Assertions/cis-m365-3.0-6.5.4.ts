@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.smtp-auth-disabled",
   id: "6.5.4",
   framework: "CIS",
   frameworkVersion: "3.0",

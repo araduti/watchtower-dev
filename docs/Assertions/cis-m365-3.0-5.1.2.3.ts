@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.tenant-creation-restricted",
   id: "5.1.2.3",
   framework: "CIS",
   frameworkVersion: "3.0",

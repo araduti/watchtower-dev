@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.managed-device-required-for-security-info",
   id: "5.2.2.10",
   framework: "CIS",
   frameworkVersion: "3.0",

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.onedrive-sync-managed-devices-only",
   id: "7.3.2",
   framework: "CIS",
   frameworkVersion: "3.0",

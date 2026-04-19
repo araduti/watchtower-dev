@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.idle-session-timeout",
   id: "1.3.2",
   part: 2,
   groupId: "1.3.2",
