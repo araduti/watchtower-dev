@@ -588,7 +588,7 @@ export const executeScan = inngest.createFunction(
           });
 
           // Create Evidence record (append-only)
-          await tx.evidence.create({
+          const evidence = await tx.evidence.create({
             data: {
               workspaceId,
               scopeId,
@@ -609,6 +609,15 @@ export const executeScan = inngest.createFunction(
               collectedById: "inngest:execute-scan",
               observedAt: now,
             },
+            select: { id: true },
+          });
+
+          // Back-link the latest evidence to the finding so the UI can fetch
+          // it directly without a separate query. This is the canonical pointer —
+          // older evidence rows remain in the Evidence table for history.
+          await tx.finding.update({
+            where: { id: findingData.id },
+            data: { latestEvidenceId: evidence.id },
           });
 
           // Audit: finding status change (if it changed)

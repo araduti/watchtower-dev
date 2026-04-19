@@ -598,30 +598,33 @@ export default function FindingDetailPage({
         )}
 
         {/* -------------------------------------------------------- */}
-        {/*  What failed — evidence detail                            */}
+        {/*  What We Found — always visible, evidence when available   */}
         {/* -------------------------------------------------------- */}
-        {evidenceData && (
-          <GlowCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-foreground inline-flex items-center gap-2">
-                <Database className="h-4 w-4 text-muted-foreground" />
-                What We Found
-              </h3>
+        <GlowCard className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-foreground inline-flex items-center gap-2">
+              <Database className="h-4 w-4 text-muted-foreground" />
+              What We Found
+            </h3>
+            {evidenceData && (
               <div className="flex items-center gap-2">
                 {evResultStyle && (
                   <span className={`text-xs font-mono font-semibold ${evResultStyle.color}`}>
                     {evResultStyle.label}
                   </span>
                 )}
+                <span className="text-border/40">·</span>
                 <ClientDate
                   value={new Date(evidenceData.observedAt).toISOString()}
                   variant="datetime"
                   className="text-xs text-muted-foreground font-mono"
                 />
               </div>
-            </div>
+            )}
+          </div>
 
-            {hasFailureDetail ? (
+          {evidenceData ? (
+            hasFailureDetail ? (
               <div className="space-y-4">
                 {/* Engine warnings — most human-readable */}
                 {warnings.length > 0 && (
@@ -638,7 +641,7 @@ export default function FindingDetailPage({
                   </div>
                 )}
 
-                {/* Actual values table */}
+                {/* Actual observed values */}
                 {Object.keys(actualValues).length > 0 && (
                   <div className="rounded-xl border border-border/30 overflow-hidden">
                     <table className="w-full text-xs">
@@ -671,39 +674,73 @@ export default function FindingDetailPage({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Evidence was collected but no detailed failure data is available.
+                Evidence was collected but contained no detailed failure data.
               </p>
-            )}
-          </GlowCard>
-        )}
+            )
+          ) : (
+            /* No evidence yet — show check-derived context as a placeholder */
+            <div className="space-y-3">
+              <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/15 bg-amber-500/5 px-3 py-2.5">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 mt-0.5 shrink-0" />
+                <span className="text-sm text-amber-300/80">
+                  No evidence collected yet. Run a scan to populate failure detail.
+                </span>
+              </div>
+              {(checkData?.dataSource || checkData?.property) && (
+                <div className="rounded-xl border border-border/30 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/30 bg-muted/10">
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">What will be checked</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="px-3 py-2 font-mono text-foreground">{checkData.property ?? "—"}</td>
+                        <td className="px-3 py-2 font-mono text-muted-foreground">{checkData.dataSource ?? "—"}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </GlowCard>
 
         {/* -------------------------------------------------------- */}
-        {/*  How to fix — remediation                                 */}
+        {/*  How to Fix — always visible                              */}
         {/* -------------------------------------------------------- */}
-        {checkData?.remediation && checkData.remediation.trim() && (
-          <GlowCard className="p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4 inline-flex items-center gap-2">
-              <Wrench className="h-4 w-4 text-muted-foreground" />
-              How to Fix
-            </h3>
-            <SimpleMarkdown text={checkData.remediation} />
-            {checkData.connectors.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-border/30">
-                <p className="text-xs text-muted-foreground mb-2">Required admin access</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {checkData.connectors.map((c) => (
-                    <span
-                      key={c}
-                      className="inline-flex items-center rounded-lg border border-border/30 bg-muted/10 px-2 py-0.5 text-xs font-mono text-muted-foreground"
-                    >
-                      {c}
-                    </span>
-                  ))}
+        <GlowCard className="p-6">
+          <h3 className="text-sm font-semibold text-foreground mb-4 inline-flex items-center gap-2">
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+            How to Fix
+          </h3>
+          {checkData?.remediation && checkData.remediation.trim() ? (
+            <>
+              <SimpleMarkdown text={checkData.remediation} />
+              {checkData.connectors.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border/30">
+                  <p className="text-xs text-muted-foreground mb-2">Required admin access</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {checkData.connectors.map((c) => (
+                      <span
+                        key={c}
+                        className="inline-flex items-center rounded-lg border border-border/30 bg-muted/10 px-2 py-0.5 text-xs font-mono text-muted-foreground"
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </GlowCard>
-        )}
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No remediation guidance has been authored for this check yet.
+            </p>
+          )}
+        </GlowCard>
 
         {/* -------------------------------------------------------- */}
         {/*  Framework coverage — full control detail                 */}
@@ -738,112 +775,109 @@ export default function FindingDetailPage({
         )}
 
         {/* -------------------------------------------------------- */}
-        {/*  Core Details                                              */}
+        {/*  Bottom row — Core Details | Lifecycle | Actions           */}
+        {/*  Three-column on desktop, stacked on mobile                */}
         {/* -------------------------------------------------------- */}
-        <GlowCard className="p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Core Details</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-            <DetailRow label="Tenant ID" value={finding.tenantId} mono />
-            <DetailRow label="Scope ID" value={finding.scopeId} mono />
-            <DetailRow label="First Seen" value={<ClientDate value={finding.firstSeenAt} variant="datetime" />} />
-            <DetailRow label="Last Seen" value={<ClientDate value={finding.lastSeenAt} variant="datetime" />} />
-            <DetailRow label="Created" value={<ClientDate value={finding.createdAt} variant="datetime" />} />
-            <DetailRow label="Updated" value={<ClientDate value={finding.updatedAt} variant="datetime" />} />
-            {finding.assignedTo && (
-              <DetailRow label="Assigned To" value={finding.assignedTo} mono />
-            )}
-            {finding.latestEvidenceId && (
-              <DetailRow label="Latest Evidence ID" value={finding.latestEvidenceId} mono />
-            )}
-            {finding.evidenceDueAt && (
-              <DetailRow label="Evidence Due" value={<ClientDate value={finding.evidenceDueAt} variant="datetime" />} />
-            )}
-            {finding.acceptanceExpiresAt && (
-              <DetailRow
-                label="Acceptance Expires"
-                value={<ClientDate value={finding.acceptanceExpiresAt} variant="datetime" />}
-              />
-            )}
-          </div>
-        </GlowCard>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        {/* -------------------------------------------------------- */}
-        {/*  Lifecycle Timeline                                        */}
-        {/* -------------------------------------------------------- */}
-        <GlowCard className="p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Lifecycle Timeline</h3>
-          {timelineEntries.length > 0 ? (
-            <div className="divide-y divide-border/30">{timelineEntries}</div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No lifecycle transitions recorded yet. This finding is still in its initial state.
-            </p>
-          )}
-        </GlowCard>
-
-        {/* -------------------------------------------------------- */}
-        {/*  Actions                                                   */}
-        {/* -------------------------------------------------------- */}
-        <GlowCard className="p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Actions</h3>
-          {feedback && (
-            <div className={`mb-4 rounded-lg border px-4 py-2.5 text-sm ${
-              feedback.type === "success"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                : "border-red-500/30 bg-red-500/10 text-red-400"
-            }`}>
-              {feedback.message}
+          {/* Core Details */}
+          <GlowCard className="p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Core Details</h3>
+            <div className="space-y-3">
+              <DetailRow label="Tenant ID" value={finding.tenantId} mono />
+              <DetailRow label="Scope ID" value={finding.scopeId} mono />
+              <DetailRow label="First Seen" value={<ClientDate value={finding.firstSeenAt} variant="datetime" />} />
+              <DetailRow label="Last Seen" value={<ClientDate value={finding.lastSeenAt} variant="datetime" />} />
+              {finding.assignedTo && (
+                <DetailRow label="Assigned To" value={finding.assignedTo} mono />
+              )}
+              {finding.evidenceDueAt && (
+                <DetailRow label="Evidence Due" value={<ClientDate value={finding.evidenceDueAt} variant="datetime" />} />
+              )}
+              {finding.acceptanceExpiresAt && (
+                <DetailRow
+                  label="Acceptance Expires"
+                  value={<ClientDate value={finding.acceptanceExpiresAt} variant="datetime" />}
+                />
+              )}
             </div>
-          )}
-          <div className="flex flex-wrap gap-3">
-            <InteractiveButton
-              variant="outline"
-              size="sm"
-              icon={<Eye className="h-4 w-4" />}
-              disabled={finding.status !== "OPEN"}
-              loading={acknowledgeMutation.isPending}
-              loadingText="Acknowledging…"
-              onClick={() => acknowledgeMutation.mutate({
-                idempotencyKey: crypto.randomUUID(),
-                findingId: finding.id,
-              })}
-            >
-              Acknowledge
-            </InteractiveButton>
-            <InteractiveButton
-              variant="outline"
-              size="sm"
-              icon={<ShieldAlert className="h-4 w-4" />}
-              disabled={finding.status !== "OPEN" && finding.status !== "ACKNOWLEDGED"}
-              onClick={() => setAcceptOpen(true)}
-            >
-              Accept Risk
-            </InteractiveButton>
-            <InteractiveButton
-              variant="outline"
-              size="sm"
-              icon={<VolumeX className="h-4 w-4" />}
-              disabled={finding.visibility === "MUTED"}
-              onClick={() => setMuteOpen(true)}
-            >
-              Mute
-            </InteractiveButton>
-            <InteractiveButton
-              variant="outline"
-              size="sm"
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              disabled={finding.status === "RESOLVED" || finding.status === "NOT_APPLICABLE"}
-              loading={resolveMutation.isPending}
-              loadingText="Resolving…"
-              onClick={() => resolveMutation.mutate({
-                idempotencyKey: crypto.randomUUID(),
-                findingId: finding.id,
-              })}
-            >
-              Resolve
-            </InteractiveButton>
-          </div>
-        </GlowCard>
+          </GlowCard>
+
+          {/* Lifecycle Timeline */}
+          <GlowCard className="p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Lifecycle</h3>
+            {timelineEntries.length > 0 ? (
+              <div className="divide-y divide-border/30">{timelineEntries}</div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No transitions yet. Finding is in its initial state.
+              </p>
+            )}
+          </GlowCard>
+
+          {/* Actions */}
+          <GlowCard className="p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Actions</h3>
+            {feedback && (
+              <div className={`mb-4 rounded-lg border px-3 py-2 text-sm ${
+                feedback.type === "success"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  : "border-red-500/30 bg-red-500/10 text-red-400"
+              }`}>
+                {feedback.message}
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <InteractiveButton
+                variant="outline"
+                size="sm"
+                icon={<Eye className="h-4 w-4" />}
+                disabled={finding.status !== "OPEN"}
+                loading={acknowledgeMutation.isPending}
+                loadingText="Acknowledging…"
+                onClick={() => acknowledgeMutation.mutate({
+                  idempotencyKey: crypto.randomUUID(),
+                  findingId: finding.id,
+                })}
+              >
+                Acknowledge
+              </InteractiveButton>
+              <InteractiveButton
+                variant="outline"
+                size="sm"
+                icon={<ShieldAlert className="h-4 w-4" />}
+                disabled={finding.status !== "OPEN" && finding.status !== "ACKNOWLEDGED"}
+                onClick={() => setAcceptOpen(true)}
+              >
+                Accept Risk
+              </InteractiveButton>
+              <InteractiveButton
+                variant="outline"
+                size="sm"
+                icon={<VolumeX className="h-4 w-4" />}
+                disabled={finding.visibility === "MUTED"}
+                onClick={() => setMuteOpen(true)}
+              >
+                Mute
+              </InteractiveButton>
+              <InteractiveButton
+                variant="outline"
+                size="sm"
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                disabled={finding.status === "RESOLVED" || finding.status === "NOT_APPLICABLE"}
+                loading={resolveMutation.isPending}
+                loadingText="Resolving…"
+                onClick={() => resolveMutation.mutate({
+                  idempotencyKey: crypto.randomUUID(),
+                  findingId: finding.id,
+                })}
+              >
+                Resolve
+              </InteractiveButton>
+            </div>
+          </GlowCard>
+
+        </div>
 
         {/* Accept Risk Dialog */}
         <Dialog open={acceptOpen} onOpenChange={setAcceptOpen}>
