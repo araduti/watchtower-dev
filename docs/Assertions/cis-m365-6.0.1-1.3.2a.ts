@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.m365.idle-session-timeout-policy",
   id: "1.3.2",
   part: 1,
   groupId: "1.3.2",                    // DB links parts — all must pass for control to pass

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.guest-access-expiry-enabled",
   id: "7.2.9",
   framework: "CIS",
   frameworkVersion: "3.0",

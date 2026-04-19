@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.outlook-addins-blocked",
   id: "6.3.1",
   framework: "CIS",
   frameworkVersion: "3.0",

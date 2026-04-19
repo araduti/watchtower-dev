@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.external-sender-tagged",
   id: "6.2.3",
   framework: "CIS",
   frameworkVersion: "3.0",

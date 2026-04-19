@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.meeting.anonymous-start-disabled",
   id: "8.5.2",
   framework: "CIS",
   frameworkVersion: "3.0",

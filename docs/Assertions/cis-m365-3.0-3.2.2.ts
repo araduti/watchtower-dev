@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.purview.dlp-policies-teams-enabled",
   id: "3.2.2",
   framework: "CIS",
   frameworkVersion: "3.0",

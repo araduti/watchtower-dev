@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.device-code-blocked",
   id: "5.2.2.12",
   framework: "CIS",
   frameworkVersion: "3.0",

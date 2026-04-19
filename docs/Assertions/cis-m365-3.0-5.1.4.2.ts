@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.device.quota-limited",
   id: "5.1.4.2",
   framework: "CIS",
   frameworkVersion: "3.0",

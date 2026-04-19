@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.device.bitlocker-recovery-restricted",
   id: "5.1.4.6",
   framework: "CIS",
   frameworkVersion: "3.0",

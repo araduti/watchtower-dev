@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.approved-public-groups-only",
   id: "1.2.1",
   framework: "CIS",
   frameworkVersion: "3.0",

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.connection-filter-safelist-disabled",
   id: "2.1.13",
   framework: "CIS",
   frameworkVersion: "3.0",

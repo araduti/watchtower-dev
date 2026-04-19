@@ -181,11 +181,11 @@ const SEEDERS: readonly Seeder[] = [
   },
   {
     name: "compliance-data",
-    description: "Checks, frameworks, and control mappings",
+    description: "Frameworks, checks, controls, and assertions (from docs/Assertions/)",
     run: async (db) => {
       const count = await seedComplianceData(db);
-      log.info(`${CHECKS.length} checks seeded`);
       log.info(`${FRAMEWORKS.length} frameworks seeded`);
+      log.info(`${CHECKS.length} checks seeded`);
       return count;
     },
     dryRun: async () => {

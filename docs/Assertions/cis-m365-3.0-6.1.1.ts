@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.audit-enabled",
   id: "6.1.1",
   framework: "CIS",
   frameworkVersion: "3.0",

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.admin-reduced-footprint-licenses",
   id: "1.1.4",
   framework: "CIS",
   frameworkVersion: "3.0",

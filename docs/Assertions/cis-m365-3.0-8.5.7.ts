@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.meeting.external-control-disabled",
   id: "8.5.7",
   framework: "CIS",
   frameworkVersion: "3.0",

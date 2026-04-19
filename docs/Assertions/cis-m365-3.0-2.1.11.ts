@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.comprehensive-attachment-filtering",
   id: "2.1.11",
   framework: "CIS",
   frameworkVersion: "3.0",

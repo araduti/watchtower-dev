@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.modern-auth-enabled",
   id: "6.5.1",
   framework: "CIS",
   frameworkVersion: "3.0",

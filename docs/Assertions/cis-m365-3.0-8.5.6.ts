@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.meeting.presenter-restricted",
   id: "8.5.6",
   framework: "CIS",
   frameworkVersion: "3.0",

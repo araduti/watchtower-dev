@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.mailtips-enabled",
   id: "6.5.2",
   framework: "CIS",
   frameworkVersion: "3.0",

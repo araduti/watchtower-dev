@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.external-file-sharing-restricted",
   id: "8.1.1",
   framework: "CIS",
   frameworkVersion: "3.0",

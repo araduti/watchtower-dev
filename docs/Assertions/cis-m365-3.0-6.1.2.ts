@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.mailbox-audit-actions",
   id: "6.1.2",
   framework: "CIS",
   frameworkVersion: "3.0",

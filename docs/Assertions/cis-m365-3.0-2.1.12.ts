@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.connection-filter-ip-allowlist-empty",
   id: "2.1.12",
   framework: "CIS",
   frameworkVersion: "3.0",

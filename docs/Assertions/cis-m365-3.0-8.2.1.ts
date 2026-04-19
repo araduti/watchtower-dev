@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.external-access-restricted",
   id: "8.2.1",
   framework: "CIS",
   frameworkVersion: "3.0",

@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.dkim-enabled",
   id: "2.1.9",
   framework: "CIS",
   frameworkVersion: "3.0",

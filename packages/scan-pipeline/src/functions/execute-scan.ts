@@ -507,15 +507,21 @@ export const executeScan = inngest.createFunction(
             };
           });
         } else {
-          engineAssertions = dbAssertions.map((dba) => ({
-            checkSlug: dba.checkSlug,
-            source: dba.control.check.dataSource ?? "",
-            property: dba.control.check.property ?? "",
-            operator: dba.operator as EngineAssertion["operator"],
-            expectedValue: dba.expectedValue,
-            sourceFilter: dba.sourceFilter as Record<string, unknown> | undefined,
-            assertionLogic: (dba.control.assertionLogic ?? "ALL") as "ALL" | "ANY",
-          }));
+          engineAssertions = dbAssertions.map((dba) => {
+            const assertion: EngineAssertion = {
+              checkSlug: dba.checkSlug,
+              source: dba.source ?? dba.control.check.dataSource ?? "",
+              property: dba.property ?? dba.control.check.property ?? "",
+              operator: dba.operator as EngineAssertion["operator"],
+              expectedValue: dba.expectedValue,
+              sourceFilter: dba.sourceFilter as Record<string, unknown> | undefined,
+              assertionLogic: (dba.assertionLogic ?? dba.control.assertionLogic ?? "ALL") as "ALL" | "ANY",
+              evaluatorSlug: dba.evaluatorSlug ?? undefined,
+              nestedFind: (dba.nestedFind as unknown as EngineAssertion["nestedFind"]) ?? undefined,
+              additionalAssertions: (dba.additionalAssertions as unknown as EngineAssertion["additionalAssertions"]) ?? undefined,
+            };
+            return assertion;
+          });
         }
 
         // 3. Run the engine

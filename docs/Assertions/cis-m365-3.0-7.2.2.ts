@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.aad-b2b-integration-enabled",
   id: "7.2.2",
   framework: "CIS",
   frameworkVersion: "3.0",

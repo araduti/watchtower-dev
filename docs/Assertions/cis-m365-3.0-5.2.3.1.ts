@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.auth.authenticator-fatigue-protection",
   id: "5.2.3.1",
   framework: "CIS",
   frameworkVersion: "3.0",

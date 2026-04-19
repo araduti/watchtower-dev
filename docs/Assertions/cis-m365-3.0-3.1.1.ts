@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.purview.audit-log-enabled",
   id: "3.1.1",
   framework: "CIS",
   frameworkVersion: "3.0",

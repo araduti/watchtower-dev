@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.teams.meeting.lobby-bypass-restricted",
   id: "8.5.3",
   framework: "CIS",
   frameworkVersion: "3.0",

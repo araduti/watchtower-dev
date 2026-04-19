@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.pim.pra-approval-required",
   id: "5.3.5",
   framework: "CIS",
   frameworkVersion: "3.0",

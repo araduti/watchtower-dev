@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.auth.weak-methods-disabled",
   id: "5.2.3.5",
   framework: "CIS",
   frameworkVersion: "3.0",

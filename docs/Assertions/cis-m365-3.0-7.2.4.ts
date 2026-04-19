@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.onedrive-sharing-restricted",
   id: "7.2.4",
   framework: "CIS",
   frameworkVersion: "3.0",

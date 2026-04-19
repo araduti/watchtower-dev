@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.external-sharing-allowed-domains",
   id: "7.2.6",
   framework: "CIS",
   frameworkVersion: "3.0",

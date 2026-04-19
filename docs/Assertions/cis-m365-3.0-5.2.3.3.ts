@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.auth.onprem-password-protection",
   id: "5.2.3.3",
   framework: "CIS",
   frameworkVersion: "3.0",

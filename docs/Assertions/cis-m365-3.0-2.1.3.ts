@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.malware-admin-notification-enabled",
   id: "2.1.3",
   framework: "CIS",
   frameworkVersion: "3.0",

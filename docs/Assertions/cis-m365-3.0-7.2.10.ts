@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.verification-code-reauth-restricted",
   id: "7.2.10",
   framework: "CIS",
   frameworkVersion: "3.0",

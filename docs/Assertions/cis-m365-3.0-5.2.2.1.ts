@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.ca.mfa-admins",
   id: "5.2.2.1",
   framework: "CIS",
   frameworkVersion: "3.0",

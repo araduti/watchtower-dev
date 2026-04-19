@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.m365.sway-external-sharing-disabled",
   id: "1.3.8",
   framework: "CIS",
   frameworkVersion: "3.0",

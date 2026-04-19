@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.spo.default-sharing-link-view-only",
   id: "7.2.11",
   framework: "CIS",
   frameworkVersion: "3.0",

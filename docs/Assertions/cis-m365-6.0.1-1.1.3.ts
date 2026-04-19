@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.global-admin-count-limited",
   id: "1.1.3",
   framework: "CIS",
   frameworkVersion: "3.0",

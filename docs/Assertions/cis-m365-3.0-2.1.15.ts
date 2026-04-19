@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.outbound-spam-limits",
   id: "2.1.15",
   framework: "CIS",
   frameworkVersion: "3.0",

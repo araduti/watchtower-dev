@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.per-user-mfa-disabled",
   id: "5.1.2.1",
   framework: "CIS",
   frameworkVersion: "3.0",

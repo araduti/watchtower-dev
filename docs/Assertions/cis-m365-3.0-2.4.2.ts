@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.defender.priority-account-strict-preset",
   id: "2.4.2",
   framework: "CIS",
   frameworkVersion: "3.0",

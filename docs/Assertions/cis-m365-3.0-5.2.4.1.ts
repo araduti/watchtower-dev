@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.sspr-enabled-all",
   id: "5.2.4.1",
   framework: "CIS",
   frameworkVersion: "3.0",

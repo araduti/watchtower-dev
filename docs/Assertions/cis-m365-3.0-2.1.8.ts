@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.exo.spf-records-published",
   id: "2.1.8",
   framework: "CIS",
   frameworkVersion: "3.0",

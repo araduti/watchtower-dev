@@ -1,4 +1,5 @@
 export default {
+  slug: "wt.entra.pim.used-for-roles",
   id: "5.3.1",
   framework: "CIS",
   frameworkVersion: "3.0",

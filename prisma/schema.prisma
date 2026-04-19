@@ -397,6 +397,26 @@ model ControlAssertion {
   expectedValue      Json?
   sourceFilter       Json? // optional row filter before asserting
 
+  // Evidence targeting (override Check.dataSource / Check.property when set).
+  // Each ControlAssertion is fully self-describing for the engine, so multi-
+  // property checks (e.g. CIS "also:") can express one assertion per property
+  // without splitting into multiple Checks.
+  source   String?
+  property String?
+
+  // Assertion logic when multiple assertions belong to the same check.
+  // "ALL" = AND-combined (default), "ANY" = OR-combined.
+  assertionLogic String @default("ALL")
+
+  // Routes to a registered evaluator module (builtin or sandboxed plugin) for
+  // checks that can't be expressed with a scalar operator.
+  evaluatorSlug String?
+
+  // Structured operator configs. Kept alongside expectedValue following the
+  // Phase 4 pattern — rich data lives in typed JSON columns, schema stays thin.
+  additionalAssertions Json? // [{source?, property, operator, expectedValue, sourceFilter?}, ...]
+  nestedFind           Json? // {arrayPath, findBy, property}
+
   createdAt DateTime @default(now())
 
   @@index([checkSlug])
