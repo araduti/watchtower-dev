@@ -57,11 +57,14 @@ const AUX_FRAMEWORKS: readonly FrameworkSeed[] = [
   },
 ];
 
-// Placeholder arrays used by index.ts for logging before the async seed runs.
-// The actual catalog comes from compliance-assertions.ts; these hold computed
-// totals after seedComplianceData returns.
-export let CHECKS: readonly { slug: string }[] = [];
-export let FRAMEWORKS: readonly { slug: string }[] = [];
+// These arrays are populated after seedComplianceData() runs and hold computed
+// totals for the index.ts logger. The real catalog is produced dynamically by
+// compliance-assertions.ts (loading docs/Assertions/*.ts at seed time).
+//
+// Primary CIS framework seeded: cis-m365-v6.0.1 ("CIS Microsoft 365 Foundations Benchmark", version "6.0.1")
+// Also seeded: cis-m365-v3.0
+export const CHECKS: { slug: string }[] = [];
+export const FRAMEWORKS: { slug: string }[] = [];
 
 // =============================================================================
 // SEEDER IMPLEMENTATION
@@ -99,11 +102,12 @@ export async function seedComplianceData(db: PrismaClient): Promise<number> {
     });
   }
 
-  // Expose totals for index.ts logging
-  CHECKS = Array.from({ length: stats.checks }, (_, i) => ({ slug: `check-${i}` }));
-  FRAMEWORKS = Array.from({ length: stats.frameworks + AUX_FRAMEWORKS.length }, (_, i) => ({
-    slug: `fw-${i}`,
-  }));
+  // Populate the exported arrays so index.ts logging shows real counts.
+  CHECKS.length = 0;
+  for (let i = 0; i < stats.checks; i++) CHECKS.push({ slug: `cis-check-${i}` });
+
+  FRAMEWORKS.length = 0;
+  for (let i = 0; i < stats.frameworks + AUX_FRAMEWORKS.length; i++) FRAMEWORKS.push({ slug: `fw-${i}` });
 
   return stats.frameworks + stats.checks + stats.controls + stats.assertions + AUX_FRAMEWORKS.length;
 }
