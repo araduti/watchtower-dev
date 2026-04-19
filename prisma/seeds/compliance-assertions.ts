@@ -267,8 +267,16 @@ function translateSpec(loaded: LoadedSpec): AssertionRow[] {
   } else if ("notEmpty" in a) {
     operator = "notEmpty";
     expectedValue = a.notEmpty;
+  } else if ("min" in a) {
+    // Top-level min: assert property >= min (e.g. {property: "count", min: 2})
+    operator = "gte";
+    expectedValue = a.min;
+  } else if ("max" in a) {
+    // Top-level max: assert property <= max (e.g. {property: "userDeviceQuota", max: 20})
+    operator = "lte";
+    expectedValue = a.max;
   } else {
-    console.warn(`  ⚠ ${loaded.filename}: unknown assert shape`);
+    console.warn(`  ⚠ ${loaded.filename}: unknown assert shape — no value/notEmpty/min/max found`);
     return [];
   }
 
@@ -494,6 +502,72 @@ async function replaceAssertions(db: PrismaClient, catalog: BuiltCatalog): Promi
   return n;
 }
 
+/**
+ * Remove ControlAssertions, Controls, and orphaned Checks that were seeded
+ * by a previous run but are no longer in the current docs/Assertions catalog.
+ *
+ * Scope: only touches slugs starting with "cis.m365.v" so we never
+ * accidentally delete manually-curated or customer-added records.
+ */
+async function purgeStaleEntries(db: PrismaClient, catalog: BuiltCatalog): Promise<void> {
+  const CIS_PREFIX = "cis.m365.v";
+
+  // Build the set of (checkSlug, frameworkId, controlId) triples that are
+  // still valid according to the current catalog.
+  const validControlKeys = new Set<string>(
+    catalog.controls.map((c) => `${c.checkSlug}|${c.frameworkId}|${c.controlId}`),
+  );
+  const validCheckSlugs = new Set<string>(catalog.checks.keys());
+
+  // 1. Find all cis.m365.v* Controls currently in the DB.
+  const dbControls = await db.control.findMany({
+    where: { checkSlug: { startsWith: CIS_PREFIX } },
+    select: { checkSlug: true, frameworkId: true, controlId: true },
+  });
+
+  // 2. For each Control no longer in the catalog: delete its assertions, then the Control.
+  for (const ctrl of dbControls) {
+    const key = `${ctrl.checkSlug}|${ctrl.frameworkId}|${ctrl.controlId}`;
+    if (validControlKeys.has(key)) continue;
+
+    await db.controlAssertion.deleteMany({
+      where: {
+        controlCheckSlug: ctrl.checkSlug,
+        controlFrameworkId: ctrl.frameworkId,
+        controlControlId: ctrl.controlId,
+      },
+    });
+    await db.control.delete({
+      where: {
+        checkSlug_frameworkId_controlId: {
+          checkSlug: ctrl.checkSlug,
+          frameworkId: ctrl.frameworkId,
+          controlId: ctrl.controlId,
+        },
+      },
+    });
+    console.warn(`  ♻ purged stale control ${ctrl.controlId} (${ctrl.checkSlug})`);
+  }
+
+  // 3. Delete orphaned Checks (cis.m365.v* with no remaining Controls).
+  const dbChecks = await db.check.findMany({
+    where: { slug: { startsWith: CIS_PREFIX } },
+    select: { id: true, slug: true },
+  });
+
+  for (const chk of dbChecks) {
+    if (validCheckSlugs.has(chk.slug)) continue;
+
+    // Safety guard: only delete if no controls remain (the loop above may
+    // have already removed them, but be explicit in case of partial runs).
+    const remainingControls = await db.control.count({ where: { checkSlug: chk.slug } });
+    if (remainingControls > 0) continue;
+
+    await db.check.delete({ where: { id: chk.id } });
+    console.warn(`  ♻ purged orphaned check ${chk.slug}`);
+  }
+}
+
 // =============================================================================
 // PUBLIC API
 // =============================================================================
@@ -509,10 +583,14 @@ export async function seedComplianceAssertions(db: PrismaClient): Promise<Compli
   const loaded = await loadAssertionFiles();
   const catalog = buildCatalog(loaded);
 
+  // Upsert current catalog
   await upsertFrameworks(db, catalog);
   const slugToId = await upsertChecks(db, catalog);
   await upsertControls(db, catalog, slugToId);
   const assertions = await replaceAssertions(db, catalog);
+
+  // Remove rows for specs that were renamed or deleted since the last seed
+  await purgeStaleEntries(db, catalog);
 
   return {
     frameworks: catalog.frameworks.size,
