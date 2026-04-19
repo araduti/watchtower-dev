@@ -343,13 +343,15 @@ export const executeScan = inngest.createFunction(
 
       adapters.push(toRuntimeAdapter<DnsDataSources>(createDnsAdapter({ verifiedDomains })));
 
-      for (const adapter of adapters) {
-        for (const source of adapter.listSources()) {
-          if (adapter.name === "microsoft-graph" && source === "domainDnsRecords") {
-            continue;
-          }
-
-          const collected = await (async () => {
+      // Fan-out: collect all adapter sources in parallel (mirrors watchtower-v2 Promise.allSettled approach).
+      // domainDnsRecords is excluded here — it was already collected above as a required bootstrap step.
+      const collectPromises = adapters.flatMap((adapter) =>
+        adapter
+          .listSources()
+          .filter(
+            (source) => !(adapter.name === "microsoft-graph" && source === "domainDnsRecords"),
+          )
+          .map(async (source): Promise<CollectedSource> => {
             try {
               const result: AdapterResult<unknown> = await adapter.collect(source, adapterConfig);
               return {
@@ -386,9 +388,20 @@ export const executeScan = inngest.createFunction(
                 kind: "permanent",
               };
             }
-          })();
+          }),
+      );
 
-          results.push(collected);
+      const settled = await Promise.allSettled(collectPromises);
+      for (const outcome of settled) {
+        // Individual source errors are captured inside the promise as status:"failed",
+        // so a rejection here means an unexpected throw — still push a sentinel so
+        // we don't silently drop a source from the results array.
+        if (outcome.status === "fulfilled") {
+          results.push(outcome.value);
+        } else {
+          console.error(
+            `[scan-pipeline:execute] step=collect-data unexpected rejection: ${String(outcome.reason)}`,
+          );
         }
       }
 
