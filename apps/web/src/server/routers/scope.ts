@@ -22,6 +22,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 import { createAuditEvent } from "@watchtower/db";
+import type { Prisma } from "@prisma/client";
 import { throwWatchtowerError } from "../errors.ts";
 import {
   checkIdempotencyKey,
@@ -266,7 +267,7 @@ export const scopeRouter = router({
           name: input.name,
           slug: input.slug,
           parentScopeId: input.parentScopeId ?? null,
-          metadata: input.metadata ?? {},
+          metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
         },
         select: SCOPE_SELECT,
       });

@@ -410,7 +410,8 @@ export const workspaceRouter = router({
           membershipId: currentOwnerMembership.id,
           roleId: adminRole.id,
         },
-        select: { id: true },
+        // MembershipRole has a composite PK (membershipId + roleId) — no id field
+        select: { membershipId: true },
       });
 
       if (!existingAdminRole) {
@@ -428,7 +429,7 @@ export const workspaceRouter = router({
           membershipId: targetMembership.id,
           roleId: ownerRole.id,
         },
-        select: { id: true },
+        select: { membershipId: true },
       });
 
       if (!existingOwnerRoleOnTarget) {

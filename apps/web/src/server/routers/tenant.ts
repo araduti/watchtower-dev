@@ -23,6 +23,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc.ts";
 import { WATCHTOWER_ERRORS } from "@watchtower/errors";
 import { createAuditEvent } from "@watchtower/db";
+import type { TenantAuthMethod, TenantStatus } from "@prisma/client";
 import {
   encryptCredentials,
   verifyEncryptedCredentials,
@@ -98,9 +99,11 @@ function toTenantOutput(row: {
   scopeId: string;
   displayName: string;
   msTenantId: string;
-  authMethod: string;
-  status: string;
-  encryptedCredentials: Buffer | null;
+  // Prisma 7: enums are typed narrowly, not as plain string
+  authMethod: TenantAuthMethod;
+  status: TenantStatus;
+  // Prisma 7: bytes fields are Uint8Array, not Buffer
+  encryptedCredentials: Uint8Array | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -331,7 +334,7 @@ export const tenantRouter = router({
           displayName: input.displayName,
           msTenantId: input.msTenantId,
           authMethod: input.authMethod,
-          encryptedCredentials: Buffer.alloc(0), // placeholder — credentials must be set via tenants:rotate_credentials
+          encryptedCredentials: new Uint8Array(0), // placeholder — credentials must be set via tenants:rotate_credentials
         },
         select: TENANT_SELECT_WITH_CREDS,
       });
@@ -602,7 +605,9 @@ export const tenantRouter = router({
       const updated = await ctx.db.tenant.update({
         where: { id: existing.id },
         data: {
-          encryptedCredentials: sealed,
+          // encryptCredentials() returns Buffer; Prisma 7 bytes fields are Uint8Array.
+          // Buffer IS-A Uint8Array at runtime — copy to a plain Uint8Array for TS.
+          encryptedCredentials: new Uint8Array(sealed),
           status: "ACTIVE",
         },
         select: TENANT_SELECT_WITH_CREDS,
@@ -680,7 +685,8 @@ export const tenantRouter = router({
       // Verify credentials via the adapter boundary (Code-Conventions §6).
       // Decryption and token acquisition happen inside the adapter closure.
       try {
-        await verifyEncryptedCredentials(tenant.encryptedCredentials);
+        // tenant.encryptedCredentials is Uint8Array (Prisma 7); adapter expects Buffer.
+        await verifyEncryptedCredentials(Buffer.from(tenant.encryptedCredentials));
         return { connected: true, error: null };
       } catch (err) {
         const message =
