@@ -11,6 +11,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -60,6 +61,11 @@ export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { resolvedTheme } = useTheme();
+  // next-themes resolvedTheme is undefined on the server — defer logo src to
+  // after mount to avoid SSR/client hydration mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const logoSrc = mounted && resolvedTheme === "light" ? "/logo_light.png" : "/logo_dark.png";
   const session = authClient.useSession();
 
   const user = session.data?.user;
@@ -94,7 +100,7 @@ export function TopNav() {
           className="flex items-center shrink-0 hover:opacity-80 transition-opacity"
         >
           <Image
-              src={resolvedTheme === "light" ? "/logo_light.png" : "/logo_dark.png"}
+              src={logoSrc}
               alt="Watchtower"
               width={48}
               height={32}

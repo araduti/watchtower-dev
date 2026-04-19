@@ -10,6 +10,12 @@ import {
   VolumeX,
   Eye,
   StickyNote,
+  BookOpen,
+  Wrench,
+  Database,
+  ChevronDown,
+  ChevronRight,
+  Info,
 } from "lucide-react";
 import {
   Badge,
@@ -76,6 +82,12 @@ interface FindingDetail {
   updatedAt: string;
 }
 
+interface RawEvidence {
+  pass?: boolean;
+  warnings?: string[];
+  actualValues?: Record<string, unknown>;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Severity badge config                                              */
 /* ------------------------------------------------------------------ */
@@ -127,6 +139,17 @@ const SEVERITY_GLOW: Record<FindingSeverity, "red" | "amber" | "blue" | "green" 
   LOW: "blue",
   INFO: "none",
 } as const;
+
+/* ------------------------------------------------------------------ */
+/*  Evidence result color                                              */
+/* ------------------------------------------------------------------ */
+
+const EVIDENCE_RESULT_STYLE: Record<string, { color: string; label: string }> = {
+  PASS: { color: "text-emerald-400", label: "Pass" },
+  FAIL: { color: "text-red-400", label: "Fail" },
+  ERROR: { color: "text-amber-400", label: "Error" },
+  NOT_APPLICABLE: { color: "text-muted-foreground", label: "N/A" },
+};
 
 /* ------------------------------------------------------------------ */
 /*  Detail row                                                         */
@@ -182,6 +205,111 @@ function TimelineEntry({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Collapsible raw data panel                                         */
+/* ------------------------------------------------------------------ */
+
+function CollapsibleJson({ label, data }: { label: string; data: unknown }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        {label}
+      </button>
+      {open && (
+        <pre className="mt-2 overflow-x-auto rounded-xl bg-muted/20 border border-border/30 p-3 text-xs font-mono text-muted-foreground leading-relaxed">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Simple markdown renderer (bold, inline-code, bullets, newlines)   */
+/* ------------------------------------------------------------------ */
+
+function SimpleMarkdown({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const elements: ReactNode[] = [];
+  let listBuffer: string[] = [];
+
+  const flushList = (key: string) => {
+    if (listBuffer.length > 0) {
+      elements.push(
+        <ul key={key} className="mt-1.5 mb-2 space-y-1 pl-4">
+          {listBuffer.map((item, i) => (
+            <li key={i} className="text-sm text-muted-foreground list-disc">
+              <InlineMarkdown text={item} />
+            </li>
+          ))}
+        </ul>,
+      );
+      listBuffer = [];
+    }
+  };
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      listBuffer.push(trimmed.slice(2));
+    } else {
+      flushList(`list-${idx}`);
+      if (!trimmed) {
+        elements.push(<div key={idx} className="h-2" />);
+      } else if (trimmed.startsWith("### ")) {
+        elements.push(
+          <p key={idx} className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-1">
+            {trimmed.slice(4)}
+          </p>,
+        );
+      } else if (trimmed.startsWith("## ")) {
+        elements.push(
+          <p key={idx} className="text-sm font-semibold text-foreground mt-3 mb-1">
+            {trimmed.slice(3)}
+          </p>,
+        );
+      } else {
+        elements.push(
+          <p key={idx} className="text-sm text-muted-foreground">
+            <InlineMarkdown text={trimmed} />
+          </p>,
+        );
+      }
+    }
+  });
+
+  flushList("list-final");
+  return <div className="space-y-0.5">{elements}</div>;
+}
+
+function InlineMarkdown({ text }: { text: string }) {
+  // Handle **bold** and `code` inline
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return (
+            <code key={i} className="rounded px-1 py-0.5 bg-muted/30 font-mono text-xs text-foreground">
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Page component                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -198,6 +326,18 @@ export default function FindingDetailPage({
   });
 
   const finding = data as FindingDetail | undefined;
+
+  // Fetch check metadata + framework mapping once we have the checkSlug
+  const { data: checkData } = trpc.check.getBySlug.useQuery(
+    { slug: finding?.checkSlug ?? "" },
+    { enabled: !!finding?.checkSlug },
+  );
+
+  // Fetch evidence detail once we have the evidenceId
+  const { data: evidenceData } = trpc.evidence.get.useQuery(
+    { evidenceId: finding?.latestEvidenceId ?? "" },
+    { enabled: !!finding?.latestEvidenceId },
+  );
 
   /* ---- Mutation state ---- */
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -258,6 +398,16 @@ export default function FindingDetailPage({
   const sevCfg = SEVERITY_BADGE[finding.severity];
   const iconState = STATUS_TO_ICON_STATE[finding.status];
   const glowColor = SEVERITY_GLOW[finding.severity];
+
+  // Parse rawEvidence safely
+  const rawEv = evidenceData?.rawEvidence as RawEvidence | null | undefined;
+  const warnings: string[] = rawEv?.warnings ?? [];
+  const actualValues: Record<string, unknown> = rawEv?.actualValues ?? {};
+  const hasFailureDetail = warnings.length > 0 || Object.keys(actualValues).length > 0;
+
+  const evResultStyle = evidenceData
+    ? (EVIDENCE_RESULT_STYLE[evidenceData.result] ?? EVIDENCE_RESULT_STYLE["ERROR"])
+    : null;
 
   /* ---- Build lifecycle timeline entries ---- */
   const timelineEntries: ReactNode[] = [];
@@ -340,18 +490,46 @@ export default function FindingDetailPage({
       }
     >
       <div className="space-y-6">
+
         {/* -------------------------------------------------------- */}
-        {/*  Header                                                    */}
+        {/*  Header — slug, title, badges                             */}
         {/* -------------------------------------------------------- */}
         <GlowCard glow={glowColor} className="p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold font-mono tracking-tight text-foreground truncate">
-                {finding.checkSlug}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1">
+              {/* Human-readable title when check data is available */}
+              {checkData?.title && (
+                <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                  {checkData.product ?? "Check"}
+                </p>
+              )}
+              <h2 className="text-xl font-bold tracking-tight text-foreground">
+                {checkData?.title ?? finding.checkSlug}
               </h2>
               <p className="mt-1 text-xs text-muted-foreground font-mono truncate">
+                {finding.checkSlug}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground font-mono truncate">
                 ID: {finding.id}
               </p>
+              {/* Framework coverage badges */}
+              {checkData?.frameworks && checkData.frameworks.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {checkData.frameworks.map((f) => (
+                    <span
+                      key={`${f.framework.id}-${f.controlId}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2 py-0.5 text-[10px] font-mono text-blue-400/80"
+                    >
+                      {f.framework.publisher} {f.framework.version}
+                      <span className="text-blue-500/40">·</span>
+                      {f.controlId}
+                      {f.classification && (
+                        <span className="ml-0.5 text-blue-500/50">{f.classification}</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-wrap shrink-0">
               <Badge variant={sevCfg.variant}>{sevCfg.label}</Badge>
@@ -367,6 +545,197 @@ export default function FindingDetailPage({
             </div>
           </div>
         </GlowCard>
+
+        {/* -------------------------------------------------------- */}
+        {/*  Check description + data source context                  */}
+        {/* -------------------------------------------------------- */}
+        {checkData && (
+          <GlowCard className="p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4 inline-flex items-center gap-2">
+              <Info className="h-4 w-4 text-muted-foreground" />
+              About This Check
+            </h3>
+            <div className="space-y-4">
+              {checkData.description && checkData.description !== checkData.title && (
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {checkData.description}
+                </p>
+              )}
+              {checkData.rationale && checkData.rationale.trim() && (
+                <div className="rounded-xl bg-amber-500/5 border border-amber-500/10 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-400/70 mb-1">Why it matters</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{checkData.rationale}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                {checkData.product && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground">Product</span>
+                    <span className="text-xs font-mono text-foreground bg-muted/20 rounded-lg px-2 py-1 w-fit">
+                      {checkData.product}
+                    </span>
+                  </div>
+                )}
+                {checkData.dataSource && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground">Data Source</span>
+                    <span className="text-xs font-mono text-foreground bg-muted/20 rounded-lg px-2 py-1 w-fit">
+                      {checkData.dataSource}
+                    </span>
+                  </div>
+                )}
+                {checkData.property && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground">Property</span>
+                    <span className="text-xs font-mono text-foreground bg-muted/20 rounded-lg px-2 py-1 w-fit">
+                      {checkData.property}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </GlowCard>
+        )}
+
+        {/* -------------------------------------------------------- */}
+        {/*  What failed — evidence detail                            */}
+        {/* -------------------------------------------------------- */}
+        {evidenceData && (
+          <GlowCard className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-foreground inline-flex items-center gap-2">
+                <Database className="h-4 w-4 text-muted-foreground" />
+                What We Found
+              </h3>
+              <div className="flex items-center gap-2">
+                {evResultStyle && (
+                  <span className={`text-xs font-mono font-semibold ${evResultStyle.color}`}>
+                    {evResultStyle.label}
+                  </span>
+                )}
+                <ClientDate
+                  value={new Date(evidenceData.observedAt).toISOString()}
+                  variant="datetime"
+                  className="text-xs text-muted-foreground font-mono"
+                />
+              </div>
+            </div>
+
+            {hasFailureDetail ? (
+              <div className="space-y-4">
+                {/* Engine warnings — most human-readable */}
+                {warnings.length > 0 && (
+                  <div className="space-y-2">
+                    {warnings.map((w, i) => (
+                      <div
+                        key={i}
+                        className="flex items-start gap-2.5 rounded-xl border border-red-500/15 bg-red-500/5 px-3 py-2.5"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-400 mt-0.5 shrink-0" />
+                        <span className="text-sm text-red-300/90 leading-relaxed">{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Actual values table */}
+                {Object.keys(actualValues).length > 0 && (
+                  <div className="rounded-xl border border-border/30 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border/30 bg-muted/10">
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Property</th>
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Observed Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/20">
+                        {Object.entries(actualValues).map(([key, val]) => (
+                          <tr key={key}>
+                            <td className="px-3 py-2 font-mono text-muted-foreground">{key}</td>
+                            <td className="px-3 py-2 font-mono text-foreground">
+                              {val === null || val === undefined
+                                ? <span className="text-muted-foreground/50 italic">null</span>
+                                : typeof val === "object"
+                                  ? <span className="text-muted-foreground">{JSON.stringify(val)}</span>
+                                  : String(val)
+                              }
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <CollapsibleJson label="Raw evidence data" data={rawEv} />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Evidence was collected but no detailed failure data is available.
+              </p>
+            )}
+          </GlowCard>
+        )}
+
+        {/* -------------------------------------------------------- */}
+        {/*  How to fix — remediation                                 */}
+        {/* -------------------------------------------------------- */}
+        {checkData?.remediation && checkData.remediation.trim() && (
+          <GlowCard className="p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4 inline-flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-muted-foreground" />
+              How to Fix
+            </h3>
+            <SimpleMarkdown text={checkData.remediation} />
+            {checkData.connectors.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-border/30">
+                <p className="text-xs text-muted-foreground mb-2">Required admin access</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {checkData.connectors.map((c) => (
+                    <span
+                      key={c}
+                      className="inline-flex items-center rounded-lg border border-border/30 bg-muted/10 px-2 py-0.5 text-xs font-mono text-muted-foreground"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </GlowCard>
+        )}
+
+        {/* -------------------------------------------------------- */}
+        {/*  Framework coverage — full control detail                 */}
+        {/* -------------------------------------------------------- */}
+        {checkData?.frameworks && checkData.frameworks.length > 0 && (
+          <GlowCard className="p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4 inline-flex items-center gap-2">
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+              Compliance Framework Coverage
+            </h3>
+            <div className="space-y-2">
+              {checkData.frameworks.map((f) => (
+                <div
+                  key={`${f.framework.id}-${f.controlId}`}
+                  className="flex items-center justify-between rounded-xl border border-border/25 bg-muted/5 px-4 py-2.5"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-foreground">{f.framework.name}</span>
+                    {f.classification && (
+                      <span className="rounded-md border border-border/30 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+                        {f.classification}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono text-xs text-blue-400/80 shrink-0 ml-4">
+                    {f.controlId}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </GlowCard>
+        )}
 
         {/* -------------------------------------------------------- */}
         {/*  Core Details                                              */}

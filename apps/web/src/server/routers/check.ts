@@ -53,6 +53,10 @@ const getInput = z.object({
   checkId: z.string(),
 });
 
+const getBySlugInput = z.object({
+  slug: z.string(),
+});
+
 const checkDetail = z.object({
   id: z.string(),
   slug: z.string(),
@@ -71,6 +75,25 @@ const checkDetail = z.object({
   product: z.string().nullable(),
   connectors: z.array(z.string()),
   createdAt: z.coerce.date(),
+});
+
+const frameworkRef = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  publisher: z.string(),
+  version: z.string(),
+});
+
+const controlRef = z.object({
+  controlId: z.string(),
+  controlTitle: z.string(),
+  classification: z.string().nullable(),
+  framework: frameworkRef,
+});
+
+const checkDetailWithFrameworks = checkDetail.extend({
+  frameworks: z.array(controlRef),
 });
 
 // ---------------------------------------------------------------------------
@@ -179,5 +202,64 @@ export const checkRouter = router({
       }
 
       return check;
+    }),
+
+  /**
+   * Get a check by slug, including its framework/control mapping.
+   *
+   * Returns the latest version of the check for the given slug, plus
+   * every Control row that references it so the UI can show which
+   * compliance frameworks (CIS, NIST, …) map to this check.
+   *
+   * Permission: checks:read (no scope — checks are global)
+   */
+  getBySlug: protectedProcedure
+    .input(getBySlugInput)
+    .output(checkDetailWithFrameworks)
+    .query(async ({ input, ctx }) => {
+      await ctx.requirePermission("checks:read");
+
+      const check = await ctx.db.check.findFirst({
+        where: { slug: input.slug },
+        orderBy: { version: "desc" },
+        select: {
+          ...CHECK_DETAIL_SELECT,
+          controls: {
+            select: {
+              controlId: true,
+              controlTitle: true,
+              classification: true,
+              framework: {
+                select: {
+                  id: true,
+                  slug: true,
+                  name: true,
+                  publisher: true,
+                  version: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!check) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Check not found.",
+          cause: { errorCode: "WATCHTOWER:CHECK:NOT_FOUND" },
+        });
+      }
+
+      const { controls, ...rest } = check;
+      return {
+        ...rest,
+        frameworks: controls.map((c) => ({
+          controlId: c.controlId,
+          controlTitle: c.controlTitle,
+          classification: c.classification,
+          framework: c.framework,
+        })),
+      };
     }),
 });
