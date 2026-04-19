@@ -45,6 +45,7 @@ import calendarSharingRestricted from "./calendar-sharing-restricted.ts";
 import userConsentRestricted from "./user-consent-restricted.ts";
 import presetPoliciesEnabled from "./preset-policies-enabled.ts";
 import scubagearStubs from "./scubagear-stubs.ts";
+import cisM365Stubs from "./cis-m365-stubs.ts";
 
 /**
  * All built-in evaluator modules. The registry loads these and indexes
@@ -86,4 +87,7 @@ export const builtinEvaluators: EvaluatorModule[] = [
 
   // ScubaGear stubs (not yet implemented)
   ...scubagearStubs,
+
+  // CIS M365 custom evaluator stubs (not yet implemented)
+  ...cisM365Stubs,
 ];

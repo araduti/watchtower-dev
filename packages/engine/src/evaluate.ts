@@ -96,6 +96,18 @@ function getProperty(obj: unknown, path: string): unknown {
 }
 
 // ---------------------------------------------------------------------------
+// Source coercion
+// ---------------------------------------------------------------------------
+
+// Adapters may return a singleton object (e.g. tenant-wide settings) rather
+// than an array. Normalize both shapes so downstream iteration is safe.
+function toSourceArray(value: unknown): Record<string, unknown>[] {
+  if (Array.isArray(value)) return value as Record<string, unknown>[];
+  if (value && typeof value === "object") return [value as Record<string, unknown>];
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Source filter
 // ---------------------------------------------------------------------------
 
@@ -265,7 +277,7 @@ function runCaMatch(
   snapshot: EvidenceSnapshot,
   config: CaMatchConfig,
 ): { pass: boolean; warnings: string[] } {
-  const policies = (snapshot.data?.caPolicies ?? snapshot.data?.conditionalAccessPolicies ?? []) as Record<string, unknown>[];
+  const policies = toSourceArray(snapshot.data?.caPolicies ?? snapshot.data?.conditionalAccessPolicies);
 
   for (const policy of policies) {
     const criteria = evaluateCaPolicy(policy, matchSpec, config);
@@ -346,7 +358,7 @@ export function evaluateControl(
 
   // Nested find — find item in nested array, assert on property
   if (assertion.operator === "nestedFind" && assertion.nestedFind) {
-    const sourceData = (snapshot.data?.[assertion.source] ?? []) as Record<string, unknown>[];
+    const sourceData = toSourceArray(snapshot.data?.[assertion.source]);
     if (sourceData.length === 0) {
       return { ...base, pass: false, actualValues: {}, warnings: [`source "${assertion.source}" not available or empty`] };
     }
@@ -387,7 +399,7 @@ export function evaluateControl(
 
   // Count assertion
   if (assertion.operator === "count") {
-    const sourceData = (snapshot.data?.[assertion.source] ?? []) as unknown[];
+    const sourceData = toSourceArray(snapshot.data?.[assertion.source]);
     const filtered = applySourceFilter(sourceData, assertion.sourceFilter as Record<string, unknown> | undefined);
     const count = filtered.length;
     const { min, max } = (assertion.expectedValue as { min?: number; max?: number }) ?? {};
@@ -403,7 +415,7 @@ export function evaluateControl(
 
   // AllowedValues
   if (assertion.operator === "allowedValues") {
-    const rawData = (snapshot.data?.[assertion.source] ?? []) as Record<string, unknown>[];
+    const rawData = toSourceArray(snapshot.data?.[assertion.source]);
     const sourceData = applySourceFilter(rawData, assertion.sourceFilter as Record<string, unknown> | undefined) as Record<string, unknown>[];
     if (sourceData.length === 0) {
       return { ...base, pass: false, actualValues: {}, warnings: [`source "${assertion.source}" not available or empty`] };
@@ -433,7 +445,7 @@ export function evaluateControl(
   }
 
   // Simple operator evaluation
-  const rawSourceData = (snapshot.data?.[assertion.source] ?? []) as Record<string, unknown>[];
+  const rawSourceData = toSourceArray(snapshot.data?.[assertion.source]);
   const sourceData = applySourceFilter(rawSourceData, assertion.sourceFilter as Record<string, unknown> | undefined) as Record<string, unknown>[];
   const failures: string[] = [];
   const actualValues: Record<string, unknown> = {};
@@ -470,7 +482,7 @@ export function evaluateControl(
     const additionalFailures: string[] = [];
     for (const sub of assertion.additionalAssertions) {
       const subSource = sub.source ?? assertion.source;
-      let subData = (snapshot.data?.[subSource] ?? []) as unknown[];
+      let subData: unknown[] = toSourceArray(snapshot.data?.[subSource]);
       subData = applySourceFilter(subData, sub.sourceFilter as Record<string, unknown> | undefined);
 
       if (subData.length === 0) {
